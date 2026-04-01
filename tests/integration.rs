@@ -468,14 +468,7 @@ fn config_with_existing_content_is_preserved() {
     let home = TmpHome::new("preserve_content");
     let npmrc = home.path().join(".npmrc");
 
-    // Write existing config
-    fs::write(
-        &npmrc,
-        "registry=https://registry.npmjs.org\nalways-auth=true\n",
-    )
-    .unwrap();
-
-    // Write full config including our security keys alongside existing ones
+    // Write existing config with user settings + security keys
     fs::write(
         &npmrc,
         "registry=https://registry.npmjs.org\nalways-auth=true\nignore-scripts=true\nmin-release-age=7\n",

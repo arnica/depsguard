@@ -480,13 +480,13 @@ mod tests {
     fn apply_fix_pnpm() {
         let f = tmp_file("");
         let rec = Recommendation {
-            key: "minimum-release-age".into(),
+            key: "ignore-scripts".into(),
             description: "test".into(),
-            expected: "10080".into(),
+            expected: "true".into(),
             status: crate::manager::CheckStatus::Missing,
         };
         apply_fix(ManagerKind::Pnpm, f.path(), &rec).unwrap();
-        assert!(f.read().contains("minimum-release-age=10080"));
+        assert!(f.read().contains("ignore-scripts=true"));
     }
 
     #[test]

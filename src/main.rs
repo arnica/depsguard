@@ -475,7 +475,19 @@ mod tests {
         let results = apply_selected(&items, &managers);
         assert_eq!(results.len(), 1);
         assert!(results[0].1.is_ok());
+        // Clean up: remove original and any .bak files
         let _ = std::fs::remove_file(&path);
+        if let Some(parent) = path.parent() {
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                let prefix = path.file_name().unwrap().to_string_lossy().to_string();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with(&prefix) && name.ends_with(".bak") {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
