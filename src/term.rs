@@ -139,6 +139,17 @@ pub fn show_cursor(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[?25h")
 }
 
+/// RAII guard that restores cursor visibility on drop (prevents broken terminal on errors).
+pub struct CursorGuard;
+
+impl Drop for CursorGuard {
+    fn drop(&mut self) {
+        // Best-effort: write directly to stdout to restore cursor even if our writer is gone
+        let _ = io::stdout().write_all(b"\x1b[?25h");
+        let _ = io::stdout().flush();
+    }
+}
+
 pub fn move_to(w: &mut impl Write, row: u16, col: u16) -> io::Result<()> {
     write!(w, "\x1b[{};{}H", row, col)
 }
