@@ -458,16 +458,29 @@ pub fn print_diff_preview(
                 }
             };
 
+            // For dotted TOML keys (e.g. install.minimumReleaseAge), show the
+            // leaf key under its [section] — matching what apply_fix writes
+            let display_key;
+            let section_line;
+            if rec.key.contains('.') {
+                let parts: Vec<&str> = rec.key.splitn(2, '.').collect();
+                display_key = parts[1].to_string();
+                section_line = format!("  {DIM}[{}]{RESET}\n", parts[0]);
+            } else {
+                display_key = rec.key.clone();
+                section_line = String::new();
+            }
+
             match current_val {
                 Some(ref cv) if cv != &rec.expected => {
-                    writeln!(w, "  {RED}-  {}{RESET}", fmt(&rec.key, cv))?;
-                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&rec.key, &rec.expected))?;
+                    write!(w, "{section_line}")?;
+                    writeln!(w, "  {RED}-  {}{RESET}", fmt(&display_key, cv))?;
+                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&display_key, &rec.expected))?;
                 }
-                Some(_) => {
-                    // Already correct, skip
-                }
+                Some(_) => {}
                 None => {
-                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&rec.key, &rec.expected))?;
+                    write!(w, "{section_line}")?;
+                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&display_key, &rec.expected))?;
                 }
             }
         }

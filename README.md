@@ -8,7 +8,7 @@
 
 Harden your package manager configs against supply chain attacks. Zero dependencies.
 
-By **[[arnica](https://arnica.io)]**
+By **[arnica](https://arnica.io)**
 
 ## What it does
 
