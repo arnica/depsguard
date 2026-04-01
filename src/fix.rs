@@ -293,12 +293,12 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
         if line.starts_with(' ') || line.starts_with('\t') {
             continue;
         }
-        if let Some((k, _)) = trimmed.split_once(':')
-            && k.trim() == key
-        {
-            *line = target_line.clone();
-            found = true;
-            break;
+        if let Some((k, _)) = trimmed.split_once(':') {
+            if k.trim() == key {
+                *line = target_line.clone();
+                found = true;
+                break;
+            }
         }
     }
 
