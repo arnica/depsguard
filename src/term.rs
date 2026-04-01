@@ -2,6 +2,56 @@
 #![allow(dead_code)]
 
 use std::io::{self, Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+// ── Color support ────────────────────────────────────────────────────
+
+static COLORS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Disable all ANSI color/style output.
+pub fn disable_colors() {
+    COLORS_ENABLED.store(false, Ordering::Relaxed);
+}
+
+/// Check if colors should be used based on environment.
+/// Respects: --no-color flag, NO_COLOR env var, non-TTY stdout, TERM=dumb.
+pub fn should_use_colors() -> bool {
+    // NO_COLOR convention (https://no-color.org/)
+    if std::env::var("NO_COLOR").is_ok() {
+        return false;
+    }
+    // TERM=dumb
+    if std::env::var("TERM").map(|t| t == "dumb").unwrap_or(false) {
+        return false;
+    }
+    // Check if stdout is a TTY
+    #[cfg(unix)]
+    {
+        unsafe extern "C" {
+            fn isatty(fd: i32) -> i32;
+        }
+        if unsafe { isatty(1) } == 0 {
+            return false;
+        }
+    }
+    #[cfg(windows)]
+    {
+        unsafe extern "system" {
+            fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
+            fn GetConsoleMode(h: *mut std::ffi::c_void, mode: *mut u32) -> i32;
+        }
+        let handle = unsafe { GetStdHandle(0xFFFF_FFF5) };
+        let mut mode = 0u32;
+        if unsafe { GetConsoleMode(handle, &mut mode) } == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn colors_enabled() -> bool {
+    COLORS_ENABLED.load(Ordering::Relaxed)
+}
 
 // ── ANSI helpers ──────────────────────────────────────────────────────
 
@@ -16,6 +66,52 @@ pub const MAGENTA: &str = "\x1b[35m";
 pub const WHITE: &str = "\x1b[97m";
 pub const BG_GREEN: &str = "\x1b[42m";
 pub const BG_RED: &str = "\x1b[41m";
+
+/// A writer wrapper that strips ANSI escape sequences when colors are disabled.
+pub struct ColorWriter<W: Write> {
+    inner: W,
+}
+
+impl<W: Write> ColorWriter<W> {
+    pub fn new(inner: W) -> Self {
+        Self { inner }
+    }
+
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
+}
+
+impl<W: Write> Write for ColorWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if colors_enabled() {
+            return self.inner.write(buf);
+        }
+        // Strip ANSI escape sequences: \x1b[...m
+        let mut i = 0;
+        let len = buf.len();
+        while i < len {
+            if buf[i] == 0x1b && i + 1 < len && buf[i + 1] == b'[' {
+                // Skip until 'm' or end
+                i += 2;
+                while i < len && buf[i] != b'm' {
+                    i += 1;
+                }
+                if i < len {
+                    i += 1; // skip 'm'
+                }
+            } else {
+                self.inner.write_all(&buf[i..i + 1])?;
+                i += 1;
+            }
+        }
+        Ok(len) // report all bytes as consumed
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
 
 pub fn clear_screen(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[2J\x1b[H")

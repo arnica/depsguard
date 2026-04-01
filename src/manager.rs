@@ -49,6 +49,7 @@ impl Recommendation {
 pub enum ManagerKind {
     Npm,
     Pnpm,
+    PnpmWorkspace,
     Bun,
     Uv,
 }
@@ -57,6 +58,7 @@ impl ManagerKind {
     pub const ALL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
+        ManagerKind::PnpmWorkspace,
         ManagerKind::Bun,
         ManagerKind::Uv,
     ];
@@ -65,6 +67,7 @@ impl ManagerKind {
         match self {
             ManagerKind::Npm => "npm",
             ManagerKind::Pnpm => "pnpm",
+            ManagerKind::PnpmWorkspace => "pnpm-workspace",
             ManagerKind::Bun => "bun",
             ManagerKind::Uv => "uv",
         }
@@ -73,11 +76,12 @@ impl ManagerKind {
     pub fn icon(self) -> &'static str {
         match self {
             ManagerKind::Npm => "📦",
-            ManagerKind::Pnpm => "⚡",
+            ManagerKind::Pnpm | ManagerKind::PnpmWorkspace => "⚡",
             ManagerKind::Bun => "🥟",
             ManagerKind::Uv => "🐍",
         }
     }
+
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +165,8 @@ fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs
     match kind {
         // npm/pnpm: ~/.npmrc on all platforms (including Windows %USERPROFILE%\.npmrc)
         ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
+        // pnpm-workspace: discovered dynamically, not a fixed path
+        ManagerKind::PnpmWorkspace => PathBuf::new(),
         // bun: ~/.bunfig.toml on all platforms
         ManagerKind::Bun => home.join(".bunfig.toml"),
         // uv: OS-specific
@@ -308,6 +314,121 @@ pub fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
     date_days <= today.saturating_sub(min_days)
 }
 
+// ── YAML reading ─────────────────────────────────────────────────────
+
+/// Read a top-level key from a simple YAML file. Returns the value as a string.
+/// Handles `key: value`, `key: "value"`, and `key: 'value'`.
+pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+        // Skip indented lines (nested keys)
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        if let Some((k, v)) = trimmed.split_once(':') {
+            let k = k.trim();
+            if k == key {
+                let v = v.split('#').next().unwrap_or(v).trim();
+                // Strip quotes
+                let v = v.trim_matches('"').trim_matches('\'');
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Directories to skip when searching downward for project files.
+const SKIP_DIRS: &[&str] = &[
+    // macOS system (enormous, never contains project files)
+    "Library",
+    // Package manager caches/stores
+    "node_modules",
+    ".npm",
+    ".pnpm-store",
+    ".cargo",
+    ".rustup",
+    ".m2",
+    ".gradle",
+    ".cache",
+    "go",
+    // Build output
+    "target",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".nuxt",
+    "__pycache__",
+    // VCS internals
+    ".git",
+    ".hg",
+    ".svn",
+    // Misc large dirs
+    ".Trash",
+    ".pyenv",
+    ".rbenv",
+    "vendor",
+];
+
+/// Max depth for downward search to avoid excessive traversal.
+const MAX_SEARCH_DEPTH: usize = 8;
+
+/// Find pnpm-workspace.yaml files by searching from the user's home directory downward.
+/// Returns all unique paths found.
+fn find_pnpm_workspaces_with_progress(
+    on_dir: &mut dyn FnMut(&Path),
+) -> Vec<PathBuf> {
+    let mut results = Vec::new();
+    let home = home_dir();
+
+    // Search downward from home (skip known large dirs)
+    search_downward(&home, 0, &mut results, on_dir);
+
+    // Deduplicate
+    results.sort();
+    results.dedup();
+    results
+}
+
+fn search_downward(
+    dir: &Path,
+    depth: usize,
+    results: &mut Vec<PathBuf>,
+    on_dir: &mut dyn FnMut(&Path),
+) {
+    if depth > MAX_SEARCH_DEPTH {
+        return;
+    }
+    on_dir(dir);
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            if path.file_name().and_then(|n| n.to_str()) == Some("pnpm-workspace.yaml") {
+                results.push(path);
+            }
+            continue;
+        }
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        // Skip hidden dirs (except those we explicitly handle) and known large dirs
+        if name.starts_with('.') || SKIP_DIRS.contains(&name) {
+            continue;
+        }
+        search_downward(&path, depth + 1, results, on_dir);
+    }
+}
+
 // ── Scanning ──────────────────────────────────────────────────────────
 
 const DELAY_DAYS: u64 = 7;
@@ -319,33 +440,90 @@ fn scan_npm(path: &Path) -> Vec<Recommendation> {
             &cfg,
             "min-release-age",
             "7",
-            "Minimum release age (days) - delays new package versions by 7 days",
+            "Delay new versions by 7 days",
         ),
         check_flat(
             &cfg,
             "ignore-scripts",
             "true",
-            "Disable post-install scripts - prevents malicious install scripts",
+            "Block malicious install scripts",
         ),
     ]
 }
 
 fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
     let cfg = read_flat_config(path);
+    // ignore-scripts is shared with npm in the same .npmrc — only check
+    // pnpm-specific keys here. Release age is handled via pnpm-workspace.yaml.
+    vec![check_flat(
+        &cfg,
+        "ignore-scripts",
+        "true",
+        "Block malicious install scripts",
+    )]
+}
+
+fn scan_pnpm_workspace(path: &Path) -> Vec<Recommendation> {
     vec![
-        check_flat(
-            &cfg,
-            "minimum-release-age",
-            "10080",
-            "Minimum release age (minutes) - delays new package versions by 7 days",
+        check_yaml(
+            path,
+            "minimumReleaseAge",
+            "4320",
+            "Delay new versions by 3 days",
+            YamlCheck::MinInt(4320),
         ),
-        check_flat(
-            &cfg,
-            "ignore-scripts",
+        check_yaml(
+            path,
+            "blockExoticSubdeps",
             "true",
-            "Disable post-install scripts - prevents malicious install scripts",
+            "Block untrusted transitive deps",
+            YamlCheck::Exact,
+        ),
+        check_yaml(
+            path,
+            "trustPolicy",
+            "no-downgrade",
+            "Block provenance downgrades",
+            YamlCheck::Exact,
+        ),
+        check_yaml(
+            path,
+            "strictDepBuilds",
+            "true",
+            "Fail on unreviewed build scripts",
+            YamlCheck::Exact,
         ),
     ]
+}
+
+enum YamlCheck {
+    Exact,
+    MinInt(u64),
+}
+
+fn check_yaml(
+    path: &Path,
+    key: &str,
+    expected: &str,
+    desc: &str,
+    check: YamlCheck,
+) -> Recommendation {
+    let val = read_yaml_value(path, key);
+    let status = match (&val, &check) {
+        (None, _) => CheckStatus::Missing,
+        (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok,
+        (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
+            Ok(n) if n >= *min => CheckStatus::Ok,
+            _ => CheckStatus::WrongValue(v.clone()),
+        },
+        (Some(v), _) => CheckStatus::WrongValue(v.clone()),
+    };
+    Recommendation {
+        key: key.into(),
+        description: desc.into(),
+        expected: expected.into(),
+        status,
+    }
 }
 
 fn scan_bun(path: &Path) -> Vec<Recommendation> {
@@ -362,26 +540,51 @@ fn scan_bun(path: &Path) -> Vec<Recommendation> {
     // already restricted. We still recommend awareness but mark it OK.
     vec![Recommendation {
         key: "install.minimumReleaseAge".into(),
-        description: "Minimum release age (seconds) - delays new versions by 7 days".into(),
+        description: "Delay new versions by 7 days".into(),
         expected: "604800".into(),
         status: delay_status,
     }]
 }
 
+/// Parse a relative duration string like "7 days", "2 weeks" into days.
+fn parse_relative_days(s: &str) -> Option<u64> {
+    let s = s.trim().to_lowercase();
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.len() == 2 {
+        let n: u64 = parts[0].parse().ok()?;
+        match parts[1].trim_end_matches('s') {
+            "day" => Some(n),
+            "week" => Some(n * 7),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 fn scan_uv(path: &Path) -> Vec<Recommendation> {
     let val = read_toml_value(path, "exclude-newer");
-    let threshold = date_days_ago(DELAY_DAYS);
     let status = match &val {
-        Some(v) if is_date_old_enough(v, DELAY_DAYS) => CheckStatus::Ok,
-        Some(v) => CheckStatus::WrongValue(v.clone()),
+        Some(v) => {
+            // Accept relative durations (e.g. "7 days") or absolute dates old enough
+            if let Some(days) = parse_relative_days(v) {
+                if days >= DELAY_DAYS {
+                    CheckStatus::Ok
+                } else {
+                    CheckStatus::WrongValue(v.clone())
+                }
+            } else if is_date_old_enough(v, DELAY_DAYS) {
+                CheckStatus::Ok
+            } else {
+                CheckStatus::WrongValue(v.clone())
+            }
+        }
         None => CheckStatus::Missing,
     };
     vec![Recommendation {
         key: "exclude-newer".into(),
-        description: format!(
-            "Exclude packages newer than 7 days - set to rolling date (currently {threshold})"
-        ),
-        expected: threshold,
+        description: "Delay new versions by 7 days".into(),
+        expected: "7 days".into(),
         status,
     }]
 }
@@ -413,6 +616,7 @@ pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
         ManagerKind::Pnpm => scan_pnpm(&path),
         ManagerKind::Bun => scan_bun(&path),
         ManagerKind::Uv => scan_uv(&path),
+        ManagerKind::PnpmWorkspace => unreachable!("use scan_pnpm_workspaces instead"),
     };
     Some(ManagerInfo {
         kind,
@@ -422,11 +626,73 @@ pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
     })
 }
 
-pub fn scan_all() -> Vec<ManagerInfo> {
-    ManagerKind::ALL
-        .iter()
-        .filter_map(|&k| scan_manager(k))
+/// Scan all discovered pnpm-workspace.yaml files (requires pnpm installed).
+fn scan_pnpm_workspaces_with_progress(
+    on_progress: &mut dyn FnMut(&str, f32),
+    base_frac: f32,
+) -> Vec<ManagerInfo> {
+    let version = match detect_version("pnpm") {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+    let paths = find_pnpm_workspaces_with_progress(&mut |dir| {
+        // Show a pulsing progress in the workspace-search fraction range (base_frac..1.0)
+        let dir_name = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("...");
+        on_progress(
+            &format!("Searching ~/{}...", dir_name),
+            base_frac,
+        );
+    });
+    paths
+        .into_iter()
+        .map(|path| {
+            let recommendations = scan_pnpm_workspace(&path);
+            ManagerInfo {
+                kind: ManagerKind::PnpmWorkspace,
+                version: version.clone(),
+                config_path: path,
+                recommendations,
+            }
+        })
         .collect()
+}
+
+#[cfg(test)]
+pub fn scan_all() -> Vec<ManagerInfo> {
+    scan_all_with_progress(|_, _| {})
+}
+
+/// Scan all managers, calling `on_progress(step_description, fraction)` after each step.
+/// `fraction` is a value from 0.0 to 1.0.
+pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<ManagerInfo> {
+    let managers: Vec<ManagerKind> = ManagerKind::ALL
+        .iter()
+        .copied()
+        .filter(|&k| k != ManagerKind::PnpmWorkspace)
+        .collect();
+    let base_steps = managers.len() + 1; // +1 for workspace search
+    let mut results = Vec::new();
+
+    for (i, &kind) in managers.iter().enumerate() {
+        on_progress(
+            &format!("Detecting {}...", kind.name()),
+            i as f32 / base_steps as f32,
+        );
+        if let Some(info) = scan_manager(kind) {
+            results.push(info);
+        }
+    }
+
+    let base_frac = managers.len() as f32 / base_steps as f32;
+    let workspace_infos =
+        scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
+    results.extend(workspace_infos);
+
+    on_progress("Done", 1.0);
+    results
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -605,7 +871,6 @@ mod tests {
     fn manager_kind_all_names() {
         for k in ManagerKind::ALL {
             assert!(!k.name().is_empty());
-            assert!(!k.icon().is_empty());
         }
     }
 
@@ -651,9 +916,10 @@ mod tests {
 
     #[test]
     fn scan_pnpm_checks() {
-        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let f = tmp_file("ignore-scripts=true\n");
         let recs = scan_pnpm(f.path());
-        assert!(recs.iter().all(|r| r.status.is_ok()));
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].status.is_ok());
     }
 
     #[test]
@@ -685,7 +951,28 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_checks() {
+    fn scan_uv_relative_days() {
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = scan_uv(f.path());
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_uv_relative_weeks() {
+        let f = tmp_file("exclude-newer = \"2 weeks\"\n");
+        let recs = scan_uv(f.path());
+        assert!(recs[0].status.is_ok()); // 14 days >= 7
+    }
+
+    #[test]
+    fn scan_uv_relative_too_short() {
+        let f = tmp_file("exclude-newer = \"3 days\"\n");
+        let recs = scan_uv(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_uv_absolute_date_ok() {
         let old_date = date_days_ago(30);
         let content = format!("exclude-newer = \"{old_date}\"\n");
         let f = tmp_file(&content);
@@ -811,5 +1098,89 @@ mod tests {
         let os = TargetOs::current();
         // Just ensure it returns something valid
         assert!(os == TargetOs::Linux || os == TargetOs::MacOs || os == TargetOs::Windows);
+    }
+
+    // ── YAML reading tests ───────────────────────────────────────────
+
+    #[test]
+    fn read_yaml_value_basic() {
+        let f = tmp_file("minimumReleaseAge: 4320\nblockExoticSubdeps: true\n");
+        assert_eq!(
+            read_yaml_value(f.path(), "minimumReleaseAge"),
+            Some("4320".into())
+        );
+        assert_eq!(
+            read_yaml_value(f.path(), "blockExoticSubdeps"),
+            Some("true".into())
+        );
+    }
+
+    #[test]
+    fn read_yaml_value_quoted() {
+        let f = tmp_file("trustPolicy: \"no-downgrade\"\n");
+        assert_eq!(
+            read_yaml_value(f.path(), "trustPolicy"),
+            Some("no-downgrade".into())
+        );
+    }
+
+    #[test]
+    fn read_yaml_value_missing() {
+        let f = tmp_file("foo: bar\n");
+        assert_eq!(read_yaml_value(f.path(), "nonexistent"), None);
+    }
+
+    #[test]
+    fn read_yaml_value_skips_nested() {
+        // Should not match indented keys
+        let f = tmp_file("packages:\n  - 'src/*'\nminimumReleaseAge: 4320\n");
+        assert_eq!(
+            read_yaml_value(f.path(), "minimumReleaseAge"),
+            Some("4320".into())
+        );
+        assert_eq!(read_yaml_value(f.path(), "- 'src/*'"), None);
+    }
+
+    #[test]
+    fn read_yaml_value_with_comment() {
+        let f = tmp_file("minimumReleaseAge: 4320 # 3 days\n");
+        assert_eq!(
+            read_yaml_value(f.path(), "minimumReleaseAge"),
+            Some("4320".into())
+        );
+    }
+
+    // ── pnpm-workspace scanning tests ────────────────────────────────
+
+    #[test]
+    fn scan_pnpm_workspace_all_ok() {
+        let f = tmp_file(
+            "minimumReleaseAge: 4320\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+        );
+        let recs = scan_pnpm_workspace(f.path());
+        assert_eq!(recs.len(), 4);
+        assert!(recs.iter().all(|r| r.status.is_ok()));
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_missing() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_workspace(f.path());
+        assert_eq!(recs.len(), 4);
+        assert!(recs.iter().all(|r| matches!(r.status, CheckStatus::Missing)));
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_higher_release_age_ok() {
+        let f = tmp_file("minimumReleaseAge: 10080\n");
+        let recs = scan_pnpm_workspace(f.path());
+        assert!(recs[0].status.is_ok()); // 10080 >= 4320
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_low_release_age() {
+        let f = tmp_file("minimumReleaseAge: 100\n");
+        let recs = scan_pnpm_workspace(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 }

@@ -1,48 +1,44 @@
 # depsguard
 
+```
+╶┬┐┌─╴┌─┐┌─┐┌─╴╷ ╷┌─┐┌─┐╶┬┐
+ ││├╴ ├─┘└─┐│╶┐│ │├─┤├┬┘ ││
+╶┴┘└─╴╵  └─┘└─┘└─┘╵ ╵╵└╴╶┴┘
+```
+
 Harden your package manager configs against supply chain attacks. Zero dependencies.
 
-Made with love by [arnica](https://arnica.io) in Atlanta.
-
-```
-     ╔═══════════════════════════════════════════════════════╗
-     ║   ____                  ____                     _    ║
-     ║  |  _ \  ___ _ __  ___ / ___|_   _  __ _ _ __ __| |   ║
-     ║  | | | |/ _ \ '_ \/ __| |  _| | | |/ _` | '__/ _` |   ║
-     ║  | |_| |  __/ |_) \__ \ |_| | |_| | (_| | | | (_| |   ║
-     ║  |____/ \___| .__/|___/\____|\__,_|\__,_|_|  \__,_|   ║
-     ║             |_|    supply chain defense               ║
-     ║                                                       ║
-     ║        Made with love by Arnica in Atlanta            ║
-     ╚═══════════════════════════════════════════════════════╝
-```
+By **[[arnica](https://arnica.io)]**
 
 ## What it does
 
-DepsGuard scans your system for installed package managers, checks their configs
-for supply chain security best practices, and offers to fix them interactively.
+DepsGuard scans your system for installed package managers and `pnpm-workspace.yaml` files, checks their configs for supply chain security best practices, and offers to fix them interactively. Backups are created before any changes.
 
 **Supported package managers:** npm, pnpm, bun, uv
 
 **Checks performed:**
 
-| Manager | Setting | Value | Purpose |
-|---------|---------|-------|---------|
-| npm | `min-release-age` | `7` (days) | Delay new package versions by 7 days |
-| npm | `ignore-scripts` | `true` | Block malicious post-install scripts |
-| pnpm | `minimum-release-age` | `10080` (minutes) | Delay new package versions by 7 days |
-| pnpm | `ignore-scripts` | `true` | Block malicious post-install scripts |
-| bun | `install.minimumReleaseAge` | `604800` (seconds) | Delay new package versions by 7 days |
-| uv | `exclude-newer` | RFC 3339 date (7 days ago) | Exclude recently published packages |
+| Manager | Config | Setting | Value | Purpose |
+|---------|--------|---------|-------|---------|
+| npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay new versions by 7 days |
+| npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Block malicious install scripts |
+| pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `4320` (min) | Delay new versions by 3 days |
+| pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
+| pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades |
+| pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts |
+| bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (sec) | Delay new versions by 7 days |
+| uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new versions by 7 days |
 
 ## Config file locations
 
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
-| npm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
-| pnpm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
+| npm/pnpm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
+| pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
 | bun | `~/.bunfig.toml` | `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
 | uv | `~/.config/uv/uv.toml` | `~/Library/Application Support/uv/uv.toml` | `%APPDATA%\uv\uv.toml` |
+
+`pnpm-workspace.yaml` files are discovered by searching from the home directory downward, skipping known large directories (`node_modules`, `Library`, `.cache`, `target`, etc.).
 
 ## Install
 
@@ -59,16 +55,25 @@ depsguard
 # Scan only, no changes
 depsguard --scan
 
+# Restore config files from backup
+depsguard --restore
+
 # Help
 depsguard --help
 ```
 
 ### Interactive mode
 
-1. Scans all detected package managers and shows their status
-2. Presents fixable items with a TUI selector
-3. Use arrow keys to navigate, space to toggle, enter to apply, q/esc to quit
-4. Applies selected fixes and re-scans to confirm
+1. Scans all detected package managers and pnpm workspaces
+2. Shows a summary of issues (not set / misconfigured / ok)
+3. Presents fixable items grouped by config file with a TUI selector
+4. Use arrow keys to navigate, space to toggle, enter to apply
+5. Press Esc to go back, q to quit
+6. Backs up config files before applying any changes
+
+### Backup & restore
+
+Before modifying any config file, depsguard creates a backup in `~/.depsguard/backups/`. Run `depsguard --restore` to restore all files from backup.
 
 ## Build
 
@@ -97,14 +102,13 @@ cargo test --test integration
 cargo test --test cross_platform
 ```
 
-**Test coverage:** 73 unit tests, 21 integration tests, 12 cross-platform tests (including Wine).
-
 ## Design
 
 - **Zero dependencies** - only uses Rust std library
 - **Cross-platform** - Linux, macOS, Windows (tested via Wine)
 - **Terminal raw mode** - direct FFI to termios (Unix) / Console API (Windows)
 - **ANSI colors** - works on modern terminals including Windows Terminal
+- **Smart search** - finds `pnpm-workspace.yaml` files across projects, skipping large dirs
 
 ### Architecture
 
@@ -113,7 +117,7 @@ src/
   main.rs       Entry point, CLI args, interactive loop
   term.rs       Raw terminal mode, ANSI codes, key input (zero-dep FFI)
   manager.rs    Package manager detection, config scanning, recommendations
-  fix.rs        Config file modification (flat .npmrc + TOML)
+  fix.rs        Config file modification (flat .npmrc, TOML, YAML) + backup/restore
   ui.rs         TUI rendering: banner, status table, interactive selector
 ```
 

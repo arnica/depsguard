@@ -1,36 +1,93 @@
 // TUI rendering — ASCII art banner, status table, interactive selector.
 
 use std::io::{self, Write};
+use std::path::Path;
 
 use crate::manager::{CheckStatus, ManagerInfo};
 use crate::term::*;
 
+/// Display a path relative to the user's home directory (~/...).
+fn display_path(path: &Path) -> String {
+    let home = crate::manager::home_dir();
+    match path.strip_prefix(&home) {
+        Ok(rel) => format!("~/{}", rel.display()),
+        Err(_) => path.display().to_string(),
+    }
+}
+
 // ── Banner ────────────────────────────────────────────────────────────
 
-const BANNER: &str = r#"
-     ╔═══════════════════════════════════════════════════════╗
-     ║   ____                  ____                     _    ║
-     ║  |  _ \  ___ _ __  ___ / ___|_   _  __ _ _ __ __| |   ║
-     ║  | | | |/ _ \ '_ \/ __| |  _| | | |/ _` | '__/ _` |   ║
-     ║  | |_| |  __/ |_) \__ \ |_| | |_| | (_| | | | (_| |   ║
-     ║  |____/ \___| .__/|___/\____|\__,_|\__,_|_|  \__,_|   ║
-     ║             |_|    supply chain defense               ║
-     ║                                                       ║
-     ║        Made with love by Arnica in Atlanta            ║
-     ╚═══════════════════════════════════════════════════════╝
-"#;
+/// Arnica brand color — ANSI 256-color 73 (closest to #44bea4)
+const ARNICA: &str = "\x1b[38;5;73m";
+/// DepsGuard brand color #ebb838 — ANSI 256-color 178 (closest match)
+const GOLD: &str = "\x1b[38;5;178m";
+
+const BOX_WIDTH: usize = 66; // inner width between │ chars
 
 pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
-    write!(w, "{CYAN}{BOLD}{BANNER}{RESET}\n")
+    let version = env!("CARGO_PKG_VERSION");
+
+    let indent = "  ";
+
+    // Top border with version
+    let title = format!(" v{version} ");
+    let remaining = BOX_WIDTH.saturating_sub(title.len() + 1);
+    writeln!(w, "{indent}{ARNICA}╭─{RESET}{BOLD}{WHITE}{title}{RESET}{ARNICA}{}{RESET}{ARNICA}╮{RESET}",
+        "─".repeat(remaining))?;
+
+    // Art lines inside box (centered)
+    let art_lines: &[&str] = &[
+        "",
+        "╶┬┐┌─╴┌─┐┌─┐┌─╴╷ ╷┌─┐┌─┐╶┬┐",
+        " ││├╴ ├─┘└─┐│╶┐│ │├─┤├┬┘ ││",
+        "╶┴┘└─╴╵  └─┘└─┘└─┘╵ ╵╵└╴╶┴┘",
+        "",
+    ];
+    for line in art_lines {
+        let display_len = line.chars().count();
+        let left = (BOX_WIDTH.saturating_sub(display_len)) / 2;
+        let right = BOX_WIDTH.saturating_sub(display_len + left);
+        writeln!(w, "{indent}{ARNICA}│{RESET}{}{GOLD}{BOLD}{line}{RESET}{}{ARNICA}│{RESET}",
+            " ".repeat(left), " ".repeat(right))?;
+    }
+
+    // Bottom border with branding right-aligned
+    let brand_cols = 13;
+    let left_dashes = BOX_WIDTH.saturating_sub(brand_cols + 1);
+    write!(w, "{indent}{ARNICA}╰{}─{RESET}", "─".repeat(left_dashes))?;
+    write!(w, "{DIM} by {RESET}{ARNICA}[{RESET}{WHITE}{BOLD}arnica{RESET}{ARNICA}]{RESET}{DIM} {RESET}")?;
+    writeln!(w, "{ARNICA}╯{RESET}")?;
+    writeln!(w)
+}
+
+// ── Progress bar ─────────────────────────────────────────────────────
+
+/// Render a status line in-place (overwrites current line).
+pub fn print_progress(w: &mut impl Write, label: &str, _fraction: f32) -> io::Result<()> {
+    let term_width = crate::term::terminal_size().map(|(w, _)| w as usize).unwrap_or(80);
+    let prefix_cols = 4; // "  · "
+    let max_label = term_width.saturating_sub(prefix_cols);
+    let truncated = if label.len() > max_label && max_label > 3 {
+        format!("{}...", &label[..max_label - 3])
+    } else {
+        label.to_string()
+    };
+    write!(w, "\r\x1b[K  {DIM}· {truncated}{RESET}")?;
+    w.flush()
+}
+
+/// Clear the progress bar line.
+pub fn clear_progress(w: &mut impl Write) -> io::Result<()> {
+    write!(w, "\r\x1b[K")
 }
 
 // ── Status rendering ──────────────────────────────────────────────────
 
 fn status_icon(s: &CheckStatus) -> &'static str {
     match s {
-        CheckStatus::Ok => "✅",
-        CheckStatus::Missing => "❌",
-        CheckStatus::WrongValue(_) => "⚠️ ",
+        CheckStatus::Ok => "✓",
+        CheckStatus::Missing => "✗",
+        CheckStatus::WrongValue(_) => "~",
     }
 }
 
@@ -55,41 +112,128 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         return Ok(());
     }
 
+    // Count issues (deduplicate by config_path + key, matching display logic)
+    let mut ok_count = 0usize;
+    let mut missing_count = 0usize;
+    let mut wrong_count = 0usize;
+    let mut seen_keys = std::collections::HashSet::new();
+    for mgr in managers {
+        for rec in &mgr.recommendations {
+            if !seen_keys.insert((&mgr.config_path, &rec.key)) {
+                continue;
+            }
+            match &rec.status {
+                CheckStatus::Ok => ok_count += 1,
+                CheckStatus::Missing => missing_count += 1,
+                CheckStatus::WrongValue(_) => wrong_count += 1,
+            }
+        }
+    }
+    let total_issues = missing_count + wrong_count;
+
+    if total_issues == 0 {
+        writeln!(
+            w,
+            "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {} config(s){RESET}\n",
+            managers.len()
+        )?;
+    } else {
+        write!(w, "  ")?;
+        if missing_count > 0 {
+            write!(w, "{RED}{BOLD}{missing_count} not set{RESET}  ")?;
+        }
+        if wrong_count > 0 {
+            write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
+        }
+        write!(w, "{GREEN}{ok_count} ok{RESET}")?;
+        writeln!(w, "  {DIM}({} total across {} config(s)){RESET}\n",
+            ok_count + missing_count + wrong_count, managers.len())?;
+    }
+
     writeln!(w, "  {BOLD}{WHITE}Detected Package Managers:{RESET}\n")?;
 
-    for mgr in managers {
-        let icon = mgr.kind.icon();
-        let name = mgr.kind.name();
-        let ver = &mgr.version;
-        let all_ok = mgr.all_ok();
+    // Group managers that share the same config path
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut assigned = vec![false; managers.len()];
+
+    for i in 0..managers.len() {
+        if assigned[i] {
+            continue;
+        }
+        let mut group = vec![i];
+        assigned[i] = true;
+        for j in (i + 1)..managers.len() {
+            if !assigned[j] && managers[j].config_path == managers[i].config_path {
+                group.push(j);
+                assigned[j] = true;
+            }
+        }
+        groups.push(group);
+    }
+
+    for group in &groups {
+        // Build header: "📦 npm v10.0 · pnpm v10.20"
+        let header_parts: Vec<String> = group
+            .iter()
+            .map(|&idx| {
+                let mgr = &managers[idx];
+                let icon = mgr.kind.icon();
+                let space = if icon.is_empty() { "" } else { " " };
+                format!(
+                    "{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}",
+                    mgr.kind.name(),
+                    mgr.version
+                )
+            })
+            .collect();
+        let header = header_parts.join(&format!(" {DIM}·{RESET} "));
+
+        let all_ok = group.iter().all(|&idx| managers[idx].all_ok());
         let badge = if all_ok {
             format!("{BG_GREEN}{BOLD} SECURE {RESET}")
         } else {
             format!("{BG_RED}{BOLD} ACTION NEEDED {RESET}")
         };
 
+        writeln!(w, "  {header}  {badge}")?;
         writeln!(
             w,
-            "  {icon} {BOLD}{CYAN}{name}{RESET} {DIM}v{ver}{RESET}  {badge}"
+            "     {DIM}Config: {}{RESET}",
+            display_path(&managers[group[0]].config_path)
         )?;
-        writeln!(w, "    {DIM}Config: {}{RESET}", mgr.config_path.display())?;
 
-        for rec in &mgr.recommendations {
-            let si = status_icon(&rec.status);
-            let sc = status_color(&rec.status);
-            let detail = match &rec.status {
-                CheckStatus::Ok => format!("{GREEN}= {}{RESET}", rec.expected),
-                CheckStatus::Missing => format!("{RED}not configured{RESET}"),
-                CheckStatus::WrongValue(v) => {
-                    format!(
-                        "{YELLOW}{v}{RESET} {DIM}(expected: {}){RESET}",
-                        rec.expected
-                    )
+        let mut seen_keys = std::collections::HashSet::new();
+        for &idx in group {
+            let mgr = &managers[idx];
+            let show_prefix = group.len() > 1;
+            for rec in &mgr.recommendations {
+                // Deduplicate identical keys within a grouped config file
+                if !seen_keys.insert(rec.key.clone()) {
+                    continue;
                 }
-            };
-            writeln!(w, "    {si} {sc}{}{RESET}", rec.key)?;
-            writeln!(w, "       {DIM}{}{RESET}", rec.description)?;
-            writeln!(w, "       Status: {detail}")?;
+                let si = status_icon(&rec.status);
+                let sc = status_color(&rec.status);
+                let detail = match &rec.status {
+                    CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
+                    CheckStatus::Missing => format!("{RED}not set{RESET}"),
+                    CheckStatus::WrongValue(v) => {
+                        format!(
+                            "{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}",
+                            rec.expected
+                        )
+                    }
+                };
+                let prefix = if show_prefix {
+                    format!("{DIM}({}){RESET} ", mgr.kind.name())
+                } else {
+                    String::new()
+                };
+                writeln!(
+                    w,
+                    "     {sc}{si}{RESET} {prefix}{sc}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
+                    rec.key, rec.description
+                )?;
+            }
         }
         writeln!(w)?;
     }
@@ -103,25 +247,50 @@ pub struct SelectItem {
     pub manager_idx: usize,
     pub rec_idx: usize,
     pub label: String,
+    pub group_path: String,  // display path for grouping
+    pub group_header: String, // e.g. "📦 npm · ⚡ pnpm"
     pub selected: bool,
 }
 
 pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
     let mut items = Vec::new();
+    // Track (config_path, key) to avoid duplicate fix items when managers share a config
+    let mut seen = std::collections::HashSet::new();
+
+    // Pre-compute which managers share each config path
+    let mut path_managers: std::collections::HashMap<&std::path::Path, Vec<&ManagerInfo>> =
+        std::collections::HashMap::new();
+    for mgr in managers {
+        path_managers
+            .entry(mgr.config_path.as_path())
+            .or_default()
+            .push(mgr);
+    }
+
     for (mi, mgr) in managers.iter().enumerate() {
         for (ri, rec) in mgr.recommendations.iter().enumerate() {
             if rec.needs_fix() {
+                let dedup_key = (mgr.config_path.clone(), rec.key.clone());
+                if !seen.insert(dedup_key) {
+                    continue;
+                }
+                let siblings = &path_managers[mgr.config_path.as_path()];
+                let group_header = siblings
+                    .iter()
+                    .map(|m| {
+                        let icon = m.kind.icon();
+                        let space = if icon.is_empty() { "" } else { " " };
+                        format!("{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}", m.kind.name(), m.version)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(&format!(" {DIM}·{RESET} "));
                 items.push(SelectItem {
                     manager_idx: mi,
                     rec_idx: ri,
-                    label: format!(
-                        "{} {} → {} = {}",
-                        mgr.kind.icon(),
-                        mgr.kind.name(),
-                        rec.key,
-                        rec.expected
-                    ),
-                    selected: true, // default: select all
+                    label: format!("{} = {}", rec.key, rec.expected),
+                    group_path: display_path(&mgr.config_path),
+                    group_header,
+                    selected: true,
                 });
             }
         }
@@ -135,19 +304,29 @@ pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -
         "  {BOLD}{WHITE}Select fixes to apply:{RESET}  {DIM}(↑↓ move, space toggle, enter apply, q quit){RESET}\n"
     )?;
 
+    let mut last_group: Option<&str> = None;
     for (i, item) in items.iter().enumerate() {
+        // Print group header when path changes
+        if last_group != Some(&item.group_path) {
+            if last_group.is_some() {
+                writeln!(w)?;
+            }
+            writeln!(w, "  {}",  item.group_header)?;
+            writeln!(w, "     {DIM}Config: {}{RESET}", item.group_path)?;
+            last_group = Some(&item.group_path);
+        }
         let arrow = if i == cursor {
             format!("{CYAN}{BOLD}▸{RESET}")
         } else {
             " ".to_string()
         };
         let check = if item.selected {
-            format!("{GREEN}[✓]{RESET}")
+            format!("{GREEN}●{RESET}")
         } else {
-            format!("{DIM}[ ]{RESET}")
+            format!("{DIM}○{RESET}")
         };
         let highlight = if i == cursor { BOLD } else { "" };
-        writeln!(w, "  {arrow} {check} {highlight}{}{RESET}", item.label)?;
+        writeln!(w, "     {arrow} {check} {highlight}{}{RESET}", item.label)?;
     }
     writeln!(w)?;
 
@@ -156,6 +335,7 @@ pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -
     writeln!(w, "  {DIM}{count} fix(es) selected{RESET}\n")
 }
 
+#[cfg(test)]
 pub fn print_fix_results(
     w: &mut impl Write,
     results: &[(String, Result<String, String>)],
@@ -207,8 +387,8 @@ mod tests {
         let mut buf = Vec::new();
         print_banner(&mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("supply chain defense"));
-        assert!(s.contains("Arnica"));
+        assert!(s.contains("v0.1.0"));
+        assert!(s.contains("arnica"));
     }
 
     #[test]
@@ -236,7 +416,7 @@ mod tests {
         print_scan_results(&mut buf, &[mgr]).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("ACTION NEEDED"));
-        assert!(s.contains("not configured"));
+        assert!(s.contains("not set"));
     }
 
     #[test]
@@ -275,12 +455,16 @@ mod tests {
                 manager_idx: 0,
                 rec_idx: 0,
                 label: "fix A".into(),
+                group_path: "~/.npmrc".into(),
+                group_header: "npm".into(),
                 selected: true,
             },
             SelectItem {
                 manager_idx: 0,
                 rec_idx: 1,
                 label: "fix B".into(),
+                group_path: "~/.npmrc".into(),
+                group_header: "npm".into(),
                 selected: false,
             },
         ];
@@ -288,8 +472,8 @@ mod tests {
         print_selector(&mut buf, &items, 0).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("▸")); // cursor
-        assert!(s.contains("[✓]"));
-        assert!(s.contains("[ ]"));
+        assert!(s.contains("●"));
+        assert!(s.contains("○"));
         assert!(s.contains("1 fix(es) selected"));
     }
 
@@ -300,12 +484,16 @@ mod tests {
                 manager_idx: 0,
                 rec_idx: 0,
                 label: "fix A".into(),
+                group_path: "~/.npmrc".into(),
+                group_header: "npm".into(),
                 selected: true,
             },
             SelectItem {
                 manager_idx: 0,
                 rec_idx: 1,
                 label: "fix B".into(),
+                group_path: "~/.npmrc".into(),
+                group_header: "npm".into(),
                 selected: true,
             },
         ];

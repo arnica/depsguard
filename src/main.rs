@@ -11,16 +11,26 @@ use ui::SelectItem;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && (args[1] == "--scan" || args[1] == "-s") {
+
+    // Check for --no-color flag or auto-detect
+    if args.iter().any(|a| a == "--no-color") || !term::should_use_colors() {
+        term::disable_colors();
+    }
+
+    if args.iter().any(|a| a == "--scan" || a == "-s") {
         run_scan_only();
         return;
     }
-    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
         print_usage();
         return;
     }
-    if args.len() > 1 && (args[1] == "--version" || args[1] == "-V") {
+    if args.iter().any(|a| a == "--version" || a == "-V") {
         println!("depsguard {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    if args.iter().any(|a| a == "--restore") {
+        run_restore();
         return;
     }
 
@@ -38,71 +48,87 @@ fn print_usage() {
     println!("    depsguard            Interactive mode (TUI)");
     println!("    depsguard --scan     Scan only, no changes");
     println!("    depsguard --help     Show this help");
-    println!("    depsguard --version  Show version\n");
+    println!("    depsguard --version  Show version");
+    println!("    depsguard --restore  Restore config files from backup");
+    println!("    depsguard --no-color Disable colored output\n");
 }
 
 fn run_scan_only() {
     let mut out = io::stdout();
     ui::print_banner(&mut out).ok();
-    let managers = manager::scan_all();
+    let managers = manager::scan_all_with_progress(|label, frac| {
+        ui::print_progress(&mut io::stdout(), label, frac).ok();
+    });
+    ui::clear_progress(&mut out).ok();
+    writeln!(out).ok();
     ui::print_scan_results(&mut out, &managers).ok();
 }
 
 fn run_interactive() -> io::Result<()> {
     let mut out = io::stdout();
 
-    // Phase 1: Scan
-    ui::print_banner(&mut out)?;
-    println!(
-        "  {}{}Scanning package managers...{}\n",
-        term::BOLD,
-        term::CYAN,
-        term::RESET
-    );
-    out.flush()?;
+    loop {
+        // Phase 1: Scan
+        term::clear_screen(&mut out)?;
+        ui::print_banner(&mut out)?;
+        let managers = manager::scan_all_with_progress(|label, frac| {
+            ui::print_progress(&mut io::stdout(), label, frac).ok();
+        });
+        ui::clear_progress(&mut out)?;
+        writeln!(out)?;
+        ui::print_scan_results(&mut out, &managers)?;
 
-    let managers = manager::scan_all();
-    ui::print_scan_results(&mut out, &managers)?;
-    out.flush()?;
+        // Build fixable items
+        let mut items = ui::build_fix_items(&managers);
+        if items.is_empty() {
+            println!(
+                "  {}{}All package managers are properly configured!{}",
+                term::BOLD,
+                term::GREEN,
+                term::RESET
+            );
+            return Ok(());
+        }
 
-    // Build fixable items
-    let mut items = ui::build_fix_items(&managers);
-    if items.is_empty() {
+        // Phase 2: Interactive selection
         println!(
-            "  {}{}All package managers are properly configured! 🎉{}",
-            term::BOLD,
-            term::GREEN,
+            "  {}Press any key to enter selection mode (q to quit)...{}",
+            term::DIM,
             term::RESET
         );
-        return Ok(());
+        out.flush()?;
+
+        {
+            let _raw = term::RawMode::enable()?;
+            let key = term::read_key()?;
+            if matches!(key, Key::Char('q') | Key::Escape) {
+                drop(_raw);
+                term::show_cursor(&mut out)?;
+                out.flush()?;
+                return Ok(());
+            }
+
+            let go_back = selection_loop(&mut out, &mut items, &managers)?;
+
+            // Raw mode drops here, restoring terminal
+            drop(_raw);
+            term::show_cursor(&mut out)?;
+            out.flush()?;
+
+            if !go_back {
+                return Ok(());
+            }
+        }
+        // go_back == true: loop back to scan results
     }
-
-    // Phase 2: Interactive selection
-    println!(
-        "  {}Press any key to enter selection mode...{}",
-        term::DIM,
-        term::RESET
-    );
-    out.flush()?;
-
-    let _raw = term::RawMode::enable()?;
-    term::read_key()?; // wait for keypress
-
-    let result = selection_loop(&mut out, &mut items, &managers);
-
-    // Raw mode drops here, restoring terminal
-    drop(_raw);
-    term::show_cursor(&mut out)?;
-    out.flush()?;
-
-    result
 }
 
+/// Returns Ok(true) if user pressed Escape (go back), Ok(false) otherwise.
 fn selection_loop(
     out: &mut impl Write,
     items: &mut Vec<SelectItem>,
     managers: &[ManagerInfo],
-) -> io::Result<()> {
+) -> io::Result<bool> {
     let mut cursor: usize = 0;
 
     loop {
@@ -127,35 +153,14 @@ fn selection_loop(
                 items[cursor].selected = !items[cursor].selected;
             }
             Key::Enter => {
-                let results = apply_selected(items, managers);
-                term::clear_screen(out)?;
-                ui::print_banner(out)?;
-                ui::print_fix_results(out, &results)?;
-
-                // Re-scan to show new status
-                writeln!(
-                    out,
-                    "  {}{}Re-scanning...{}\n",
-                    term::BOLD,
-                    term::CYAN,
-                    term::RESET
-                )?;
-                out.flush()?;
-                let new_managers = manager::scan_all();
-                ui::print_scan_results(out, &new_managers)?;
-
-                writeln!(
-                    out,
-                    "  {}Press any key to exit...{}",
-                    term::DIM,
-                    term::RESET
-                )?;
-                out.flush()?;
-                term::read_key()?;
-                return Ok(());
+                apply_selected(items, managers);
+                return Ok(true); // loop back to main scan screen
             }
-            Key::Escape | Key::Char('q') => {
-                return Ok(());
+            Key::Char('q') => {
+                return Ok(false);
+            }
+            Key::Escape => {
+                return Ok(true);
             }
             _ => {}
         }
@@ -166,16 +171,69 @@ fn apply_selected(
     items: &[SelectItem],
     managers: &[ManagerInfo],
 ) -> Vec<(String, Result<String, String>)> {
+    let mut backed_up = std::collections::HashSet::new();
     items
         .iter()
         .filter(|item| item.selected)
         .map(|item| {
             let mgr = &managers[item.manager_idx];
             let rec = &mgr.recommendations[item.rec_idx];
+            // Backup before first modification to each file
+            if let Err(e) = fix::backup_file(&mgr.config_path, &mut backed_up) {
+                return (item.label.clone(), Err(format!("backup failed: {e}")));
+            }
             let result = fix::apply_fix(mgr.kind, &mgr.config_path, rec).map_err(|e| e.to_string());
             (item.label.clone(), result)
         })
         .collect()
+}
+
+fn run_restore() {
+    let mut out = io::stdout();
+    ui::print_banner(&mut out).ok();
+
+    let backups = fix::list_backups();
+    if backups.is_empty() {
+        println!(
+            "  {}{}No backups found. Nothing to restore.{}",
+            term::BOLD,
+            term::YELLOW,
+            term::RESET
+        );
+        return;
+    }
+
+    println!(
+        "  {}{}Restoring {} file(s) from backup:{}",
+        term::BOLD,
+        term::CYAN,
+        backups.len(),
+        term::RESET
+    );
+    for (original, _) in &backups {
+        println!("    {}{}{}", term::DIM, original.display(), term::RESET);
+    }
+    println!();
+
+    let results = fix::restore_all();
+    for (path, result) in &results {
+        match result {
+            Ok(()) => println!(
+                "  {}✓{} Restored {}",
+                term::GREEN,
+                term::RESET,
+                path.display()
+            ),
+            Err(e) => println!(
+                "  {}✗{} Failed to restore {}: {}",
+                term::RED,
+                term::RESET,
+                path.display(),
+                e
+            ),
+        }
+    }
+    println!();
 }
 
 #[cfg(test)]
@@ -201,6 +259,8 @@ mod tests {
             manager_idx: 0,
             rec_idx: 0,
             label: "fix A".into(),
+            group_path: "~/.npmrc".into(),
+            group_header: "npm".into(),
             selected: false,
         }];
         let results = apply_selected(&items, &managers);
@@ -227,6 +287,8 @@ mod tests {
             manager_idx: 0,
             rec_idx: 0,
             label: "fix".into(),
+            group_path: "~/.npmrc".into(),
+            group_header: "npm".into(),
             selected: true,
         }];
         let results = apply_selected(&items, &managers);

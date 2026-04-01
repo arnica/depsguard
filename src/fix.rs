@@ -1,10 +1,83 @@
 // Apply fixes to package manager config files.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::manager::{ManagerKind, Recommendation};
+use crate::manager::{self, ManagerKind, Recommendation};
+
+// ── Backup / Restore ─────────────────────────────────────────────────
+
+/// Directory where backups are stored.
+fn backup_dir() -> PathBuf {
+    manager::home_dir().join(".depsguard/backups")
+}
+
+/// Convert a config path to a backup filename (replace / with __ ).
+fn backup_name(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "__").replace('\\', "__")
+}
+
+/// Backup a config file before modifying it. Only backs up once per path per session.
+pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<()> {
+    if backed_up.contains(path) {
+        return Ok(()); // already backed up this session
+    }
+    if !path.exists() {
+        backed_up.insert(path.to_path_buf());
+        return Ok(()); // nothing to back up
+    }
+    let dir = backup_dir();
+    fs::create_dir_all(&dir)?;
+    let dest = dir.join(backup_name(path));
+    fs::copy(path, &dest)?;
+    backed_up.insert(path.to_path_buf());
+    Ok(())
+}
+
+/// List all backed-up files with their original paths.
+pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
+    let dir = backup_dir();
+    let mut results = Vec::new();
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return results,
+    };
+    for entry in entries.flatten() {
+        let backup_path = entry.path();
+        if backup_path.is_file() {
+            let name = backup_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            // Reconstruct original path from __ -separated name
+            let original = name.replacen("__", "/", name.matches("__").count());
+            results.push((PathBuf::from(original), backup_path));
+        }
+    }
+    results.sort();
+    results
+}
+
+/// Restore all backed-up files to their original locations.
+pub fn restore_all() -> Vec<(PathBuf, Result<(), String>)> {
+    let backups = list_backups();
+    let mut results = Vec::new();
+    for (original, backup) in &backups {
+        let res = fs::copy(backup, original)
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+        results.push((original.clone(), res));
+    }
+    // Clean up backup dir after successful restore
+    if results.iter().all(|(_, r)| r.is_ok()) {
+        let dir = backup_dir();
+        let _ = fs::remove_dir_all(&dir);
+    }
+    results
+}
 
 /// Apply a single recommendation fix to the config file at `path`.
 pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Result<String> {
@@ -12,6 +85,10 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
         ManagerKind::Npm | ManagerKind::Pnpm => apply_flat_fix(path, &rec.key, &rec.expected),
         ManagerKind::Bun => apply_toml_fix(path, &rec.key, &rec.expected, false),
         ManagerKind::Uv => apply_toml_fix(path, &rec.key, &rec.expected, true),
+        ManagerKind::PnpmWorkspace => {
+            let quote = matches!(rec.key.as_str(), "trustPolicy");
+            apply_yaml_fix(path, &rec.key, &rec.expected, quote)
+        }
     }
 }
 
@@ -133,6 +210,53 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
                 None => lines.push(target_line.clone()),
             }
         }
+    }
+
+    let output = lines.join("\n") + "\n";
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, &output)?;
+    Ok(target_line)
+}
+
+/// Set a top-level key in a YAML file (pnpm-workspace.yaml style).
+/// If `quote` is true, wraps value in double quotes.
+fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Result<String> {
+    let content = fs::read_to_string(path).unwrap_or_default();
+    let formatted_val = if quote {
+        format!("\"{value}\"")
+    } else {
+        value.to_string()
+    };
+    let target_line = format!("{key}: {formatted_val}");
+
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    let mut found = false;
+
+    for line in &mut lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+        // Only match top-level keys (not indented)
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        if let Some((k, _)) = trimmed.split_once(':') {
+            if k.trim() == key {
+                *line = target_line.clone();
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if !found {
+        if !lines.is_empty() && !lines.last().unwrap().is_empty() {
+            lines.push(String::new());
+        }
+        lines.push(target_line.clone());
     }
 
     let output = lines.join("\n") + "\n";
@@ -319,10 +443,74 @@ mod tests {
         let rec = Recommendation {
             key: "exclude-newer".into(),
             description: "test".into(),
-            expected: "2024-01-01".into(),
+            expected: "7 days".into(),
             status: crate::manager::CheckStatus::Missing,
         };
         apply_fix(ManagerKind::Uv, f.path(), &rec).unwrap();
-        assert!(f.read().contains("exclude-newer = \"2024-01-01\""));
+        assert!(f.read().contains("exclude-newer = \"7 days\""));
+    }
+
+    // ── YAML fix tests ──────────────────────────────────────────────
+
+    #[test]
+    fn yaml_fix_adds_missing_key() {
+        let f = tmp_file("packages:\n  - 'src/*'\n");
+        apply_yaml_fix(f.path(), "strictDepBuilds", "true", false).unwrap();
+        let content = f.read();
+        assert!(content.contains("strictDepBuilds: true"));
+        assert!(content.contains("packages:")); // preserves existing
+    }
+
+    #[test]
+    fn yaml_fix_updates_existing_key() {
+        let f = tmp_file("minimumReleaseAge: 100\n");
+        apply_yaml_fix(f.path(), "minimumReleaseAge", "4320", false).unwrap();
+        let content = f.read();
+        assert!(content.contains("minimumReleaseAge: 4320"));
+        assert!(!content.contains("100"));
+    }
+
+    #[test]
+    fn yaml_fix_quoted_value() {
+        let f = tmp_file("");
+        apply_yaml_fix(f.path(), "trustPolicy", "no-downgrade", true).unwrap();
+        let content = f.read();
+        assert!(content.contains("trustPolicy: \"no-downgrade\""));
+    }
+
+    #[test]
+    fn yaml_fix_preserves_other_keys() {
+        let f = tmp_file("packages:\n  - 'src/*'\nblockExoticSubdeps: true\n");
+        apply_yaml_fix(f.path(), "minimumReleaseAge", "4320", false).unwrap();
+        let content = f.read();
+        assert!(content.contains("blockExoticSubdeps: true"));
+        assert!(content.contains("minimumReleaseAge: 4320"));
+        assert!(content.contains("packages:"));
+    }
+
+    #[test]
+    fn apply_fix_pnpm_workspace() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "trustPolicy".into(),
+            description: "test".into(),
+            expected: "no-downgrade".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
+        assert!(f.read().contains("trustPolicy: \"no-downgrade\""));
+    }
+
+    #[test]
+    fn apply_fix_pnpm_workspace_unquoted() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "strictDepBuilds".into(),
+            description: "test".into(),
+            expected: "true".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
+        assert!(f.read().contains("strictDepBuilds: true"));
     }
 }
