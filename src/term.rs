@@ -13,8 +13,8 @@ pub fn disable_colors() {
     COLORS_ENABLED.store(false, Ordering::Relaxed);
 }
 
-/// Check if colors should be used based on environment.
-/// Respects: --no-color flag, NO_COLOR env var, non-TTY stdout, TERM=dumb.
+/// Check if colors should be used based on environment/TTY state.
+/// Considers: NO_COLOR env var, non-TTY stdout, TERM=dumb.
 pub fn should_use_colors() -> bool {
     // NO_COLOR convention (https://no-color.org/)
     if std::env::var("NO_COLOR").is_ok() {
