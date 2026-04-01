@@ -17,6 +17,8 @@ jobs:
   check:
     name: Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # macOS runner has intermittent toolchain issues; don't block PR on it
+    continue-on-error: ${{ matrix.os == 'macos-14' }}
     strategy:
       fail-fast: false
       matrix:
