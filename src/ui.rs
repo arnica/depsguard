@@ -6,6 +6,15 @@ use std::path::Path;
 use crate::manager::{CheckStatus, ManagerInfo};
 use crate::term::*;
 
+/// Return "1 config" or "3 configs" — simple singular/plural.
+fn plural(n: usize, singular: &str, plural_form: &str) -> String {
+    if n == 1 {
+        format!("{n} {singular}")
+    } else {
+        format!("{n} {plural_form}")
+    }
+}
+
 /// Display a path relative to the user's home directory (~/...).
 pub fn display_path(path: &Path) -> String {
     let home = crate::manager::home_dir();
@@ -149,12 +158,16 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         }
     }
     let total_issues = missing_count + wrong_count;
+    let unique_configs = {
+        let s: std::collections::HashSet<_> = managers.iter().map(|m| &m.config_path).collect();
+        s.len()
+    };
 
     if total_issues == 0 {
         writeln!(
             w,
-            "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {} config(s){RESET}\n",
-            managers.len()
+            "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
+            plural(unique_configs, "config", "configs")
         )?;
     } else {
         write!(w, "  ")?;
@@ -165,15 +178,12 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
         }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
+        let total = ok_count + missing_count + wrong_count;
         writeln!(
             w,
-            "  {DIM}({} total across {} config(s)){RESET}\n",
-            ok_count + missing_count + wrong_count,
-            {
-                let unique: std::collections::HashSet<_> =
-                    managers.iter().map(|m| &m.config_path).collect();
-                unique.len()
-            }
+            "  {DIM}({} total across {}){RESET}\n",
+            plural(total, "check", "checks"),
+            plural(unique_configs, "config", "configs"),
         )?;
     }
 
@@ -360,7 +370,11 @@ pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -
 
     // Summary
     let count = items.iter().filter(|i| i.selected).count();
-    writeln!(w, "  {DIM}{count} fix(es) selected{RESET}\n")
+    writeln!(
+        w,
+        "  {DIM}{} selected{RESET}\n",
+        plural(count, "fix", "fixes")
+    )
 }
 
 #[cfg(test)]
@@ -503,7 +517,7 @@ mod tests {
         assert!(s.contains("▸")); // cursor
         assert!(s.contains("●"));
         assert!(s.contains("○"));
-        assert!(s.contains("1 fix(es) selected"));
+        assert!(s.contains("1 fix selected"));
     }
 
     #[test]
@@ -529,7 +543,7 @@ mod tests {
         let mut buf = Vec::new();
         print_selector(&mut buf, &items, 1).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("2 fix(es) selected"));
+        assert!(s.contains("2 fixes selected"));
     }
 
     #[test]
