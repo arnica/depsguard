@@ -274,18 +274,12 @@ fn run_restore() {
     let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
 
-    writeln!(
-        out,
-        "  {}Searching for backup files (including pnpm workspaces)...{}",
-        term::DIM,
-        term::RESET
-    )
-    .ok();
-    out.flush().ok();
-
-    let backups = fix::list_backups();
-    // Clear the searching message
-    write!(out, "\r\x1b[K").ok();
+    let backups = fix::list_backups_with_progress(&mut |label| {
+        let stdout = io::stdout();
+        let mut w = term::ColorWriter::new(stdout.lock());
+        ui::print_progress(&mut w, label, 0.0).ok();
+    });
+    ui::clear_progress(&mut out).ok();
 
     if backups.is_empty() {
         writeln!(
