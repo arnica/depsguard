@@ -4,6 +4,7 @@ mod term;
 mod ui;
 
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 use manager::ManagerInfo;
 use term::Key;
@@ -273,7 +274,19 @@ fn run_restore() {
     let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
 
+    writeln!(
+        out,
+        "  {}Searching for backup files (including pnpm workspaces)...{}",
+        term::DIM,
+        term::RESET
+    )
+    .ok();
+    out.flush().ok();
+
     let backups = fix::list_backups();
+    // Clear the searching message
+    write!(out, "\r\x1b[K").ok();
+
     if backups.is_empty() {
         writeln!(
             out,
@@ -288,34 +301,52 @@ fn run_restore() {
 
     writeln!(
         out,
-        "  {}{}Available backups:{}",
+        "  {}{}Available backups:{} {}(newest first){}",
         term::BOLD,
         term::CYAN,
-        term::RESET
+        term::RESET,
+        term::DIM,
+        term::RESET,
     )
     .ok();
+
+    // Group backups by original path for cleaner display
+    let mut last_original: Option<&std::path::Path> = None;
     for (i, (original, backup)) in backups.iter().enumerate() {
+        if last_original != Some(original.as_path()) {
+            let display = ui::display_path(original);
+            writeln!(out, "\n    {}{}{}:", term::BOLD, display, term::RESET).ok();
+            last_original = Some(original.as_path());
+        }
         let bak_name = backup.file_name().unwrap_or_default().to_string_lossy();
+        // Extract timestamp from backup name
+        let ts = bak_name
+            .rsplit('.')
+            .nth(1) // second from end (before "bak")
+            .unwrap_or("?");
         writeln!(
             out,
-            "    {}[{}]{} {} {}({}){}",
+            "      {}[{}]{} {}{}{}",
             term::BOLD,
             i + 1,
             term::RESET,
-            original.display(),
             term::DIM,
-            bak_name,
+            ts,
             term::RESET,
         )
         .ok();
     }
     writeln!(out).ok();
 
-    // Prompt for selection
+    // Prompt with "latest" shortcut
     write!(
         out,
-        "  Select backup to restore (1-{}, or 'q' to cancel): ",
-        backups.len()
+        "  Select (1-{}, '{}latest{}' to restore all newest, '{}q{}' to cancel): ",
+        backups.len(),
+        term::BOLD,
+        term::RESET,
+        term::BOLD,
+        term::RESET,
     )
     .ok();
     out.flush().ok();
@@ -329,6 +360,13 @@ fn run_restore() {
         writeln!(out, "  Cancelled.").ok();
         return;
     }
+
+    if input.eq_ignore_ascii_case("latest") || input == "l" {
+        // Restore the newest backup for each unique original path
+        restore_latest(&backups, &mut out);
+        return;
+    }
+
     let idx: usize = match input.parse::<usize>() {
         Ok(n) if n >= 1 && n <= backups.len() => n - 1,
         _ => {
@@ -344,33 +382,39 @@ fn run_restore() {
         }
     };
 
-    let (ref original, ref backup) = backups[idx];
+    restore_one(&backups[idx].1, &backups[idx].0, &mut out);
+    println!();
+}
+
+/// Restore the newest backup for each unique original path.
+fn restore_latest(backups: &[(PathBuf, PathBuf)], out: &mut impl Write) {
+    // Backups are sorted newest-first, so first occurrence per original is the latest
+    let mut restored = std::collections::HashSet::new();
+    for (original, backup) in backups {
+        if restored.insert(original.clone()) {
+            restore_one(backup, original, out);
+        }
+    }
+    writeln!(out).ok();
+}
+
+fn restore_one(backup: &Path, original: &Path, out: &mut impl Write) {
+    let display = ui::display_path(original);
     match fix::restore_backup(backup, original) {
         Ok(()) => {
-            writeln!(
-                out,
-                "  {}✓{} Restored {}",
-                term::GREEN,
-                term::RESET,
-                original.display()
-            )
-            .ok();
-            // Remove the backup file after successful restore
+            writeln!(out, "  {}✓{} Restored {display}", term::GREEN, term::RESET).ok();
             let _ = std::fs::remove_file(backup);
         }
         Err(e) => {
             writeln!(
                 out,
-                "  {}✗{} Failed to restore {}: {}",
+                "  {}✗{} Failed to restore {display}: {e}",
                 term::RED,
                 term::RESET,
-                original.display(),
-                e
             )
             .ok();
         }
     }
-    println!();
 }
 
 #[cfg(test)]
