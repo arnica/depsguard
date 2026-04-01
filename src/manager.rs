@@ -14,6 +14,10 @@ pub fn set_skip_workspaces(skip: bool) {
     SKIP_WORKSPACES.store(skip, Ordering::Relaxed);
 }
 
+pub fn skip_workspaces_enabled() -> bool {
+    SKIP_WORKSPACES.load(Ordering::Relaxed)
+}
+
 pub fn set_delay_days(days: u64) {
     DELAY_DAYS_SETTING.store(days, Ordering::Relaxed);
 }
