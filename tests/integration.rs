@@ -155,6 +155,7 @@ fn npm_config_fix_and_rescan() {
 }
 
 #[test]
+#[ignore] // requires network access — run with: cargo test -- --ignored
 fn npm_install_with_min_release_age() {
     if !has_command("npm") {
         return;
@@ -227,6 +228,7 @@ fn pnpm_config_fix_and_rescan() {
 }
 
 #[test]
+#[ignore] // requires network access
 fn pnpm_install_with_config() {
     if !has_command("pnpm") {
         return;
@@ -295,6 +297,7 @@ fn bun_config_fix_and_rescan() {
 }
 
 #[test]
+#[ignore] // requires network access
 fn bun_install_with_config() {
     if !has_command("bun") {
         return;
@@ -364,6 +367,7 @@ fn uv_config_fix_and_rescan() {
 }
 
 #[test]
+#[ignore] // requires network access
 fn uv_install_with_config() {
     if !has_command("uv") {
         return;

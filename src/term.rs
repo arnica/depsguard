@@ -313,22 +313,48 @@ pub enum Key {
 }
 
 pub fn read_key() -> io::Result<Key> {
-    let mut buf = [0u8; 4];
-    let n = io::stdin().lock().read(&mut buf)?;
-    if n == 0 {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+
+    let mut first = [0u8; 1];
+    if stdin.read(&mut first)? == 0 {
         return Ok(Key::Unknown);
     }
-    Ok(match buf[0] {
-        27 if n >= 3 && buf[1] == b'[' => match buf[2] {
+
+    if first[0] != 27 {
+        return Ok(match first[0] {
+            b' ' => Key::Space,
+            13 | 10 => Key::Enter,
+            c => Key::Char(c as char),
+        });
+    }
+
+    // ESC received — read next bytes to disambiguate escape sequences.
+    let mut seq = [0u8; 2];
+    let n = stdin.read(&mut seq)?;
+    if n == 0 {
+        return Ok(Key::Escape);
+    }
+
+    if seq[0] == b'[' {
+        // Got "ESC [", may need one more byte for the sequence letter.
+        let letter = if n >= 2 {
+            seq[1]
+        } else {
+            let mut last = [0u8; 1];
+            if stdin.read(&mut last)? == 0 {
+                return Ok(Key::Escape);
+            }
+            last[0]
+        };
+        return Ok(match letter {
             b'A' => Key::Up,
             b'B' => Key::Down,
             _ => Key::Unknown,
-        },
-        27 => Key::Escape,
-        b' ' => Key::Space,
-        13 | 10 => Key::Enter,
-        c => Key::Char(c as char),
-    })
+        });
+    }
+
+    Ok(Key::Escape)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────

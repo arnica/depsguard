@@ -111,9 +111,13 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
                     new_lines.push(line.clone());
                     if !inserted {
                         let trimmed = line.trim();
-                        if trimmed == format!("[{sec}]") {
-                            new_lines.push(target_line.clone());
-                            inserted = true;
+                        // Match section header by trimming interior whitespace
+                        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                            let inner = trimmed[1..trimmed.len() - 1].trim();
+                            if inner == sec {
+                                new_lines.push(target_line.clone());
+                                inserted = true;
+                            }
                         }
                     }
                 }
