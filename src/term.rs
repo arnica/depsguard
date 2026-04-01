@@ -111,8 +111,12 @@ impl<W: Write> Write for ColorWriter<W> {
                     }
                 }
             } else {
-                self.inner.write_all(&buf[i..i + 1])?;
-                i += 1;
+                // Write contiguous non-escape spans in one call
+                let start = i;
+                while i < len && buf[i] != 0x1b {
+                    i += 1;
+                }
+                self.inner.write_all(&buf[start..i])?;
             }
         }
         Ok(len) // report all bytes as consumed

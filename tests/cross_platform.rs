@@ -39,17 +39,12 @@ fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
         .expect("failed to run depsguard")
 }
 
-// ── Simulated macOS filesystem layout ─────────────────────────────────
-// On Linux, we can test that config READING works with macOS-style paths
-// by writing configs to the expected locations and scanning with HOME set.
+// ── Cross-platform uv filesystem layout ───────────────────────────────
+// Tests config reading at the Linux uv path. macOS-specific path
+// resolution is covered by config_path_for unit tests in manager.rs.
 
 #[test]
-fn macos_uv_path_layout() {
-    // macOS uv config lives at ~/Library/Application Support/uv/uv.toml
-    // We can't change the compiled OS, but we can verify our path logic
-    // matches expected output by testing the config_path_for function
-    // (unit tests cover this in manager.rs). Here we test that the
-    // scanning logic works with files at the Linux-equivalent location.
+fn linux_uv_path_layout() {
     let home = TmpDir::new("macos_uv");
     let uv_dir = home.path().join(".config/uv");
     fs::create_dir_all(&uv_dir).unwrap();
