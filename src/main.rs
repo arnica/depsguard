@@ -54,10 +54,13 @@ fn print_usage() {
 }
 
 fn run_scan_only() {
-    let mut out = io::stdout();
+    let stdout = io::stdout();
+    let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
     let managers = manager::scan_all_with_progress(|label, frac| {
-        ui::print_progress(&mut io::stdout(), label, frac).ok();
+        let stdout = io::stdout();
+        let mut w = term::ColorWriter::new(stdout.lock());
+        ui::print_progress(&mut w, label, frac).ok();
     });
     ui::clear_progress(&mut out).ok();
     writeln!(out).ok();
@@ -65,14 +68,17 @@ fn run_scan_only() {
 }
 
 fn run_interactive() -> io::Result<()> {
-    let mut out = io::stdout();
+    let stdout = io::stdout();
+    let mut out = term::ColorWriter::new(stdout.lock());
 
     loop {
         // Phase 1: Scan
         term::clear_screen(&mut out)?;
         ui::print_banner(&mut out)?;
         let managers = manager::scan_all_with_progress(|label, frac| {
-            ui::print_progress(&mut io::stdout(), label, frac).ok();
+            let stdout = io::stdout();
+            let mut w = term::ColorWriter::new(stdout.lock());
+            ui::print_progress(&mut w, label, frac).ok();
         });
         ui::clear_progress(&mut out)?;
         writeln!(out)?;
