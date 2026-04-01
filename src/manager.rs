@@ -149,10 +149,10 @@ impl TargetOs {
     }
 }
 
-/// Resolve config path for a given OS + home/appdata directories.
-#[cfg_attr(not(test), allow(dead_code))]
+/// Resolve config path for a given OS and home directory.
 /// `home` is %USERPROFILE% on Windows, $HOME on Unix.
-/// `appdata` is %APPDATA% on Windows (only used for uv on Windows).
+/// On Windows, derives %APPDATA% as `home/AppData/Roaming` (used for uv).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf {
     config_path_full(kind, home, &home.join("AppData/Roaming"), os)
 }
@@ -266,12 +266,46 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     (y, m, d)
 }
 
-/// Parse a YYYY-MM-DD date and check if it's at least `min_days` old from today.
+/// Parse a YYYY-MM-DD prefix from a date string (also works with RFC 3339 timestamps).
+fn parse_date_to_days(date_str: &str) -> Option<u64> {
+    if date_str.len() < 10 {
+        return None;
+    }
+    let b = date_str.as_bytes();
+    if b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let y: u64 = date_str[0..4].parse().ok()?;
+    let m: u64 = date_str[5..7].parse().ok()?;
+    let d: u64 = date_str[8..10].parse().ok()?;
+    if !(1..=12).contains(&m) || d == 0 || d > 31 {
+        return None;
+    }
+    // Inverse of days_to_ymd (civil_from_days algorithm)
+    let (adj_y, adj_m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+    let era = adj_y / 400;
+    let yoe = adj_y - era * 400;
+    let doy = (153 * adj_m + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146097 + doe - 719468)
+}
+
+fn current_epoch_days() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / 86400
+}
+
+/// Parse a date (YYYY-MM-DD or RFC 3339) and check if it's at least `min_days` old.
 pub fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
-    let today = date_days_ago(0);
-    let threshold = date_days_ago(min_days);
-    // date_str should be <= threshold (i.e., at least min_days ago)
-    date_str <= &threshold && date_str <= &today
+    let Some(date_days) = parse_date_to_days(date_str) else {
+        return false;
+    };
+    let today = current_epoch_days();
+    date_days <= today.saturating_sub(min_days)
 }
 
 // ── Scanning ──────────────────────────────────────────────────────────
