@@ -241,8 +241,8 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
         if let Some((k, v)) = line.split_once('=') {
             let k = k.trim();
             let v = v.split('#').next().unwrap_or(v).trim();
-            // Strip quotes
-            let v = v.trim_matches('"');
+            // Strip double or single quotes
+            let v = v.trim_matches('"').trim_matches('\'');
             if current_section == target_section && k == target_key {
                 return Some(v.to_string());
             }
@@ -481,7 +481,7 @@ fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
 
 fn scan_pnpm_workspace(path: &Path) -> Vec<Recommendation> {
     let days = get_delay_days();
-    let minutes = days * 24 * 60;
+    let minutes = days.saturating_mul(24).saturating_mul(60);
     vec![
         check_yaml(
             path,
@@ -546,7 +546,7 @@ fn check_yaml(
 
 fn scan_bun(path: &Path) -> Vec<Recommendation> {
     let days = get_delay_days();
-    let seconds = days * 86400;
+    let seconds = days.saturating_mul(86400);
     let delay = read_toml_value(path, "install.minimumReleaseAge");
     let delay_status = match &delay {
         Some(v) => match v.parse::<u64>() {
@@ -572,7 +572,7 @@ fn parse_relative_days(s: &str) -> Option<u64> {
         let n: u64 = parts[0].parse().ok()?;
         match parts[1].trim_end_matches('s') {
             "day" => Some(n),
-            "week" => Some(n * 7),
+            "week" => n.checked_mul(7),
             _ => None,
         }
     } else {

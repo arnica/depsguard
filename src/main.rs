@@ -112,15 +112,15 @@ fn print_usage() {
 
 fn print_usage_short() {
     eprintln!("  USAGE:");
-    eprintln!("    depsguard                  Interactive mode (TUI)");
-    eprintln!("    depsguard --scan           Scan only, no changes");
-    eprintln!("    depsguard --help           Show this help");
-    eprintln!("    depsguard --version        Show version");
-    eprintln!("    depsguard --restore        Restore config files from backup");
-    eprintln!("    depsguard --no-color       Disable colored output");
-    eprintln!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search");
-    eprintln!("    depsguard --delay-days N   Set release delay (default: 7)");
-    eprintln!();
+    println!("    depsguard                  Interactive mode (TUI)");
+    println!("    depsguard --scan           Scan only, no changes");
+    println!("    depsguard --help           Show this help");
+    println!("    depsguard --version        Show version");
+    println!("    depsguard --restore        Restore config files from backup");
+    println!("    depsguard --no-color       Disable colored output");
+    println!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search");
+    println!("    depsguard --delay-days N   Set release delay (default: 7)");
+    println!();
 }
 
 fn run_scan_only() {
