@@ -64,8 +64,13 @@ pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<
 /// Returns `Vec<(original, backup_path)>` sorted by backup filename.
 pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
     let mut results = Vec::new();
+    let mut seen_dirs = std::collections::HashSet::new();
     for kind in ManagerKind::ALL {
         let config = manager::config_path(*kind);
+        // Deduplicate: npm and pnpm share ~/.npmrc, skip if already scanned
+        if !seen_dirs.insert(config.clone()) {
+            continue;
+        }
         let config_name = match config.file_name() {
             Some(n) => n.to_string_lossy().to_string(),
             None => continue,

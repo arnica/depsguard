@@ -178,24 +178,18 @@ fn run_interactive() -> io::Result<()> {
 
         {
             let _raw = term::RawMode::enable()?;
+            let _cursor = term::CursorGuard; // restores cursor on drop (even on error unwind)
             let key = term::read_key()?;
             if matches!(key, Key::Char('q') | Key::Escape) {
-                drop(_raw);
-                term::show_cursor(&mut out)?;
-                out.flush()?;
                 return Ok(());
             }
 
             let go_back = selection_loop(&mut out, &mut items, &managers)?;
 
-            // Raw mode drops here, restoring terminal
-            drop(_raw);
-            term::show_cursor(&mut out)?;
-            out.flush()?;
-
             if !go_back {
                 return Ok(());
             }
+            // _raw and _cursor drop here, restoring terminal state
         }
         // go_back == true: loop back to scan results
     }
