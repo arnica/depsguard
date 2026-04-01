@@ -169,7 +169,11 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             w,
             "  {DIM}({} total across {} config(s)){RESET}\n",
             ok_count + missing_count + wrong_count,
-            managers.len()
+            {
+                let unique: std::collections::HashSet<_> =
+                    managers.iter().map(|m| &m.config_path).collect();
+                unique.len()
+            }
         )?;
     }
 

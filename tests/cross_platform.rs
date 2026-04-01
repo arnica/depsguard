@@ -45,7 +45,7 @@ fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
 
 #[test]
 fn linux_uv_path_layout() {
-    let home = TmpDir::new("macos_uv");
+    let home = TmpDir::new("linux_uv");
     let uv_dir = home.path().join(".config/uv");
     fs::create_dir_all(&uv_dir).unwrap();
     fs::write(
@@ -225,6 +225,11 @@ fn windows_exe_is_valid_pe() {
         return;
     }
     let header = fs::read(&exe).unwrap();
+    assert!(
+        header.len() >= 2,
+        "Executable too small to be a valid PE file: {}",
+        exe.display()
+    );
     // PE files start with "MZ"
     assert_eq!(&header[0..2], b"MZ", "Not a valid PE executable");
 }
