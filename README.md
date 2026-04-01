@@ -2,19 +2,19 @@
 
 Harden your package manager configs against supply chain attacks. Zero dependencies.
 
-Made with love by [Arnica](https://arnica.io) in Atlanta.
+Made with love by [arnica](https://arnica.io) in Atlanta.
 
 ```
-     ╔═══════════════════════════════════════════════════╗
-     ║   ____                   ____                     ║
-     ║  |  _ \  ___ _ __  ___  / ___|_   _  __ _ _ __   ║
-     ║  | | | |/ _ \ '_ \/ __|| |  _| | | |/ _` | '__|  ║
-     ║  | |_| |  __/ |_) \__ \| |_| | |_| | (_| | |     ║
-     ║  |____/ \___| .__/|___/ \____|\__,_|\__,_|_|     ║
-     ║             |_|    supply chain defense            ║
-     ║                                                   ║
-     ║        Made with love by Arnica in Atlanta         ║
-     ╚═══════════════════════════════════════════════════╝
+     ╔═══════════════════════════════════════════════════════╗
+     ║   ____                  ____                     _    ║
+     ║  |  _ \  ___ _ __  ___ / ___|_   _  __ _ _ __ __| |   ║
+     ║  | | | |/ _ \ '_ \/ __| |  _| | | |/ _` | '__/ _` |   ║
+     ║  | |_| |  __/ |_) \__ \ |_| | |_| | (_| | | | (_| |   ║
+     ║  |____/ \___| .__/|___/\____|\__,_|\__,_|_|  \__,_|   ║
+     ║             |_|    supply chain defense               ║
+     ║                                                       ║
+     ║        Made with love by Arnica in Atlanta            ║
+     ╚═══════════════════════════════════════════════════════╝
 ```
 
 ## What it does
