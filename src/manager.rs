@@ -254,27 +254,26 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
 
 // ── Exclude-newer date calculation ────────────────────────────────────
 
-/// Returns an RFC 3339 timestamp N days ago (e.g. "2024-01-01T00:00:00Z") for uv exclude-newer.
-pub fn date_days_ago(days: u64) -> String {
+#[cfg(test)]
+fn date_days_ago(days: u64) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
     let target = now - (days * 86400);
-    // Convert epoch to YYYY-MM-DD
     epoch_to_date(target)
 }
 
+#[cfg(test)]
 fn epoch_to_date(epoch: u64) -> String {
-    // Simple date calculation from epoch — returns RFC 3339 with T00:00:00Z
     let days_since_epoch = epoch / 86400;
     let (year, month, day) = days_to_ymd(days_since_epoch);
     format!("{year:04}-{month:02}-{day:02}T00:00:00Z")
 }
 
+#[cfg(test)]
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
-    // Algorithm from https://howardhinnant.github.io/date_algorithms.html
     let z = days + 719468;
     let era = z / 146097;
     let doe = z - era * 146097;
@@ -322,7 +321,7 @@ fn current_epoch_days() -> u64 {
 }
 
 /// Parse a date (YYYY-MM-DD or RFC 3339) and check if it's at least `min_days` old.
-pub fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
+fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
     let Some(date_days) = parse_date_to_days(date_str) else {
         return false;
     };
