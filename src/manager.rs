@@ -324,7 +324,7 @@ fn current_epoch_days() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs()
         / 86400
 }
@@ -438,11 +438,19 @@ fn search_downward(
         Err(_) => return,
     };
     for entry in entries.flatten() {
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
         let path = entry.path();
-        if !path.is_dir() {
+        if !file_type.is_dir() {
             if path.file_name().and_then(|n| n.to_str()) == Some("pnpm-workspace.yaml") {
                 results.push(path);
             }
+            continue;
+        }
+        // Skip symlinked directories to avoid loops and leaving $HOME
+        if file_type.is_symlink() {
             continue;
         }
         let name = match path.file_name().and_then(|n| n.to_str()) {

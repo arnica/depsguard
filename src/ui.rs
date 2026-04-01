@@ -432,12 +432,27 @@ pub fn print_diff_preview(
                 flat.get(&rec.key).cloned()
             };
 
-            // Format separator to match what apply_fix actually writes
+            // Format to match what apply_fix actually writes (including quoting)
+            let is_toml = ext.eq_ignore_ascii_case("toml");
             let fmt = |k: &str, v: &str| -> String {
                 if is_npmrc {
                     format!("{k}={v}")
                 } else if is_yaml {
-                    format!("{k}: {v}")
+                    // trustPolicy gets quoted in YAML
+                    let needs_quote = k == "trustPolicy";
+                    if needs_quote {
+                        format!("{k}: \"{v}\"")
+                    } else {
+                        format!("{k}: {v}")
+                    }
+                } else if is_toml {
+                    // uv exclude-newer and other string TOML values get quoted
+                    let needs_quote = v.contains(' ') || v.contains('-') || v.contains('T');
+                    if needs_quote {
+                        format!("{k} = \"{v}\"")
+                    } else {
+                        format!("{k} = {v}")
+                    }
                 } else {
                     format!("{k} = {v}")
                 }
