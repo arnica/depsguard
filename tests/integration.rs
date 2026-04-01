@@ -77,10 +77,7 @@ fn scan_shows_banner() {
     let home = TmpHome::new("scan_banner");
     let out = run_depsguard(&["--scan"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("supply chain defense"),
-        "Missing banner in output"
-    );
+    assert!(stdout.contains("arnica"), "Missing banner in output");
 }
 
 #[test]

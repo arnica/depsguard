@@ -24,12 +24,22 @@ fn main() {
             match val.parse::<u64>() {
                 Ok(d) if d > 0 => manager::set_delay_days(d),
                 _ => {
-                    eprintln!("{}{}Error:{} --delay-days requires a positive number", term::RED, term::BOLD, term::RESET);
+                    eprintln!(
+                        "{}{}Error:{} --delay-days requires a positive number",
+                        term::RED,
+                        term::BOLD,
+                        term::RESET
+                    );
                     std::process::exit(1);
                 }
             }
         } else {
-            eprintln!("{}{}Error:{} --delay-days requires a value", term::RED, term::BOLD, term::RESET);
+            eprintln!(
+                "{}{}Error:{} --delay-days requires a value",
+                term::RED,
+                term::BOLD,
+                term::RESET
+            );
             std::process::exit(1);
         }
     }
@@ -53,8 +63,16 @@ fn main() {
 
     // Check for unrecognized flags
     let known = &[
-        "--scan", "-s", "--help", "-h", "--version", "-V",
-        "--restore", "--no-color", "--no-workspaces", "--delay-days",
+        "--scan",
+        "-s",
+        "--help",
+        "-h",
+        "--version",
+        "-V",
+        "--restore",
+        "--no-color",
+        "--no-workspaces",
+        "--delay-days",
     ];
     let mut skip_next = false;
     for arg in &args[1..] {
@@ -67,7 +85,12 @@ fn main() {
             continue;
         }
         if arg.starts_with('-') && !known.contains(&arg.as_str()) {
-            eprintln!("{}{}Error:{} unrecognized option '{arg}'", term::RED, term::BOLD, term::RESET);
+            eprintln!(
+                "{}{}Error:{} unrecognized option '{arg}'",
+                term::RED,
+                term::BOLD,
+                term::RESET
+            );
             eprintln!();
             print_usage_short();
             std::process::exit(1);
@@ -256,7 +279,8 @@ fn run_restore() {
             term::BOLD,
             term::YELLOW,
             term::RESET
-        ).ok();
+        )
+        .ok();
         return;
     }
 
@@ -267,9 +291,17 @@ fn run_restore() {
         term::CYAN,
         backups.len(),
         term::RESET
-    ).ok();
+    )
+    .ok();
     for (original, _) in &backups {
-        writeln!(out, "    {}{}{}", term::DIM, original.display(), term::RESET).ok();
+        writeln!(
+            out,
+            "    {}{}{}",
+            term::DIM,
+            original.display(),
+            term::RESET
+        )
+        .ok();
     }
     writeln!(out).ok();
 
@@ -282,7 +314,8 @@ fn run_restore() {
                 term::GREEN,
                 term::RESET,
                 path.display()
-            ).ok(),
+            )
+            .ok(),
             Err(e) => writeln!(
                 out,
                 "  {}✗{} Failed to restore {}: {}",
@@ -290,7 +323,8 @@ fn run_restore() {
                 term::RESET,
                 path.display(),
                 e
-            ).ok(),
+            )
+            .ok(),
         };
     }
     println!();

@@ -32,8 +32,11 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
     // Top border with version
     let title = format!(" v{version} ");
     let remaining = BOX_WIDTH.saturating_sub(title.len() + 1);
-    writeln!(w, "{indent}{ARNICA}╭─{RESET}{BOLD}{WHITE}{title}{RESET}{ARNICA}{}{RESET}{ARNICA}╮{RESET}",
-        "─".repeat(remaining))?;
+    writeln!(
+        w,
+        "{indent}{ARNICA}╭─{RESET}{BOLD}{WHITE}{title}{RESET}{ARNICA}{}{RESET}{ARNICA}╮{RESET}",
+        "─".repeat(remaining)
+    )?;
 
     // Art lines inside box (centered)
     let art_lines: &[&str] = &[
@@ -47,15 +50,22 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
         let display_len = line.chars().count();
         let left = (BOX_WIDTH.saturating_sub(display_len)) / 2;
         let right = BOX_WIDTH.saturating_sub(display_len + left);
-        writeln!(w, "{indent}{ARNICA}│{RESET}{}{GOLD}{BOLD}{line}{RESET}{}{ARNICA}│{RESET}",
-            " ".repeat(left), " ".repeat(right))?;
+        writeln!(
+            w,
+            "{indent}{ARNICA}│{RESET}{}{GOLD}{BOLD}{line}{RESET}{}{ARNICA}│{RESET}",
+            " ".repeat(left),
+            " ".repeat(right)
+        )?;
     }
 
     // Bottom border with branding right-aligned
     let brand_cols = 13;
     let left_dashes = BOX_WIDTH.saturating_sub(brand_cols + 1);
     write!(w, "{indent}{ARNICA}╰{}─{RESET}", "─".repeat(left_dashes))?;
-    write!(w, "{DIM} by {RESET}{ARNICA}[{RESET}{WHITE}{BOLD}arnica{RESET}{ARNICA}]{RESET}{DIM} {RESET}")?;
+    write!(
+        w,
+        "{DIM} by {RESET}{ARNICA}[{RESET}{WHITE}{BOLD}arnica{RESET}{ARNICA}]{RESET}{DIM} {RESET}"
+    )?;
     writeln!(w, "{ARNICA}╯{RESET}")?;
     writeln!(w)
 }
@@ -64,11 +74,20 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
 
 /// Render a status line in-place (overwrites current line).
 pub fn print_progress(w: &mut impl Write, label: &str, _fraction: f32) -> io::Result<()> {
-    let term_width = crate::term::terminal_size().map(|(w, _)| w as usize).unwrap_or(80);
+    let term_width = crate::term::terminal_size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(80);
     let prefix_cols = 4; // "  · "
     let max_label = term_width.saturating_sub(prefix_cols);
     let truncated = if label.len() > max_label && max_label > 3 {
-        format!("{}...", &label[..max_label - 3])
+        // UTF-8 safe truncation: find a valid char boundary
+        let limit = max_label - 3;
+        let cut = label
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(limit)
+            .unwrap_or(label.len());
+        format!("{}...", &label[..cut])
     } else {
         label.to_string()
     };
@@ -146,8 +165,12 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
         }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
-        writeln!(w, "  {DIM}({} total across {} config(s)){RESET}\n",
-            ok_count + missing_count + wrong_count, managers.len())?;
+        writeln!(
+            w,
+            "  {DIM}({} total across {} config(s)){RESET}\n",
+            ok_count + missing_count + wrong_count,
+            managers.len()
+        )?;
     }
 
     writeln!(w, "  {BOLD}{WHITE}Detected Package Managers:{RESET}\n")?;
@@ -217,10 +240,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                     CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
                     CheckStatus::Missing => format!("{RED}not set{RESET}"),
                     CheckStatus::WrongValue(v) => {
-                        format!(
-                            "{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}",
-                            rec.expected
-                        )
+                        format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
                     }
                 };
                 let prefix = if show_prefix {
@@ -247,7 +267,7 @@ pub struct SelectItem {
     pub manager_idx: usize,
     pub rec_idx: usize,
     pub label: String,
-    pub group_path: String,  // display path for grouping
+    pub group_path: String,   // display path for grouping
     pub group_header: String, // e.g. "📦 npm · ⚡ pnpm"
     pub selected: bool,
 }
@@ -280,7 +300,11 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
                     .map(|m| {
                         let icon = m.kind.icon();
                         let space = if icon.is_empty() { "" } else { " " };
-                        format!("{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}", m.kind.name(), m.version)
+                        format!(
+                            "{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}",
+                            m.kind.name(),
+                            m.version
+                        )
                     })
                     .collect::<Vec<_>>()
                     .join(&format!(" {DIM}·{RESET} "));
@@ -311,7 +335,7 @@ pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -
             if last_group.is_some() {
                 writeln!(w)?;
             }
-            writeln!(w, "  {}",  item.group_header)?;
+            writeln!(w, "  {}", item.group_header)?;
             writeln!(w, "     {DIM}Config: {}{RESET}", item.group_path)?;
             last_group = Some(&item.group_path);
         }
@@ -387,7 +411,8 @@ mod tests {
         let mut buf = Vec::new();
         print_banner(&mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("v0.1.0"));
+        let expected_ver = format!("v{}", env!("CARGO_PKG_VERSION"));
+        assert!(s.contains(&expected_ver));
         assert!(s.contains("arnica"));
     }
 

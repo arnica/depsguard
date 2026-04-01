@@ -97,7 +97,6 @@ impl ManagerKind {
             ManagerKind::Uv => "🐍",
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -261,7 +260,7 @@ fn date_days_ago(days: u64) -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let target = now - (days * 86400);
+    let target = now.saturating_sub(days.checked_mul(86400).unwrap_or(u64::MAX));
     epoch_to_date(target)
 }
 
@@ -303,6 +302,9 @@ fn parse_date_to_days(date_str: &str) -> Option<u64> {
         return None;
     }
     // Inverse of days_to_ymd (civil_from_days algorithm)
+    if y == 0 {
+        return None; // year 0 would underflow
+    }
     let (adj_y, adj_m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
     let era = adj_y / 400;
     let yoe = adj_y - era * 400;
@@ -395,9 +397,7 @@ const MAX_SEARCH_DEPTH: usize = 8;
 
 /// Find pnpm-workspace.yaml files by searching from the user's home directory downward.
 /// Returns all unique paths found.
-fn find_pnpm_workspaces_with_progress(
-    on_dir: &mut dyn FnMut(&Path),
-) -> Vec<PathBuf> {
+fn find_pnpm_workspaces_with_progress(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
     let mut results = Vec::new();
     let home = home_dir();
 
@@ -656,10 +656,7 @@ fn scan_pnpm_workspaces_with_progress(
     };
     let paths = find_pnpm_workspaces_with_progress(&mut |dir| {
         // Show a pulsing progress in the workspace-search fraction range (base_frac..1.0)
-        let dir_name = dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("...");
+        let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("...");
         on_progress(
             &format!("Searching for workspace configs in ~/{}...", dir_name),
             base_frac,
@@ -707,8 +704,7 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 
     if !SKIP_WORKSPACES.load(Ordering::Relaxed) {
         let base_frac = managers.len() as f32 / base_steps as f32;
-        let workspace_infos =
-            scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
+        let workspace_infos = scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
         results.extend(workspace_infos);
     }
 
@@ -1176,7 +1172,7 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_all_ok() {
         let f = tmp_file(
-            "minimumReleaseAge: 4320\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
         );
         let recs = scan_pnpm_workspace(f.path());
         assert_eq!(recs.len(), 4);
@@ -1188,7 +1184,10 @@ mod tests {
         let f = tmp_file("");
         let recs = scan_pnpm_workspace(f.path());
         assert_eq!(recs.len(), 4);
-        assert!(recs.iter().all(|r| matches!(r.status, CheckStatus::Missing)));
+        assert!(
+            recs.iter()
+                .all(|r| matches!(r.status, CheckStatus::Missing))
+        );
     }
 
     #[test]

@@ -30,6 +30,7 @@ pub fn should_use_colors() -> bool {
         unsafe extern "C" {
             fn isatty(fd: i32) -> i32;
         }
+        // SAFETY: isatty(1) is a standard POSIX call on fd 1 (stdout), always safe.
         if unsafe { isatty(1) } == 0 {
             return false;
         }
@@ -40,6 +41,8 @@ pub fn should_use_colors() -> bool {
             fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
             fn GetConsoleMode(h: *mut std::ffi::c_void, mode: *mut u32) -> i32;
         }
+        // SAFETY: GetStdHandle with STD_OUTPUT_HANDLE is always safe; GetConsoleMode
+        // reads into a valid &mut u32 pointer. Both are standard Win32 console APIs.
         let handle = unsafe { GetStdHandle(0xFFFF_FFF5) };
         let mut mode = 0u32;
         if unsafe { GetConsoleMode(handle, &mut mode) } == 0 {
