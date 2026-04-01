@@ -1192,10 +1192,9 @@ mod tests {
         let f = tmp_file("");
         let recs = scan_pnpm_workspace(f.path());
         assert_eq!(recs.len(), 4);
-        assert!(
-            recs.iter()
-                .all(|r| matches!(r.status, CheckStatus::Missing))
-        );
+        assert!(recs
+            .iter()
+            .all(|r| matches!(r.status, CheckStatus::Missing)));
     }
 
     #[test]
