@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <!-- Left bracket -->
+  <path d="M8 6 H20 V12 H14 V48 H20 V54 H8 V6Z" fill="#44bea4"/>
+  <!-- Right bracket -->
+  <path d="M192 6 H180 V12 H186 V48 H180 V54 H192 V6Z" fill="#44bea4"/>
+  <!-- Text "arnica" -->
+  <text x="100" y="38" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="white" letter-spacing="1">arnica</text>
+</svg>

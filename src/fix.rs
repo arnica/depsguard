@@ -150,6 +150,9 @@ fn scan_backups_for(config: &Path, results: &mut Vec<(PathBuf, PathBuf)>) {
 
 /// Restore a single backup file to its original location.
 pub fn restore_backup(backup: &Path, original: &Path) -> Result<(), String> {
+    if let Some(parent) = original.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
     fs::copy(backup, original)
         .map(|_| ())
         .map_err(|e| e.to_string())

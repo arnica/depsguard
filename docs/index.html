@@ -36,7 +36,7 @@
       <div class="flex items-center gap-3">
         <span class="text-2xl">&#x1f6e1;</span>
         <span class="text-xl font-bold text-arnica">DepsGuard</span>
-        <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">by arnica</span>
+        <img src="img/arnica-logo.svg" alt="arnica" class="h-5 opacity-70 hover:opacity-100 transition-opacity">
       </div>
       <div class="flex items-center gap-6">
         <a href="https://github.com/arnica/depsguard" class="text-sm text-gray-400 hover:text-white transition-colors">GitHub</a>
@@ -128,21 +128,46 @@
   <!-- How it works -->
   <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
     <h2 class="text-2xl font-bold mb-8">How it works</h2>
-    <div class="grid md:grid-cols-3 gap-8">
-      <div>
-        <div class="text-3xl font-bold text-arnica mb-3">1</div>
-        <h3 class="font-bold mb-2">Scan</h3>
-        <p class="text-sm text-gray-400">Detects installed package managers and reads their config files. Shows what's configured and what's missing.</p>
+
+    <!-- Step 1: Scan -->
+    <div class="mb-12">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">1</div>
+        <div>
+          <h3 class="font-bold text-lg">Scan</h3>
+          <p class="text-sm text-gray-400">Detects installed package managers and shows what's configured, what's missing, and what needs fixing.</p>
+        </div>
       </div>
-      <div>
-        <div class="text-3xl font-bold text-arnica mb-3">2</div>
-        <h3 class="font-bold mb-2">Select</h3>
-        <p class="text-sm text-gray-400">Interactive TUI lets you pick which fixes to apply. Arrow keys to navigate, space to toggle, enter to apply.</p>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+        <img src="img/scan.png" alt="DepsGuard scan showing detected package managers with ACTION NEEDED badges" class="w-full" loading="lazy">
       </div>
-      <div>
-        <div class="text-3xl font-bold text-arnica mb-3">3</div>
-        <h3 class="font-bold mb-2">Fix</h3>
-        <p class="text-sm text-gray-400">Applies changes with automatic backups. Use <code class="text-arnica">--restore</code> to undo. Atomic writes prevent corruption.</p>
+    </div>
+
+    <!-- Step 2: Select -->
+    <div class="mb-12">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">2</div>
+        <div>
+          <h3 class="font-bold text-lg">Select</h3>
+          <p class="text-sm text-gray-400">Interactive TUI lets you pick which fixes to apply. Arrow keys to navigate, space to toggle, enter to apply.</p>
+        </div>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+        <img src="img/select.png" alt="DepsGuard fix selector showing npm and uv fixes ready to apply" class="w-full" loading="lazy">
+      </div>
+    </div>
+
+    <!-- Step 3: Fixed -->
+    <div class="mb-4">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">3</div>
+        <div>
+          <h3 class="font-bold text-lg">Done</h3>
+          <p class="text-sm text-gray-400">Fixes applied with automatic backups. Use <code class="text-arnica">--restore</code> to undo anytime.</p>
+        </div>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+        <img src="img/secure.png" alt="DepsGuard showing all checks passed with SECURE badges" class="w-full" loading="lazy">
       </div>
     </div>
   </section>
@@ -173,7 +198,7 @@
   <!-- Footer -->
   <footer class="border-t border-gray-800 mt-16">
     <div class="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-gray-500">
-      <div>Made with care by <a href="https://arnica.io" class="text-arnica hover:underline">Arnica</a> in Atlanta</div>
+      <div class="flex items-center gap-2">Made with care by <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-4 inline-block"></a> in Atlanta</div>
       <div class="flex gap-4">
         <a href="https://github.com/arnica/depsguard" class="hover:text-gray-300 transition-colors">GitHub</a>
         <a href="https://github.com/arnica/depsguard/blob/main/LICENSE" class="hover:text-gray-300 transition-colors">MIT License</a>

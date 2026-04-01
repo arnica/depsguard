@@ -27,7 +27,7 @@ pub fn should_use_colors() -> bool {
     // Check if stdout is a TTY
     #[cfg(unix)]
     {
-        unsafe extern "C" {
+        extern "C" {
             fn isatty(fd: i32) -> i32;
         }
         // SAFETY: isatty(1) is a standard POSIX call on fd 1 (stdout), always safe.
@@ -37,7 +37,7 @@ pub fn should_use_colors() -> bool {
     }
     #[cfg(windows)]
     {
-        unsafe extern "system" {
+        extern "system" {
             fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
             fn GetConsoleMode(h: *mut std::ffi::c_void, mode: *mut u32) -> i32;
         }
@@ -206,7 +206,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
         sr_window: SmallRect,
         dw_maximum_window_size: Coord,
     }
-    unsafe extern "system" {
+    extern "system" {
         fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
         fn GetConsoleScreenBufferInfo(
             h: *mut std::ffi::c_void,
@@ -231,7 +231,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
 }
 
 #[cfg(unix)]
-unsafe extern "C" {
+extern "C" {
     #[link_name = "ioctl"]
     fn libc_ioctl(fd: i32, request: u64, ...) -> i32;
 }
@@ -300,7 +300,7 @@ mod raw {
 
     use platform::Termios;
 
-    unsafe extern "C" {
+    extern "C" {
         #[link_name = "ioctl"]
         fn libc_ioctl(fd: i32, request: u64, ...) -> i32;
     }
@@ -358,7 +358,7 @@ mod raw {
     const STD_OUTPUT_HANDLE: Dword = 0xFFFF_FFF5; // (DWORD)-11
     const ENABLE_VIRTUAL_TERMINAL_PROCESSING: Dword = 0x0004;
 
-    unsafe extern "system" {
+    extern "system" {
         fn GetStdHandle(nStdHandle: Dword) -> Handle;
         fn GetConsoleMode(hConsoleHandle: Handle, lpMode: *mut Dword) -> i32;
         fn SetConsoleMode(hConsoleHandle: Handle, dwMode: Dword) -> i32;
