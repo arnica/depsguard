@@ -97,12 +97,20 @@ impl ManagerInfo {
 // ── Detection ─────────────────────────────────────────────────────────
 
 pub fn detect_version(name: &str) -> Option<String> {
-    Command::new(name)
-        .arg("--version")
-        .output()
+    // On Windows, try the command directly first, then with .cmd extension
+    // (npm, pnpm are .cmd shims on Windows)
+    let result = Command::new(name).arg("--version").output();
+    let output = match result {
+        Ok(o) if o.status.success() => o,
+        _ if cfg!(target_os = "windows") => Command::new(format!("{name}.cmd"))
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?,
+        _ => return None,
+    };
+    String::from_utf8(output.stdout)
         .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
 }
 
@@ -113,20 +121,61 @@ pub fn home_dir() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
 }
 
-pub fn config_path(kind: ManagerKind) -> PathBuf {
-    let home = home_dir();
-    match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
-        ManagerKind::Bun => home.join(".bunfig.toml"),
-        ManagerKind::Uv => {
-            if cfg!(target_os = "macos") {
-                home.join("Library/Application Support/uv/uv.toml")
-            } else {
-                // Linux / default
-                home.join(".config/uv/uv.toml")
-            }
+/// On Windows, %APPDATA% (e.g. C:\Users\X\AppData\Roaming) differs from %USERPROFILE%.
+fn appdata_dir() -> PathBuf {
+    env::var("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home_dir().join("AppData/Roaming"))
+}
+
+/// Target OS for config path resolution. Allows testing all platforms from any host.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TargetOs {
+    Linux,
+    MacOs,
+    Windows,
+}
+
+impl TargetOs {
+    /// Detect the current OS at runtime.
+    pub fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            TargetOs::MacOs
+        } else if cfg!(target_os = "windows") {
+            TargetOs::Windows
+        } else {
+            TargetOs::Linux
         }
     }
+}
+
+/// Resolve config path for a given OS + home/appdata directories.
+#[cfg_attr(not(test), allow(dead_code))]
+/// `home` is %USERPROFILE% on Windows, $HOME on Unix.
+/// `appdata` is %APPDATA% on Windows (only used for uv on Windows).
+pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf {
+    config_path_full(kind, home, &home.join("AppData/Roaming"), os)
+}
+
+fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
+    match kind {
+        // npm/pnpm: ~/.npmrc on all platforms (including Windows %USERPROFILE%\.npmrc)
+        ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
+        // bun: ~/.bunfig.toml on all platforms
+        ManagerKind::Bun => home.join(".bunfig.toml"),
+        // uv: OS-specific
+        ManagerKind::Uv => match os {
+            TargetOs::MacOs => home.join("Library/Application Support/uv/uv.toml"),
+            TargetOs::Windows => appdata.join("uv/uv.toml"),
+            TargetOs::Linux => home.join(".config/uv/uv.toml"),
+        },
+    }
+}
+
+pub fn config_path(kind: ManagerKind) -> PathBuf {
+    let home = home_dir();
+    let appdata = appdata_dir();
+    config_path_full(kind, &home, &appdata, TargetOs::current())
 }
 
 // ── Config reading ────────────────────────────────────────────────────
@@ -183,7 +232,7 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
 
 // ── Exclude-newer date calculation ────────────────────────────────────
 
-/// Returns a date string N days ago in YYYY-MM-DD format (for uv exclude-newer).
+/// Returns an RFC 3339 timestamp N days ago (e.g. "2024-01-01T00:00:00Z") for uv exclude-newer.
 pub fn date_days_ago(days: u64) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now()
@@ -232,16 +281,36 @@ const DELAY_DAYS: u64 = 7;
 fn scan_npm(path: &Path) -> Vec<Recommendation> {
     let cfg = read_flat_config(path);
     vec![
-        check_flat(&cfg, "min-release-age", "7", "Minimum release age (days) - delays new package versions by 7 days"),
-        check_flat(&cfg, "ignore-scripts", "true", "Disable post-install scripts - prevents malicious install scripts"),
+        check_flat(
+            &cfg,
+            "min-release-age",
+            "7",
+            "Minimum release age (days) - delays new package versions by 7 days",
+        ),
+        check_flat(
+            &cfg,
+            "ignore-scripts",
+            "true",
+            "Disable post-install scripts - prevents malicious install scripts",
+        ),
     ]
 }
 
 fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
     let cfg = read_flat_config(path);
     vec![
-        check_flat(&cfg, "minimum-release-age", "10080", "Minimum release age (minutes) - delays new package versions by 7 days"),
-        check_flat(&cfg, "ignore-scripts", "true", "Disable post-install scripts - prevents malicious install scripts"),
+        check_flat(
+            &cfg,
+            "minimum-release-age",
+            "10080",
+            "Minimum release age (minutes) - delays new package versions by 7 days",
+        ),
+        check_flat(
+            &cfg,
+            "ignore-scripts",
+            "true",
+            "Disable post-install scripts - prevents malicious install scripts",
+        ),
     ]
 }
 
@@ -257,15 +326,12 @@ fn scan_bun(path: &Path) -> Vec<Recommendation> {
     };
     // Bun uses a trusted-dependencies allow-list by default, so scripts are
     // already restricted. We still recommend awareness but mark it OK.
-    vec![
-        Recommendation {
-            key: "install.minimumReleaseAge".into(),
-            description: "Minimum release age (seconds) - delays new versions by 7 days".into(),
-            expected: "604800".into(),
-            status: delay_status,
-
-        },
-    ]
+    vec![Recommendation {
+        key: "install.minimumReleaseAge".into(),
+        description: "Minimum release age (seconds) - delays new versions by 7 days".into(),
+        expected: "604800".into(),
+        status: delay_status,
+    }]
 }
 
 fn scan_uv(path: &Path) -> Vec<Recommendation> {
@@ -359,8 +425,8 @@ mod tests {
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_nanos();
-                let path =
-                    std::env::temp_dir().join(format!("depsguard_test_{id}_{}", std::process::id()));
+                let path = std::env::temp_dir()
+                    .join(format!("depsguard_test_{id}_{}", std::process::id()));
                 let file = fs::File::create(&path)?;
                 Ok(Self { path, file })
             }
@@ -416,10 +482,7 @@ mod tests {
     #[test]
     fn read_toml_value_basic() {
         let f = tmp_file("foo = \"bar\"\n\n[install]\nminimumReleaseAge = 604800\n");
-        assert_eq!(
-            read_toml_value(f.path(), "foo"),
-            Some("bar".into())
-        );
+        assert_eq!(read_toml_value(f.path(), "foo"), Some("bar".into()));
         assert_eq!(
             read_toml_value(f.path(), "install.minimumReleaseAge"),
             Some("604800".into())
@@ -493,7 +556,6 @@ mod tests {
             description: "d".into(),
             expected: "v".into(),
             status: CheckStatus::Ok,
-
         };
         assert!(!ok.needs_fix());
         let bad = Recommendation {
@@ -501,7 +563,6 @@ mod tests {
             description: "d".into(),
             expected: "v".into(),
             status: CheckStatus::Missing,
-
         };
         assert!(bad.needs_fix());
     }
@@ -525,7 +586,6 @@ mod tests {
                 description: "d".into(),
                 expected: "v".into(),
                 status: CheckStatus::Ok,
-    
             }],
         };
         assert!(info.all_ok());
@@ -636,5 +696,86 @@ mod tests {
     fn home_dir_returns_path() {
         let h = home_dir();
         assert!(!h.as_os_str().is_empty());
+    }
+
+    // ── Cross-platform config path tests ──────────────────────────────
+
+    #[test]
+    fn config_path_linux_npm() {
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Npm, home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.npmrc"));
+    }
+
+    #[test]
+    fn config_path_linux_pnpm() {
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Pnpm, home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.npmrc"));
+    }
+
+    #[test]
+    fn config_path_linux_bun() {
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.bunfig.toml"));
+    }
+
+    #[test]
+    fn config_path_linux_uv() {
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Uv, home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/uv/uv.toml"));
+    }
+
+    #[test]
+    fn config_path_macos_npm() {
+        let home = Path::new("/Users/testuser");
+        let p = config_path_for(ManagerKind::Npm, home, TargetOs::MacOs);
+        assert_eq!(p, PathBuf::from("/Users/testuser/.npmrc"));
+    }
+
+    #[test]
+    fn config_path_macos_uv() {
+        let home = Path::new("/Users/testuser");
+        let p = config_path_for(ManagerKind::Uv, home, TargetOs::MacOs);
+        assert_eq!(
+            p,
+            PathBuf::from("/Users/testuser/Library/Application Support/uv/uv.toml")
+        );
+    }
+
+    #[test]
+    fn config_path_windows_npm() {
+        // npm user config is %USERPROFILE%\.npmrc on Windows
+        let home = Path::new("C:/Users/testuser");
+        let p = config_path_for(ManagerKind::Npm, home, TargetOs::Windows);
+        assert_eq!(p, PathBuf::from("C:/Users/testuser/.npmrc"));
+    }
+
+    #[test]
+    fn config_path_windows_uv() {
+        // uv uses %APPDATA%\uv\uv.toml on Windows
+        let home = Path::new("C:/Users/testuser");
+        let appdata = Path::new("C:/Users/testuser/AppData/Roaming");
+        let p = config_path_full(ManagerKind::Uv, home, appdata, TargetOs::Windows);
+        assert_eq!(
+            p,
+            PathBuf::from("C:/Users/testuser/AppData/Roaming/uv/uv.toml")
+        );
+    }
+
+    #[test]
+    fn config_path_windows_bun() {
+        let home = Path::new("C:/Users/testuser");
+        let p = config_path_for(ManagerKind::Bun, home, TargetOs::Windows);
+        assert_eq!(p, PathBuf::from("C:/Users/testuser/.bunfig.toml"));
+    }
+
+    #[test]
+    fn target_os_current() {
+        let os = TargetOs::current();
+        // Just ensure it returns something valid
+        assert!(os == TargetOs::Linux || os == TargetOs::MacOs || os == TargetOs::Windows);
     }
 }

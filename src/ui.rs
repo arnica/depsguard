@@ -8,14 +8,16 @@ use crate::term::*;
 // ── Banner ────────────────────────────────────────────────────────────
 
 const BANNER: &str = r#"
-     ╔═══════════════════════════════════════════════╗
-     ║   ____                   ____                 ║
-     ║  |  _ \  ___ _ __  ___  / ___|_   _  __ _ _ __║
-     ║  | | | |/ _ \ '_ \/ __|| |  _| | | |/ _` | '_|║
-     ║  | |_| |  __/ |_) \__ \| |_| | |_| | (_| | |  ║
-     ║  |____/ \___| .__/|___/ \____|\__,_|\__,_|_|  ║
-     ║             |_|    supply chain defense 🛡️     ║
-     ╚═══════════════════════════════════════════════╝
+     ╔═══════════════════════════════════════════════════╗
+     ║   ____                   ____                     ║
+     ║  |  _ \  ___ _ __  ___  / ___|_   _  __ _ _ __   ║
+     ║  | | | |/ _ \ '_ \/ __|| |  _| | | |/ _` | '__|  ║
+     ║  | |_| |  __/ |_) \__ \| |_| | |_| | (_| | |     ║
+     ║  |____/ \___| .__/|___/ \____|\__,_|\__,_|_|     ║
+     ║             |_|    supply chain defense 🛡️         ║
+     ║                                                   ║
+     ║        Made with love by Arnica in Atlanta         ║
+     ╚═══════════════════════════════════════════════════╝
 "#;
 
 pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
@@ -70,11 +72,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             w,
             "  {icon} {BOLD}{CYAN}{name}{RESET} {DIM}v{ver}{RESET}  {badge}"
         )?;
-        writeln!(
-            w,
-            "    {DIM}Config: {}{RESET}",
-            mgr.config_path.display()
-        )?;
+        writeln!(w, "    {DIM}Config: {}{RESET}", mgr.config_path.display())?;
 
         for rec in &mgr.recommendations {
             let si = status_icon(&rec.status);
@@ -83,19 +81,14 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 CheckStatus::Ok => format!("{GREEN}= {}{RESET}", rec.expected),
                 CheckStatus::Missing => format!("{RED}not configured{RESET}"),
                 CheckStatus::WrongValue(v) => {
-                    format!("{YELLOW}{v}{RESET} {DIM}(expected: {}){RESET}", rec.expected)
+                    format!(
+                        "{YELLOW}{v}{RESET} {DIM}(expected: {}){RESET}",
+                        rec.expected
+                    )
                 }
             };
-            writeln!(
-                w,
-                "    {si} {sc}{}{RESET}",
-                rec.key
-            )?;
-            writeln!(
-                w,
-                "       {DIM}{}{RESET}",
-                rec.description
-            )?;
+            writeln!(w, "    {si} {sc}{}{RESET}", rec.key)?;
+            writeln!(w, "       {DIM}{}{RESET}", rec.description)?;
             writeln!(w, "       Status: {detail}")?;
         }
         writeln!(w)?;
@@ -136,11 +129,7 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
     items
 }
 
-pub fn print_selector(
-    w: &mut impl Write,
-    items: &[SelectItem],
-    cursor: usize,
-) -> io::Result<()> {
+pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -> io::Result<()> {
     writeln!(
         w,
         "  {BOLD}{WHITE}Select fixes to apply:{RESET}  {DIM}(↑↓ move, space toggle, enter apply, q quit){RESET}\n"
@@ -164,10 +153,7 @@ pub fn print_selector(
 
     // Summary
     let count = items.iter().filter(|i| i.selected).count();
-    writeln!(
-        w,
-        "  {DIM}{count} fix(es) selected{RESET}\n"
-    )
+    writeln!(w, "  {DIM}{count} fix(es) selected{RESET}\n")
 }
 
 pub fn print_fix_results(
@@ -213,7 +199,6 @@ mod tests {
             description: "test desc".into(),
             expected: "expected_val".into(),
             status,
-
         }
     }
 
@@ -223,6 +208,7 @@ mod tests {
         print_banner(&mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("supply chain defense"));
+        assert!(s.contains("Arnica"));
     }
 
     #[test]
