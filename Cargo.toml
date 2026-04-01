@@ -1,0 +1,8 @@
+[package]
+name = "depsguard"
+version = "0.1.0"
+edition = "2024"
+description = "Harden package manager configs against supply chain attacks"
+license = "MIT"
+
+[dependencies]
