@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>DepsGuard - Supply Chain Defense</title>
   <meta name="description" content="Harden your package manager configs against supply chain attacks. Zero dependencies. One command.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f6e1;</text></svg>">
@@ -34,13 +34,17 @@
   <nav class="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
     <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <span class="text-2xl">&#x1f6e1;</span>
         <span class="text-xl font-bold text-arnica">DepsGuard</span>
-        <img src="img/arnica-logo.svg" alt="arnica" class="h-5 opacity-70 hover:opacity-100 transition-opacity">
+        <span class="text-sm text-gray-500">by</span>
+        <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-5 opacity-70 hover:opacity-100 transition-opacity"></a>
       </div>
       <div class="flex items-center gap-6">
-        <a href="https://github.com/arnica/depsguard" class="text-sm text-gray-400 hover:text-white transition-colors">GitHub</a>
-        <a href="https://crates.io/crates/depsguard" class="text-sm text-gray-400 hover:text-white transition-colors">Crates.io</a>
+        <a href="https://github.com/arnica/depsguard" class="text-gray-400 hover:text-white transition-colors" title="GitHub">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <a href="https://crates.io/crates/depsguard" class="text-gray-400 hover:text-white transition-colors" title="Crates.io">
+          <img src="https://crates.io/assets/cargo.png" alt="Crates.io" class="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity">
+        </a>
         <a href="https://github.com/arnica/depsguard#readme" class="text-sm text-gray-400 hover:text-white transition-colors">Docs</a>
       </div>
     </div>
@@ -49,22 +53,22 @@
   <!-- Hero -->
   <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
     <div class="fade-in">
-      <pre class="text-arnica font-mono text-sm md:text-base mb-8 leading-relaxed"><code>  &#x2576;&#x252c;&#x2510;&#x250c;&#x2500;&#x2574;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2574;&#x2577; &#x2577;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2510;&#x2576;&#x252c;&#x2510;
-   &#x2502;&#x2502;&#x251c;&#x2574; &#x251c;&#x2500;&#x2518;&#x2514;&#x2500;&#x2510;&#x2502;&#x2576;&#x2510;&#x2502; &#x2502;&#x251c;&#x2500;&#x2524;&#x251c;&#x252c;&#x2518; &#x2502;&#x2502;
-  &#x2576;&#x2534;&#x2518;&#x2514;&#x2500;&#x2574;&#x2575;  &#x2514;&#x2500;&#x2518;&#x2514;&#x2500;&#x2518;&#x2514;&#x2500;&#x2518;&#x2575; &#x2575;&#x2575;&#x2514;&#x2574;&#x2576;&#x2534;&#x2518;</code></pre>
+      <pre class="text-gold font-mono text-sm md:text-base mb-8 text-left" style="line-height: 1.15"><code>╶┬┐┌─╴┌─┐┌─┐┌─╴╷ ╷┌─┐┌─┐╶┬┐
+ ││├╴ ├─┘└─┐│╶┐│ │├─┤├┬┘ ││
+╶┴┘└─╴╵  └─┘└─┘└─┘╵ ╵╵└╴╶┴┘</code></pre>
     </div>
 
-    <h1 class="fade-in text-4xl md:text-5xl font-bold mb-6 leading-tight">
-      Harden your package managers<br>
+    <h1 class="fade-in text-4xl md:text-4xl font-bold mb-6 leading-tight">
+      Harden your package managers
       <span class="text-arnica">against supply chain attacks.</span>
     </h1>
 
-    <p class="fade-in-delay text-lg text-gray-400 max-w-2xl mb-10">
+    <p class="fade-in-delay text-lg text-gray-400 max-w-4xl mb-10">
       One command to scan npm, pnpm, bun, and uv configs for security best practices.
-      Interactive TUI to apply fixes. Zero dependencies. Cross-platform.
+      Interactive terminal UI to apply fixes. Zero dependencies. Cross-platform. Free, MIT licensed.
     </p>
 
-    <div class="fade-in-delay-2 flex flex-wrap gap-4">
+    <div class="fade-in-delay-2 flex flex-wrap gap-4 items-center">
       <div class="bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 font-mono text-sm flex items-center gap-3">
         <span class="text-gray-500">$</span>
         <span class="text-gold">cargo install depsguard</span>
@@ -72,10 +76,11 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         </button>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 font-mono text-sm flex items-center gap-3">
-        <span class="text-gray-500">$</span>
-        <span class="text-gold">brew install arnica/tap/depsguard</span>
-      </div>
+      <span class="text-gray-600">or</span>
+      <a href="https://github.com/arnica/depsguard/releases/latest" class="bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 text-sm flex items-center gap-2 text-gray-300 hover:text-white hover:border-gray-600 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Download binary
+      </a>
     </div>
   </section>
 
@@ -138,8 +143,8 @@
           <p class="text-sm text-gray-400">Detects installed package managers and shows what's configured, what's missing, and what needs fixing.</p>
         </div>
       </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
-        <img src="img/scan.png" alt="DepsGuard scan showing detected package managers with ACTION NEEDED badges" class="w-full" loading="lazy">
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
+        <img max-width="50%" src="img/scan.png" alt="DepsGuard scan showing detected package managers with ACTION NEEDED badges" class="w-full" loading="lazy">
       </div>
     </div>
 
@@ -149,10 +154,10 @@
         <div class="text-3xl font-bold text-arnica">2</div>
         <div>
           <h3 class="font-bold text-lg">Select</h3>
-          <p class="text-sm text-gray-400">Interactive TUI lets you pick which fixes to apply. Arrow keys to navigate, space to toggle, enter to apply.</p>
+          <p class="text-sm text-gray-400">Pick which fixes to apply interactively. Arrow keys to navigate, space to toggle, enter to apply.</p>
         </div>
       </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
         <img src="img/select.png" alt="DepsGuard fix selector showing npm and uv fixes ready to apply" class="w-full" loading="lazy">
       </div>
     </div>
@@ -166,34 +171,12 @@
           <p class="text-sm text-gray-400">Fixes applied with automatic backups. Use <code class="text-arnica">--restore</code> to undo anytime.</p>
         </div>
       </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
         <img src="img/secure.png" alt="DepsGuard showing all checks passed with SECURE badges" class="w-full" loading="lazy">
       </div>
     </div>
   </section>
 
-  <!-- Install -->
-  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
-    <h2 class="text-2xl font-bold mb-8">Install</h2>
-    <div class="space-y-4">
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div class="text-xs text-gray-500 mb-2">Cargo (Rust)</div>
-        <code class="text-sm text-gold">cargo install depsguard</code>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div class="text-xs text-gray-500 mb-2">Homebrew (macOS / Linux)</div>
-        <code class="text-sm text-gold">brew install arnica/tap/depsguard</code>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div class="text-xs text-gray-500 mb-2">Scoop (Windows)</div>
-        <code class="text-sm text-gold">scoop bucket add arnica https://github.com/arnica/scoop-bucket && scoop install depsguard</code>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div class="text-xs text-gray-500 mb-2">Download binary (Linux / macOS / Windows)</div>
-        <code class="text-sm text-gold">curl -fsSL https://github.com/arnica/depsguard/releases/latest/download/depsguard-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz</code>
-      </div>
-    </div>
-  </section>
 
   <!-- Footer -->
   <footer class="border-t border-gray-800 mt-16">
