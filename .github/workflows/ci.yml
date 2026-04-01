@@ -26,7 +26,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
       - name: Show toolchain
         run: rustc --version && cargo --version
       - name: Check formatting
