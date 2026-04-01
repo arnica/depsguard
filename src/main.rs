@@ -111,7 +111,7 @@ fn print_usage() {
 }
 
 fn print_usage_short() {
-    eprintln!("  USAGE:");
+    println!("  USAGE:");
     println!("    depsguard                  Interactive mode (TUI)");
     println!("    depsguard --scan           Scan only, no changes");
     println!("    depsguard --help           Show this help");
@@ -204,7 +204,7 @@ fn run_interactive() -> io::Result<()> {
 /// Returns Ok(true) if user pressed Escape (go back), Ok(false) otherwise.
 fn selection_loop(
     out: &mut impl Write,
-    items: &mut Vec<SelectItem>,
+    items: &mut [SelectItem],
     managers: &[ManagerInfo],
 ) -> io::Result<bool> {
     let mut cursor: usize = 0;
@@ -218,9 +218,7 @@ fn selection_loop(
 
         match term::read_key()? {
             Key::Up => {
-                if cursor > 0 {
-                    cursor -= 1;
-                }
+                cursor = cursor.saturating_sub(1);
             }
             Key::Down => {
                 if cursor + 1 < items.len() {
@@ -286,46 +284,87 @@ fn run_restore() {
 
     writeln!(
         out,
-        "  {}{}Restoring {} file(s) from backup:{}",
+        "  {}{}Available backups:{}",
         term::BOLD,
         term::CYAN,
-        backups.len(),
         term::RESET
     )
     .ok();
-    for (original, _) in &backups {
+    for (i, (original, backup)) in backups.iter().enumerate() {
+        let bak_name = backup.file_name().unwrap_or_default().to_string_lossy();
         writeln!(
             out,
-            "    {}{}{}",
-            term::DIM,
+            "    {}[{}]{} {} {}({}){}",
+            term::BOLD,
+            i + 1,
+            term::RESET,
             original.display(),
-            term::RESET
+            term::DIM,
+            bak_name,
+            term::RESET,
         )
         .ok();
     }
     writeln!(out).ok();
 
-    let results = fix::restore_all();
-    for (path, result) in &results {
-        match result {
-            Ok(()) => writeln!(
+    // Prompt for selection
+    write!(
+        out,
+        "  Select backup to restore (1-{}, or 'q' to cancel): ",
+        backups.len()
+    )
+    .ok();
+    out.flush().ok();
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_err() {
+        return;
+    }
+    let input = input.trim();
+    if input.eq_ignore_ascii_case("q") || input.is_empty() {
+        writeln!(out, "  Cancelled.").ok();
+        return;
+    }
+    let idx: usize = match input.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= backups.len() => n - 1,
+        _ => {
+            writeln!(
+                out,
+                "  {}{}Invalid selection.{}",
+                term::RED,
+                term::BOLD,
+                term::RESET
+            )
+            .ok();
+            return;
+        }
+    };
+
+    let (ref original, ref backup) = backups[idx];
+    match fix::restore_backup(backup, original) {
+        Ok(()) => {
+            writeln!(
                 out,
                 "  {}✓{} Restored {}",
                 term::GREEN,
                 term::RESET,
-                path.display()
+                original.display()
             )
-            .ok(),
-            Err(e) => writeln!(
+            .ok();
+            // Remove the backup file after successful restore
+            let _ = std::fs::remove_file(backup);
+        }
+        Err(e) => {
+            writeln!(
                 out,
                 "  {}✗{} Failed to restore {}: {}",
                 term::RED,
                 term::RESET,
-                path.display(),
+                original.display(),
                 e
             )
-            .ok(),
-        };
+            .ok();
+        }
     }
     println!();
 }
