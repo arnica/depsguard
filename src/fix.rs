@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::manager::{self, ManagerKind, Recommendation};
+use crate::ui;
 
 // ── Backup / Restore ─────────────────────────────────────────────────
 
@@ -61,8 +62,9 @@ pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<
 }
 
 /// List all backup files adjacent to known config paths AND discovered workspace files.
+/// Uses `on_progress` to show live search progress (same UI as scan).
 /// Returns `Vec<(original, backup_path)>` sorted by backup timestamp (newest first).
-pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
+pub fn list_backups_with_progress(on_progress: &mut dyn FnMut(&str)) -> Vec<(PathBuf, PathBuf)> {
     let mut results = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
@@ -74,8 +76,10 @@ pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
             config_paths.push(config);
         }
     }
-    // Also discover pnpm-workspace.yaml files (same search as scan)
-    for ws in manager::find_pnpm_workspaces() {
+    // Discover pnpm-workspace.yaml files with live progress (same as scan)
+    for ws in manager::find_pnpm_workspaces_with_callback(&mut |dir| {
+        on_progress(&format!("Scanning {}", ui::display_path(dir)));
+    }) {
         config_paths.push(ws);
     }
 
