@@ -7,7 +7,7 @@ use crate::manager::{CheckStatus, ManagerInfo};
 use crate::term::*;
 
 /// Display a path relative to the user's home directory (~/...).
-fn display_path(path: &Path) -> String {
+pub fn display_path(path: &Path) -> String {
     let home = crate::manager::home_dir();
     match path.strip_prefix(&home) {
         Ok(rel) => format!("~/{}", rel.display()),

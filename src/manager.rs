@@ -395,6 +395,11 @@ const SKIP_DIRS: &[&str] = &[
 /// Max depth for downward search to avoid excessive traversal.
 const MAX_SEARCH_DEPTH: usize = 8;
 
+/// Find pnpm-workspace.yaml files (silent, no progress callback). Used by restore.
+pub fn find_pnpm_workspaces() -> Vec<PathBuf> {
+    find_pnpm_workspaces_with_progress(&mut |_| {})
+}
+
 /// Find pnpm-workspace.yaml files by searching from the user's home directory downward.
 /// Returns all unique paths found.
 fn find_pnpm_workspaces_with_progress(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {

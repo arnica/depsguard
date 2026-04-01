@@ -60,47 +60,66 @@ pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<
     Ok(())
 }
 
-/// List all backup files adjacent to known config paths.
-/// Returns `Vec<(original, backup_path)>` sorted by backup filename.
+/// List all backup files adjacent to known config paths AND discovered workspace files.
+/// Returns `Vec<(original, backup_path)>` sorted by backup timestamp (newest first).
 pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
     let mut results = Vec::new();
-    let mut seen_dirs = std::collections::HashSet::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // Collect all config paths to scan: fixed paths + discovered workspaces
+    let mut config_paths: Vec<PathBuf> = Vec::new();
     for kind in ManagerKind::ALL {
         let config = manager::config_path(*kind);
-        // Deduplicate: npm and pnpm share ~/.npmrc, skip if already scanned
-        if !seen_dirs.insert(config.clone()) {
-            continue;
-        }
-        let config_name = match config.file_name() {
-            Some(n) => n.to_string_lossy().to_string(),
-            None => continue,
-        };
-        let parent = match config.parent() {
-            Some(p) => p,
-            None => continue,
-        };
-        let entries = match fs::read_dir(parent) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        for entry in entries.flatten() {
-            let p = entry.path();
-            let name = p
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            // Match pattern: {config_name}.{timestamp}.bak
-            if name.starts_with(&config_name)
-                && name.ends_with(".bak")
-                && name.len() > config_name.len() + 5
-            {
-                results.push((config.clone(), p));
-            }
+        if !config.as_os_str().is_empty() {
+            config_paths.push(config);
         }
     }
-    results.sort_by(|a, b| a.1.cmp(&b.1));
+    // Also discover pnpm-workspace.yaml files (same search as scan)
+    for ws in manager::find_pnpm_workspaces() {
+        config_paths.push(ws);
+    }
+
+    for config in config_paths {
+        if !seen.insert(config.clone()) {
+            continue;
+        }
+        scan_backups_for(&config, &mut results);
+    }
+
+    // Sort newest first (timestamp in filename sorts lexicographically)
+    results.sort_by(|a, b| b.1.cmp(&a.1));
     results
+}
+
+/// Scan for .bak files adjacent to a config path.
+fn scan_backups_for(config: &Path, results: &mut Vec<(PathBuf, PathBuf)>) {
+    let config_name = match config.file_name() {
+        Some(n) => n.to_string_lossy().to_string(),
+        None => return,
+    };
+    let parent = match config.parent() {
+        Some(p) => p,
+        None => return,
+    };
+    let entries = match fs::read_dir(parent) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        // Match pattern: {config_name}.{timestamp}.bak
+        if name.starts_with(&config_name)
+            && name.ends_with(".bak")
+            && name.len() > config_name.len() + 5
+        {
+            results.push((config.to_path_buf(), p));
+        }
+    }
 }
 
 /// Restore a single backup file to its original location.
