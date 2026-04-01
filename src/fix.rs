@@ -4,49 +4,43 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use crate::manager::{self, ManagerKind, Recommendation};
 
 // ── Backup / Restore ─────────────────────────────────────────────────
 
-/// Directory where backups are stored.
-fn backup_dir() -> PathBuf {
-    manager::home_dir().join(".depsguard/backups")
-}
+/// Generate an ISO-8601–style timestamp from SystemTime, without chrono.
+/// Format: `YYYY-MM-DDTHH-MM-SS` (hyphens in time part for filename safety).
+fn iso_timestamp() -> String {
+    let dur = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = dur.as_secs();
+    // Manual UTC breakdown (no leap-second handling needed for filenames)
+    let days = secs / 86400;
+    let time = secs % 86400;
+    let h = time / 3600;
+    let m = (time % 3600) / 60;
+    let s = time % 60;
 
-/// Convert a config path to a backup filename (replace / with __ ).
-fn backup_name(path: &Path) -> String {
-    // Percent-encode the path for reversible backup filenames (safe on Windows)
-    path.to_string_lossy()
-        .bytes()
-        .map(|b| match b {
-            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' => String::from(b as char),
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
+    // Date from days since 1970-01-01 (civil calendar algorithm)
+    let z = days as i64 + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mon = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mon <= 2 { y + 1 } else { y };
 
-fn percent_decode(s: &str) -> String {
-    let mut result = Vec::new();
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(b) =
-                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
-            {
-                result.push(b);
-                i += 3;
-                continue;
-            }
-        }
-        result.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&result).into_owned()
+    format!("{y:04}-{mon:02}-{d:02}T{h:02}-{m:02}-{s:02}")
 }
 
 /// Backup a config file before modifying it. Only backs up once per path per session.
+/// The backup is stored adjacent to the original as `{path}.{ISO-timestamp}.bak`.
 pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<()> {
     if backed_up.contains(path) {
         return Ok(()); // already backed up this session
@@ -55,62 +49,60 @@ pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<
         backed_up.insert(path.to_path_buf());
         return Ok(()); // nothing to back up
     }
-    let dir = backup_dir();
-    fs::create_dir_all(&dir)?;
-    let dest = dir.join(backup_name(path));
+    let ts = iso_timestamp();
+    let name = format!(
+        "{}.{ts}.bak",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    );
+    let dest = path.with_file_name(name);
     fs::copy(path, &dest)?;
     backed_up.insert(path.to_path_buf());
     Ok(())
 }
 
-/// List all backed-up files with their original paths.
+/// List all backup files adjacent to known config paths.
+/// Returns `Vec<(original, backup_path)>` sorted by backup filename.
 pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
-    let dir = backup_dir();
     let mut results = Vec::new();
-    let entries = match fs::read_dir(&dir) {
-        Ok(e) => e,
-        Err(_) => return results,
-    };
-    for entry in entries.flatten() {
-        let backup_path = entry.path();
-        if backup_path.is_file() {
-            let name = backup_path
+    for kind in ManagerKind::ALL {
+        let config = manager::config_path(*kind);
+        let config_name = match config.file_name() {
+            Some(n) => n.to_string_lossy().to_string(),
+            None => continue,
+        };
+        let parent = match config.parent() {
+            Some(p) => p,
+            None => continue,
+        };
+        let entries = match fs::read_dir(parent) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let name = p
                 .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
-            // Reconstruct original path by decoding percent-encoded name
-            let original = PathBuf::from(percent_decode(&name));
-            // Skip temp files (created by tests)
-            let temp = std::env::temp_dir();
-            if original.starts_with(&temp) {
-                // Clean up stale test backup
-                let _ = fs::remove_file(&backup_path);
-                continue;
+            // Match pattern: {config_name}.{timestamp}.bak
+            if name.starts_with(&config_name)
+                && name.ends_with(".bak")
+                && name.len() > config_name.len() + 5
+            {
+                results.push((config.clone(), p));
             }
-            results.push((original, backup_path));
         }
     }
-    results.sort();
+    results.sort_by(|a, b| a.1.cmp(&b.1));
     results
 }
 
-/// Restore all backed-up files to their original locations.
-pub fn restore_all() -> Vec<(PathBuf, Result<(), String>)> {
-    let backups = list_backups();
-    let mut results = Vec::new();
-    for (original, backup) in &backups {
-        let res = fs::copy(backup, original)
-            .map(|_| ())
-            .map_err(|e| e.to_string());
-        results.push((original.clone(), res));
-    }
-    // Clean up backup dir after successful restore
-    if results.iter().all(|(_, r)| r.is_ok()) {
-        let dir = backup_dir();
-        let _ = fs::remove_dir_all(&dir);
-    }
-    results
+/// Restore a single backup file to its original location.
+pub fn restore_backup(backup: &Path, original: &Path) -> Result<(), String> {
+    fs::copy(backup, original)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Apply a single recommendation fix to the config file at `path`.
@@ -153,7 +145,7 @@ fn apply_flat_fix(path: &Path, key: &str, value: &str) -> io::Result<String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, &output)?;
+    atomic_write(path, &output)?;
     Ok(line)
 }
 
@@ -250,7 +242,7 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, &output)?;
+    atomic_write(path, &output)?;
     Ok(target_line)
 }
 
@@ -277,12 +269,12 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
         if line.starts_with(' ') || line.starts_with('\t') {
             continue;
         }
-        if let Some((k, _)) = trimmed.split_once(':') {
-            if k.trim() == key {
-                *line = target_line.clone();
-                found = true;
-                break;
-            }
+        if let Some((k, _)) = trimmed.split_once(':')
+            && k.trim() == key
+        {
+            *line = target_line.clone();
+            found = true;
+            break;
         }
     }
 
@@ -297,8 +289,24 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, &output)?;
+    atomic_write(path, &output)?;
     Ok(target_line)
+}
+
+/// Write content to a temp file then rename into place (atomic on same filesystem).
+fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = parent.join(format!(".depsguard-tmp-{}-{n}", std::process::id()));
+    fs::write(&tmp, content)?;
+    if let Err(e) = fs::rename(&tmp, path) {
+        // Clean up temp file on failure
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
