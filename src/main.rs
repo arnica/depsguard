@@ -16,6 +16,9 @@ fn main() {
     if args.iter().any(|a| a == "--no-color") || !term::should_use_colors() {
         term::disable_colors();
     }
+    if args.iter().any(|a| a == "--no-workspaces") {
+        manager::set_skip_workspaces(true);
+    }
 
     if args.iter().any(|a| a == "--scan" || a == "-s") {
         run_scan_only();
@@ -41,7 +44,8 @@ fn main() {
 }
 
 fn print_usage() {
-    let mut out = io::stdout();
+    let stdout = io::stdout();
+    let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
     println!("  Harden your package manager configs against supply chain attacks.\n");
     println!("  USAGE:");
@@ -50,7 +54,8 @@ fn print_usage() {
     println!("    depsguard --help     Show this help");
     println!("    depsguard --version  Show version");
     println!("    depsguard --restore  Restore config files from backup");
-    println!("    depsguard --no-color Disable colored output\n");
+    println!("    depsguard --no-color      Disable colored output");
+    println!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search\n");
 }
 
 fn run_scan_only() {
@@ -87,21 +92,23 @@ fn run_interactive() -> io::Result<()> {
         // Build fixable items
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            println!(
+            writeln!(
+                out,
                 "  {}{}All package managers are properly configured!{}",
                 term::BOLD,
                 term::GREEN,
                 term::RESET
-            );
+            )?;
             return Ok(());
         }
 
         // Phase 2: Interactive selection
-        println!(
+        writeln!(
+            out,
             "  {}Press any key to enter selection mode (q to quit)...{}",
             term::DIM,
             term::RESET
-        );
+        )?;
         out.flush()?;
 
         {
@@ -195,49 +202,54 @@ fn apply_selected(
 }
 
 fn run_restore() {
-    let mut out = io::stdout();
+    let stdout = io::stdout();
+    let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
 
     let backups = fix::list_backups();
     if backups.is_empty() {
-        println!(
+        writeln!(
+            out,
             "  {}{}No backups found. Nothing to restore.{}",
             term::BOLD,
             term::YELLOW,
             term::RESET
-        );
+        ).ok();
         return;
     }
 
-    println!(
+    writeln!(
+        out,
         "  {}{}Restoring {} file(s) from backup:{}",
         term::BOLD,
         term::CYAN,
         backups.len(),
         term::RESET
-    );
+    ).ok();
     for (original, _) in &backups {
-        println!("    {}{}{}", term::DIM, original.display(), term::RESET);
+        writeln!(out, "    {}{}{}", term::DIM, original.display(), term::RESET).ok();
     }
-    println!();
+    writeln!(out).ok();
 
     let results = fix::restore_all();
     for (path, result) in &results {
         match result {
-            Ok(()) => println!(
+            Ok(()) => writeln!(
+                out,
                 "  {}✓{} Restored {}",
                 term::GREEN,
                 term::RESET,
                 path.display()
-            ),
-            Err(e) => println!(
+            ).ok(),
+            Err(e) => writeln!(
+                out,
                 "  {}✗{} Failed to restore {}: {}",
                 term::RED,
                 term::RESET,
                 path.display(),
                 e
-            ),
-        }
+            ).ok(),
+        };
     }
     println!();
 }

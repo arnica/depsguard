@@ -5,6 +5,22 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static SKIP_WORKSPACES: AtomicBool = AtomicBool::new(false);
+static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
+
+pub fn set_skip_workspaces(skip: bool) {
+    SKIP_WORKSPACES.store(skip, Ordering::Relaxed);
+}
+
+pub fn set_delay_days(days: u64) {
+    DELAY_DAYS_SETTING.store(days, Ordering::Relaxed);
+}
+
+pub fn get_delay_days() -> u64 {
+    DELAY_DAYS_SETTING.load(Ordering::Relaxed)
+}
 
 // ── Core types ────────────────────────────────────────────────────────
 
@@ -431,16 +447,17 @@ fn search_downward(
 
 // ── Scanning ──────────────────────────────────────────────────────────
 
-const DELAY_DAYS: u64 = 7;
+// Default delay is 7 days, configurable via --delay-days
 
 fn scan_npm(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
     let cfg = read_flat_config(path);
     vec![
         check_flat(
             &cfg,
             "min-release-age",
-            "7",
-            "Delay new versions by 7 days",
+            &days.to_string(),
+            &format!("Delay new versions by {days} days"),
         ),
         check_flat(
             &cfg,
@@ -642,7 +659,7 @@ fn scan_pnpm_workspaces_with_progress(
             .and_then(|n| n.to_str())
             .unwrap_or("...");
         on_progress(
-            &format!("Searching ~/{}...", dir_name),
+            &format!("Searching for workspace configs in ~/{}...", dir_name),
             base_frac,
         );
     });
@@ -678,7 +695,7 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 
     for (i, &kind) in managers.iter().enumerate() {
         on_progress(
-            &format!("Detecting {}...", kind.name()),
+            &format!("Checking {} configuration...", kind.name()),
             i as f32 / base_steps as f32,
         );
         if let Some(info) = scan_manager(kind) {
@@ -686,10 +703,12 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
         }
     }
 
-    let base_frac = managers.len() as f32 / base_steps as f32;
-    let workspace_infos =
-        scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
-    results.extend(workspace_infos);
+    if !SKIP_WORKSPACES.load(Ordering::Relaxed) {
+        let base_frac = managers.len() as f32 / base_steps as f32;
+        let workspace_infos =
+            scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
+        results.extend(workspace_infos);
+    }
 
     on_progress("Done", 1.0);
     results
