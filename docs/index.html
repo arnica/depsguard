@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DepsGuard - Supply Chain Defense</title>
+  <meta name="description" content="Harden your package manager configs against supply chain attacks. Zero dependencies. One command.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f6e1;</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            arnica: '#44bea4',
+            gold: '#ebb838',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+    .fade-in-delay { animation: fadeIn 0.6s ease-out 0.2s forwards; opacity: 0; }
+    .fade-in-delay-2 { animation: fadeIn 0.6s ease-out 0.4s forwards; opacity: 0; }
+    pre code { font-size: 0.875rem; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">&#x1f6e1;</span>
+        <span class="text-xl font-bold text-arnica">DepsGuard</span>
+        <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">by arnica</span>
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com/arnica/depsguard" class="text-sm text-gray-400 hover:text-white transition-colors">GitHub</a>
+        <a href="https://crates.io/crates/depsguard" class="text-sm text-gray-400 hover:text-white transition-colors">Crates.io</a>
+        <a href="https://github.com/arnica/depsguard#readme" class="text-sm text-gray-400 hover:text-white transition-colors">Docs</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
+    <div class="fade-in">
+      <pre class="text-arnica font-mono text-sm md:text-base mb-8 leading-relaxed"><code>  &#x2576;&#x252c;&#x2510;&#x250c;&#x2500;&#x2574;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2574;&#x2577; &#x2577;&#x250c;&#x2500;&#x2510;&#x250c;&#x2500;&#x2510;&#x2576;&#x252c;&#x2510;
+   &#x2502;&#x2502;&#x251c;&#x2574; &#x251c;&#x2500;&#x2518;&#x2514;&#x2500;&#x2510;&#x2502;&#x2576;&#x2510;&#x2502; &#x2502;&#x251c;&#x2500;&#x2524;&#x251c;&#x252c;&#x2518; &#x2502;&#x2502;
+  &#x2576;&#x2534;&#x2518;&#x2514;&#x2500;&#x2574;&#x2575;  &#x2514;&#x2500;&#x2518;&#x2514;&#x2500;&#x2518;&#x2514;&#x2500;&#x2518;&#x2575; &#x2575;&#x2575;&#x2514;&#x2574;&#x2576;&#x2534;&#x2518;</code></pre>
+    </div>
+
+    <h1 class="fade-in text-4xl md:text-5xl font-bold mb-6 leading-tight">
+      Harden your package managers<br>
+      <span class="text-arnica">against supply chain attacks.</span>
+    </h1>
+
+    <p class="fade-in-delay text-lg text-gray-400 max-w-2xl mb-10">
+      One command to scan npm, pnpm, bun, and uv configs for security best practices.
+      Interactive TUI to apply fixes. Zero dependencies. Cross-platform.
+    </p>
+
+    <div class="fade-in-delay-2 flex flex-wrap gap-4">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 font-mono text-sm flex items-center gap-3">
+        <span class="text-gray-500">$</span>
+        <span class="text-gold">cargo install depsguard</span>
+        <button onclick="navigator.clipboard.writeText('cargo install depsguard')" class="text-gray-600 hover:text-gray-300 transition-colors" title="Copy">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        </button>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 font-mono text-sm flex items-center gap-3">
+        <span class="text-gray-500">$</span>
+        <span class="text-gold">brew install arnica/tap/depsguard</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- What it checks -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">What it protects</h2>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f4e6;</span>
+          <h3 class="font-bold text-lg">npm</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">min-release-age=7</code> &mdash; delays new versions by 7 days</li>
+          <li><code class="text-arnica">ignore-scripts=true</code> &mdash; blocks malicious install scripts</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x26a1;</span>
+          <h3 class="font-bold text-lg">pnpm</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">minimumReleaseAge</code> &mdash; workspace-level release delay</li>
+          <li><code class="text-arnica">trustPolicy: no-downgrade</code> &mdash; blocks provenance downgrades</li>
+          <li><code class="text-arnica">strictDepBuilds: true</code> &mdash; fails on unreviewed scripts</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f95f;</span>
+          <h3 class="font-bold text-lg">bun</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">install.minimumReleaseAge=604800</code> &mdash; 7-day delay (seconds)</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f40d;</span>
+          <h3 class="font-bold text-lg">uv</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">exclude-newer</code> &mdash; excludes recently published packages</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">How it works</h2>
+    <div class="grid md:grid-cols-3 gap-8">
+      <div>
+        <div class="text-3xl font-bold text-arnica mb-3">1</div>
+        <h3 class="font-bold mb-2">Scan</h3>
+        <p class="text-sm text-gray-400">Detects installed package managers and reads their config files. Shows what's configured and what's missing.</p>
+      </div>
+      <div>
+        <div class="text-3xl font-bold text-arnica mb-3">2</div>
+        <h3 class="font-bold mb-2">Select</h3>
+        <p class="text-sm text-gray-400">Interactive TUI lets you pick which fixes to apply. Arrow keys to navigate, space to toggle, enter to apply.</p>
+      </div>
+      <div>
+        <div class="text-3xl font-bold text-arnica mb-3">3</div>
+        <h3 class="font-bold mb-2">Fix</h3>
+        <p class="text-sm text-gray-400">Applies changes with automatic backups. Use <code class="text-arnica">--restore</code> to undo. Atomic writes prevent corruption.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">Install</h2>
+    <div class="space-y-4">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <div class="text-xs text-gray-500 mb-2">Cargo (Rust)</div>
+        <code class="text-sm text-gold">cargo install depsguard</code>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <div class="text-xs text-gray-500 mb-2">Homebrew (macOS / Linux)</div>
+        <code class="text-sm text-gold">brew install arnica/tap/depsguard</code>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <div class="text-xs text-gray-500 mb-2">Scoop (Windows)</div>
+        <code class="text-sm text-gold">scoop bucket add arnica https://github.com/arnica/scoop-bucket && scoop install depsguard</code>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <div class="text-xs text-gray-500 mb-2">Download binary (Linux / macOS / Windows)</div>
+        <code class="text-sm text-gold">curl -fsSL https://github.com/arnica/depsguard/releases/latest/download/depsguard-$(uname -m)-$(uname -s | tr A-Z a-z).tar.gz | tar xz</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 mt-16">
+    <div class="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-gray-500">
+      <div>Made with care by <a href="https://arnica.io" class="text-arnica hover:underline">Arnica</a> in Atlanta</div>
+      <div class="flex gap-4">
+        <a href="https://github.com/arnica/depsguard" class="hover:text-gray-300 transition-colors">GitHub</a>
+        <a href="https://github.com/arnica/depsguard/blob/main/LICENSE" class="hover:text-gray-300 transition-colors">MIT License</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

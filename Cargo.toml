@@ -4,5 +4,24 @@ version = "0.1.0"
 edition = "2024"
 description = "Harden package manager configs against supply chain attacks"
 license = "MIT"
+repository = "https://github.com/arnica/depsguard"
+homepage = "https://arnica.github.io/depsguard"
+documentation = "https://github.com/arnica/depsguard#readme"
+readme = "README.md"
+keywords = ["security", "supply-chain", "npm", "pnpm", "uv"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["Arnica <engineering@arnica.io>"]
+rust-version = "1.85"
+exclude = ["docs/", ".github/", "tests/", "target/"]
+
+[[bin]]
+name = "depsguard"
+path = "src/main.rs"
 
 [dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
