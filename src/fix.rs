@@ -86,8 +86,18 @@ pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
         scan_backups_for(&config, &mut results);
     }
 
-    // Sort newest first (timestamp in filename sorts lexicographically)
-    results.sort_by(|a, b| b.1.cmp(&a.1));
+    // Sort newest first by timestamp extracted from filename, then by path as tiebreaker
+    let extract_ts = |p: &Path| -> String {
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        // Timestamp is between last '.' before ".bak" — e.g. "foo.2026-04-01T12-00-00.bak"
+        let base = name.strip_suffix(".bak").unwrap_or(&name);
+        base.rsplit('.').next().unwrap_or("").to_string()
+    };
+    results.sort_by(|a, b| extract_ts(&b.1).cmp(&extract_ts(&a.1)).then(a.1.cmp(&b.1)));
     results
 }
 
@@ -112,13 +122,25 @@ fn scan_backups_for(config: &Path, results: &mut Vec<(PathBuf, PathBuf)>) {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        // Match pattern: {config_name}.{timestamp}.bak
-        if name.starts_with(&config_name)
-            && name.ends_with(".bak")
-            && name.len() > config_name.len() + 5
-        {
-            results.push((config.to_path_buf(), p));
+        if !name.ends_with(".bak") {
+            continue;
         }
+        // Strip ".bak" suffix and validate: must be "{config_name}.{timestamp}"
+        let base = &name[..name.len() - 4];
+        let prefix = format!("{config_name}.");
+        if !base.starts_with(&prefix) {
+            continue;
+        }
+        let ts = &base[prefix.len()..];
+        // Timestamp must be non-empty and match our iso_timestamp format (digits, T, -)
+        if ts.is_empty()
+            || !ts
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == 'T' || c == '-')
+        {
+            continue;
+        }
+        results.push((config.to_path_buf(), p));
     }
 }
 
@@ -325,12 +347,30 @@ fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp = parent.join(format!(".depsguard-tmp-{}-{n}", std::process::id()));
     fs::write(&tmp, content)?;
-    if let Err(e) = fs::rename(&tmp, path) {
-        // Clean up temp file on failure
-        let _ = fs::remove_file(&tmp);
-        return Err(e);
+    match fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        #[cfg(windows)]
+        Err(e)
+            if e.kind() == io::ErrorKind::PermissionDenied
+                || e.raw_os_error() == Some(183) /* ERROR_ALREADY_EXISTS */ =>
+        {
+            // Windows rename fails if dest exists; remove then retry
+            if let Err(re) = fs::remove_file(path) {
+                if re.kind() != io::ErrorKind::NotFound {
+                    let _ = fs::remove_file(&tmp);
+                    return Err(e);
+                }
+            }
+            fs::rename(&tmp, path).map_err(|e2| {
+                let _ = fs::remove_file(&tmp);
+                e2
+            })
+        }
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
     }
-    Ok(())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
