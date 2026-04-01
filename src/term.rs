@@ -87,18 +87,25 @@ impl<W: Write> Write for ColorWriter<W> {
         if colors_enabled() {
             return self.inner.write(buf);
         }
-        // Strip ANSI escape sequences: \x1b[...m
+        // Strip ANSI color/style sequences (\x1b[...m) but keep cursor control
+        // CSI sequences end with a byte in 0x40..0x7E (@A-Z[\]^_`a-z{|}~)
         let mut i = 0;
         let len = buf.len();
         while i < len {
             if buf[i] == 0x1b && i + 1 < len && buf[i + 1] == b'[' {
-                // Skip until 'm' or end
+                // Find the terminating byte
+                let start = i;
                 i += 2;
-                while i < len && buf[i] != b'm' {
+                while i < len && !(0x40..=0x7E).contains(&buf[i]) {
                     i += 1;
                 }
                 if i < len {
-                    i += 1; // skip 'm'
+                    let terminator = buf[i];
+                    i += 1;
+                    // Only strip color/style (ends with 'm'), pass through others
+                    if terminator != b'm' {
+                        self.inner.write_all(&buf[start..i])?;
+                    }
                 }
             } else {
                 self.inner.write_all(&buf[i..i + 1])?;
