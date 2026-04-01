@@ -73,7 +73,7 @@ depsguard --help
 
 ### Backup & restore
 
-Before modifying any config file, depsguard creates a backup in `~/.depsguard/backups/`. Run `depsguard --restore` to restore all files from backup.
+Before modifying any config file, depsguard creates a timestamped `.bak` backup next to the original (e.g. `~/.npmrc.2026-04-01T12-00-00Z.bak`). Run `depsguard --restore` to select and restore from these backups.
 
 ## Build
 

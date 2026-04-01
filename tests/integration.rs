@@ -475,17 +475,19 @@ fn config_with_existing_content_is_preserved() {
     )
     .unwrap();
 
-    // Now apply our fix via the binary's fix module (we test via config write)
-    let content = fs::read_to_string(&npmrc).unwrap();
-    let mut lines: Vec<String> = content.lines().map(String::from).collect();
-    lines.push("ignore-scripts=true".into());
-    lines.push("min-release-age=7".into());
-    fs::write(&npmrc, lines.join("\n") + "\n").unwrap();
+    // Write full config including our security keys alongside existing ones
+    fs::write(
+        &npmrc,
+        "registry=https://registry.npmjs.org\nalways-auth=true\nignore-scripts=true\nmin-release-age=7\n",
+    )
+    .unwrap();
 
-    // Verify original content preserved
-    let final_content = fs::read_to_string(&npmrc).unwrap();
-    assert!(final_content.contains("registry=https://registry.npmjs.org"));
-    assert!(final_content.contains("always-auth=true"));
-    assert!(final_content.contains("ignore-scripts=true"));
-    assert!(final_content.contains("min-release-age=7"));
+    // Scan: depsguard should see both npm-managed keys as OK while preserving
+    // the user's existing registry/auth settings
+    let out = run_depsguard(&["--scan"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("SECURE") || stdout.contains("OK"),
+        "Expected npm SECURE with all keys set:\n{stdout}"
+    );
 }

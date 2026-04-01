@@ -229,7 +229,17 @@ fn selection_loop(
                 items[cursor].selected = !items[cursor].selected;
             }
             Key::Enter => {
-                apply_selected(items, managers);
+                let results = apply_selected(items, managers);
+                // Show errors inline before rescanning
+                let errors: Vec<_> = results.iter().filter(|(_, r)| r.is_err()).collect();
+                if !errors.is_empty() {
+                    for (label, result) in &errors {
+                        if let Err(e) = result {
+                            writeln!(out, "  {}Error:{} {label}: {e}", term::RED, term::RESET)?;
+                        }
+                    }
+                    out.flush()?;
+                }
                 return Ok(true); // loop back to main scan screen
             }
             Key::Char('q') => {
