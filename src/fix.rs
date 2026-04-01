@@ -76,11 +76,14 @@ pub fn list_backups_with_progress(on_progress: &mut dyn FnMut(&str)) -> Vec<(Pat
             config_paths.push(config);
         }
     }
-    // Discover pnpm-workspace.yaml files with live progress (same as scan)
-    for ws in manager::find_pnpm_workspaces_with_callback(&mut |dir| {
-        on_progress(&format!("Scanning {}", ui::display_path(dir)));
-    }) {
-        config_paths.push(ws);
+    // Discover pnpm-workspace.yaml files with live progress (same as scan),
+    // unless --no-workspaces was specified
+    if !manager::skip_workspaces_enabled() {
+        for ws in manager::find_pnpm_workspaces_with_callback(&mut |dir| {
+            on_progress(&format!("Scanning {}", ui::display_path(dir)));
+        }) {
+            config_paths.push(ws);
+        }
     }
 
     for config in config_paths {

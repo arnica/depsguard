@@ -237,6 +237,14 @@ fn selection_loop(
                 }
                 return Ok(true); // loop back to main scan screen
             }
+            Key::Char('d') => {
+                // Show diff preview of selected changes
+                term::clear_screen(out)?;
+                ui::print_banner(out)?;
+                ui::print_diff_preview(out, items, managers)?;
+                out.flush()?;
+                term::read_key()?; // wait for any key to go back
+            }
             Key::Char('q') => {
                 return Ok(false);
             }

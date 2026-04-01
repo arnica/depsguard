@@ -339,7 +339,7 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
 pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -> io::Result<()> {
     writeln!(
         w,
-        "  {BOLD}{WHITE}Select fixes to apply:{RESET}  {DIM}(↑↓ move, space toggle, enter apply, q quit){RESET}\n"
+        "  {BOLD}{WHITE}Select fixes to apply:{RESET}  {DIM}(↑↓ move, space toggle, enter apply, d diff, q quit){RESET}\n"
     )?;
 
     let mut last_group: Option<&str> = None;
@@ -375,6 +375,74 @@ pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -
         "  {DIM}{} selected{RESET}\n",
         plural(count, "fix", "fixes")
     )
+}
+
+// ── Diff preview ─────────────────────────────────────────────────────
+
+/// Render a unified-diff style preview of what selected fixes will change.
+pub fn print_diff_preview(
+    w: &mut impl Write,
+    items: &[SelectItem],
+    managers: &[crate::manager::ManagerInfo],
+) -> io::Result<()> {
+    writeln!(
+        w,
+        "  {BOLD}{WHITE}Preview of changes:{RESET}  {DIM}(press any key to go back){RESET}\n"
+    )?;
+
+    // Group selected items by config path
+    let mut by_path: std::collections::BTreeMap<
+        &std::path::Path,
+        Vec<(&SelectItem, &crate::manager::Recommendation)>,
+    > = std::collections::BTreeMap::new();
+    for item in items.iter().filter(|i| i.selected) {
+        let mgr = &managers[item.manager_idx];
+        let rec = &mgr.recommendations[item.rec_idx];
+        by_path
+            .entry(&mgr.config_path)
+            .or_default()
+            .push((item, rec));
+    }
+
+    if by_path.is_empty() {
+        writeln!(w, "  {DIM}No fixes selected.{RESET}\n")?;
+        return Ok(());
+    }
+
+    for (path, fixes) in &by_path {
+        let dp = display_path(path);
+        writeln!(w, "  {BOLD}{CYAN}--- {dp}{RESET}")?;
+        writeln!(w, "  {BOLD}{CYAN}+++ {dp}{RESET} {DIM}(after fix){RESET}")?;
+
+        // Read current file content
+        let content = std::fs::read_to_string(path).unwrap_or_default();
+        let current_keys: std::collections::HashMap<&str, &str> = content
+            .lines()
+            .filter_map(|l| {
+                let t = l.trim();
+                // Handle key=value and key: value and key = value
+                t.split_once('=')
+                    .or_else(|| t.split_once(':'))
+                    .map(|(k, v)| (k.trim(), v.split('#').next().unwrap_or(v).trim()))
+            })
+            .collect();
+
+        for (_item, rec) in fixes {
+            match current_keys.get(rec.key.as_str()) {
+                Some(current_val) => {
+                    // Key exists with different value
+                    writeln!(w, "  {RED}-  {} = {}{RESET}", rec.key, current_val)?;
+                    writeln!(w, "  {GREEN}+  {} = {}{RESET}", rec.key, rec.expected)?;
+                }
+                None => {
+                    // Key doesn't exist yet
+                    writeln!(w, "  {GREEN}+  {} = {}{RESET}", rec.key, rec.expected)?;
+                }
+            }
+        }
+        writeln!(w)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
