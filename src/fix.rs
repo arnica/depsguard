@@ -16,7 +16,10 @@ fn backup_dir() -> PathBuf {
 
 /// Convert a config path to a backup filename (replace / with __ ).
 fn backup_name(path: &Path) -> String {
-    path.to_string_lossy().replace('/', "__").replace('\\', "__")
+    path.to_string_lossy()
+        .replace('/', "__")
+        .replace('\\', "__")
+        .replace(':', "_") // Windows drive letter colon
 }
 
 /// Backup a config file before modifying it. Only backs up once per path per session.
