@@ -234,6 +234,9 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
     let mut current_section: Option<&str> = None;
     for line in content.lines() {
         let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
         if line.starts_with('[') && line.ends_with(']') {
             current_section = Some(line[1..line.len() - 1].trim());
             continue;
