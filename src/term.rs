@@ -55,8 +55,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
     const TIOCGWINSZ: u64 = 0x5413;
     #[cfg(target_os = "macos")]
     const TIOCGWINSZ: u64 = 0x40087468;
-    let ret =
-        unsafe { libc_ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize as *mut u8) };
+    let ret = unsafe { libc_ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize as *mut u8) };
     if ret == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
         Some((ws.ws_col, ws.ws_row))
     } else {
@@ -64,7 +63,48 @@ pub fn terminal_size() -> Option<(u16, u16)> {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+pub fn terminal_size() -> Option<(u16, u16)> {
+    #[repr(C)]
+    struct Coord {
+        x: i16,
+        y: i16,
+    }
+    #[repr(C)]
+    struct SmallRect {
+        left: i16,
+        top: i16,
+        right: i16,
+        bottom: i16,
+    }
+    #[repr(C)]
+    struct ConsoleScreenBufferInfo {
+        dw_size: Coord,
+        dw_cursor_position: Coord,
+        w_attributes: u16,
+        sr_window: SmallRect,
+        dw_maximum_window_size: Coord,
+    }
+    unsafe extern "system" {
+        fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
+        fn GetConsoleScreenBufferInfo(
+            h: *mut std::ffi::c_void,
+            info: *mut ConsoleScreenBufferInfo,
+        ) -> i32;
+    }
+    let mut info = unsafe { std::mem::zeroed::<ConsoleScreenBufferInfo>() };
+    let handle = unsafe { GetStdHandle(0xFFFF_FFF5) }; // STD_OUTPUT_HANDLE
+    let ret = unsafe { GetConsoleScreenBufferInfo(handle, &mut info) };
+    if ret != 0 {
+        let cols = (info.sr_window.right - info.sr_window.left + 1) as u16;
+        let rows = (info.sr_window.bottom - info.sr_window.top + 1) as u16;
+        Some((cols, rows))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 pub fn terminal_size() -> Option<(u16, u16)> {
     None
 }
@@ -82,48 +122,62 @@ mod raw {
     use std::io;
 
     // Minimal termios FFI — no libc crate needed.
-    #[cfg(target_os = "linux")]
-    const NCCS: usize = 32;
-    #[cfg(target_os = "macos")]
-    const NCCS: usize = 20;
+    // Field types must match the OS ABI exactly to avoid UB.
 
-    #[repr(C)]
-    #[derive(Clone)]
-    pub struct Termios {
-        pub c_iflag: u64,
-        pub c_oflag: u64,
-        pub c_cflag: u64,
-        pub c_lflag: u64,
-        #[cfg(target_os = "linux")]
-        pub c_line: u8,
-        pub c_cc: [u8; NCCS],
-        #[cfg(target_os = "macos")]
-        pub c_ispeed: u64,
-        #[cfg(target_os = "macos")]
-        pub c_ospeed: u64,
-    }
-
-    // Linux flags
+    // Linux: tcflag_t = u32, cc_t = u8, speed_t = u32, NCCS = 32
     #[cfg(target_os = "linux")]
-    mod flags {
-        pub const ECHO: u64 = 0o10;
-        pub const ICANON: u64 = 0o2;
-        pub const ISIG: u64 = 0o1;
-        pub const IEXTEN: u64 = 0o100000;
+    mod platform {
+        pub const NCCS: usize = 32;
+        pub type TcFlag = u32;
+
+        #[repr(C)]
+        #[derive(Clone)]
+        pub struct Termios {
+            pub c_iflag: TcFlag,
+            pub c_oflag: TcFlag,
+            pub c_cflag: TcFlag,
+            pub c_lflag: TcFlag,
+            pub c_line: u8,
+            pub c_cc: [u8; NCCS],
+            pub c_ispeed: TcFlag,
+            pub c_ospeed: TcFlag,
+        }
+
+        pub const ECHO: TcFlag = 0o10;
+        pub const ICANON: TcFlag = 0o2;
+        pub const ISIG: TcFlag = 0o1;
+        pub const IEXTEN: TcFlag = 0o100000;
         pub const TCGETS: u64 = 0x5401;
         pub const TCSETS: u64 = 0x5402;
     }
 
-    // macOS flags
+    // macOS: tcflag_t = u64 (unsigned long on 64-bit), NCCS = 20
     #[cfg(target_os = "macos")]
-    mod flags {
-        pub const ECHO: u64 = 0x00000008;
-        pub const ICANON: u64 = 0x00000100;
-        pub const ISIG: u64 = 0x00000080;
-        pub const IEXTEN: u64 = 0x00000400;
+    mod platform {
+        pub const NCCS: usize = 20;
+        pub type TcFlag = u64;
+
+        #[repr(C)]
+        #[derive(Clone)]
+        pub struct Termios {
+            pub c_iflag: TcFlag,
+            pub c_oflag: TcFlag,
+            pub c_cflag: TcFlag,
+            pub c_lflag: TcFlag,
+            pub c_cc: [u8; NCCS],
+            pub c_ispeed: TcFlag,
+            pub c_ospeed: TcFlag,
+        }
+
+        pub const ECHO: TcFlag = 0x00000008;
+        pub const ICANON: TcFlag = 0x00000100;
+        pub const ISIG: TcFlag = 0x00000080;
+        pub const IEXTEN: TcFlag = 0x00000400;
         pub const TCGETS: u64 = 0x40487413; // TIOCGETA
         pub const TCSETS: u64 = 0x80487414; // TIOCSETA
     }
+
+    use platform::Termios;
 
     unsafe extern "C" {
         #[link_name = "ioctl"]
@@ -137,13 +191,14 @@ mod raw {
     impl RawMode {
         pub fn enable() -> io::Result<Self> {
             let mut orig = unsafe { std::mem::zeroed::<Termios>() };
-            let ret = unsafe { libc_ioctl(0, flags::TCGETS, &mut orig as *mut Termios) };
+            let ret = unsafe { libc_ioctl(0, platform::TCGETS, &mut orig as *mut Termios) };
             if ret != 0 {
                 return Err(io::Error::last_os_error());
             }
             let saved = orig.clone();
-            orig.c_lflag &= !(flags::ECHO | flags::ICANON | flags::ISIG | flags::IEXTEN);
-            let ret = unsafe { libc_ioctl(0, flags::TCSETS, &orig as *const Termios) };
+            orig.c_lflag &=
+                !(platform::ECHO | platform::ICANON | platform::ISIG | platform::IEXTEN);
+            let ret = unsafe { libc_ioctl(0, platform::TCSETS, &orig as *const Termios) };
             if ret != 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -154,13 +209,94 @@ mod raw {
     impl Drop for RawMode {
         fn drop(&mut self) {
             unsafe {
-                libc_ioctl(0, flags::TCSETS, &self.original as *const Termios);
+                libc_ioctl(0, platform::TCSETS, &self.original as *const Termios);
             }
         }
     }
 }
 
 #[cfg(unix)]
+pub use raw::RawMode;
+
+// ── Windows raw mode ─────────────────────────────────────────────────
+
+#[cfg(windows)]
+mod raw {
+    use std::io;
+
+    // Windows Console API FFI
+    type Handle = *mut std::ffi::c_void;
+    type Dword = u32;
+    const STD_INPUT_HANDLE: Dword = 0xFFFF_FFF6; // (DWORD)-10
+    const ENABLE_ECHO_INPUT: Dword = 0x0004;
+    const ENABLE_LINE_INPUT: Dword = 0x0002;
+    const ENABLE_PROCESSED_INPUT: Dword = 0x0001;
+    const ENABLE_VIRTUAL_TERMINAL_INPUT: Dword = 0x0200;
+
+    // Enable ANSI escape sequences on Windows output
+    const STD_OUTPUT_HANDLE: Dword = 0xFFFF_FFF5; // (DWORD)-11
+    const ENABLE_VIRTUAL_TERMINAL_PROCESSING: Dword = 0x0004;
+
+    unsafe extern "system" {
+        fn GetStdHandle(nStdHandle: Dword) -> Handle;
+        fn GetConsoleMode(hConsoleHandle: Handle, lpMode: *mut Dword) -> i32;
+        fn SetConsoleMode(hConsoleHandle: Handle, dwMode: Dword) -> i32;
+    }
+
+    pub struct RawMode {
+        input_handle: Handle,
+        original_input_mode: Dword,
+        output_handle: Handle,
+        original_output_mode: Dword,
+    }
+
+    impl RawMode {
+        pub fn enable() -> io::Result<Self> {
+            unsafe {
+                let input_handle = GetStdHandle(STD_INPUT_HANDLE);
+                let output_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+                let mut original_input_mode: Dword = 0;
+                if GetConsoleMode(input_handle, &mut original_input_mode) == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+
+                let mut original_output_mode: Dword = 0;
+                let _ = GetConsoleMode(output_handle, &mut original_output_mode);
+
+                // Disable echo and line input, enable virtual terminal input
+                let new_input = (original_input_mode
+                    & !(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT))
+                    | ENABLE_VIRTUAL_TERMINAL_INPUT;
+                if SetConsoleMode(input_handle, new_input) == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+
+                // Enable ANSI escape processing on output
+                let new_output = original_output_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+                let _ = SetConsoleMode(output_handle, new_output);
+
+                Ok(RawMode {
+                    input_handle,
+                    original_input_mode,
+                    output_handle,
+                    original_output_mode,
+                })
+            }
+        }
+    }
+
+    impl Drop for RawMode {
+        fn drop(&mut self) {
+            unsafe {
+                SetConsoleMode(self.input_handle, self.original_input_mode);
+                SetConsoleMode(self.output_handle, self.original_output_mode);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
 pub use raw::RawMode;
 
 // ── Key input ─────────────────────────────────────────────────────────

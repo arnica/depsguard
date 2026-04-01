@@ -172,8 +172,7 @@ fn apply_selected(
         .map(|item| {
             let mgr = &managers[item.manager_idx];
             let rec = &mgr.recommendations[item.rec_idx];
-            let result =
-                fix::apply_fix(mgr.kind, &mgr.config_path, rec).map_err(|e| e.to_string());
+            let result = fix::apply_fix(mgr.kind, &mgr.config_path, rec).map_err(|e| e.to_string());
             (item.label.clone(), result)
         })
         .collect()
@@ -196,7 +195,6 @@ mod tests {
                 description: "test".into(),
                 expected: "true".into(),
                 status: CheckStatus::Missing,
-
             }],
         }];
         let items = vec![SelectItem {
@@ -211,10 +209,7 @@ mod tests {
 
     #[test]
     fn apply_selected_applies_selected() {
-        let path = std::env::temp_dir().join(format!(
-            "depsguard_main_test_{}",
-            std::process::id()
-        ));
+        let path = std::env::temp_dir().join(format!("depsguard_main_test_{}", std::process::id()));
         std::fs::write(&path, "").unwrap();
 
         let managers = vec![ManagerInfo {
@@ -226,7 +221,6 @@ mod tests {
                 description: "test".into(),
                 expected: "true".into(),
                 status: CheckStatus::Missing,
-
             }],
         }];
         let items = vec![SelectItem {
@@ -254,7 +248,6 @@ mod tests {
                 description: "d".into(),
                 expected: "v".into(),
                 status: CheckStatus::Missing,
-
             }],
         }];
         let items = ui::build_fix_items(&managers);

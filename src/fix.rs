@@ -277,7 +277,6 @@ mod tests {
             description: "test".into(),
             expected: "true".into(),
             status: crate::manager::CheckStatus::Missing,
-
         };
         apply_fix(ManagerKind::Npm, f.path(), &rec).unwrap();
         assert!(f.read().contains("ignore-scripts=true"));
@@ -291,7 +290,6 @@ mod tests {
             description: "test".into(),
             expected: "10080".into(),
             status: crate::manager::CheckStatus::Missing,
-
         };
         apply_fix(ManagerKind::Pnpm, f.path(), &rec).unwrap();
         assert!(f.read().contains("minimum-release-age=10080"));
@@ -305,7 +303,6 @@ mod tests {
             description: "test".into(),
             expected: "604800".into(),
             status: crate::manager::CheckStatus::Missing,
-
         };
         apply_fix(ManagerKind::Bun, f.path(), &rec).unwrap();
         let content = f.read();
@@ -320,7 +317,6 @@ mod tests {
             description: "test".into(),
             expected: "2024-01-01".into(),
             status: crate::manager::CheckStatus::Missing,
-
         };
         apply_fix(ManagerKind::Uv, f.path(), &rec).unwrap();
         assert!(f.read().contains("exclude-newer = \"2024-01-01\""));
