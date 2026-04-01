@@ -19,6 +19,20 @@ fn main() {
     if args.iter().any(|a| a == "--no-workspaces") {
         manager::set_skip_workspaces(true);
     }
+    if let Some(pos) = args.iter().position(|a| a == "--delay-days") {
+        if let Some(val) = args.get(pos + 1) {
+            match val.parse::<u64>() {
+                Ok(d) if d > 0 => manager::set_delay_days(d),
+                _ => {
+                    eprintln!("{}{}Error:{} --delay-days requires a positive number", term::RED, term::BOLD, term::RESET);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            eprintln!("{}{}Error:{} --delay-days requires a value", term::RED, term::BOLD, term::RESET);
+            std::process::exit(1);
+        }
+    }
 
     if args.iter().any(|a| a == "--scan" || a == "-s") {
         run_scan_only();
@@ -37,8 +51,31 @@ fn main() {
         return;
     }
 
+    // Check for unrecognized flags
+    let known = &[
+        "--scan", "-s", "--help", "-h", "--version", "-V",
+        "--restore", "--no-color", "--no-workspaces", "--delay-days",
+    ];
+    let mut skip_next = false;
+    for arg in &args[1..] {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if arg == "--delay-days" {
+            skip_next = true;
+            continue;
+        }
+        if arg.starts_with('-') && !known.contains(&arg.as_str()) {
+            eprintln!("{}{}Error:{} unrecognized option '{arg}'", term::RED, term::BOLD, term::RESET);
+            eprintln!();
+            print_usage_short();
+            std::process::exit(1);
+        }
+    }
+
     if let Err(e) = run_interactive() {
-        eprintln!("Error: {e}");
+        eprintln!("{}{}Error:{} {e}", term::RED, term::BOLD, term::RESET);
         std::process::exit(1);
     }
 }
@@ -47,15 +84,20 @@ fn print_usage() {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
-    println!("  Harden your package manager configs against supply chain attacks.\n");
-    println!("  USAGE:");
-    println!("    depsguard            Interactive mode (TUI)");
-    println!("    depsguard --scan     Scan only, no changes");
-    println!("    depsguard --help     Show this help");
-    println!("    depsguard --version  Show version");
-    println!("    depsguard --restore  Restore config files from backup");
-    println!("    depsguard --no-color      Disable colored output");
-    println!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search\n");
+    print_usage_short();
+}
+
+fn print_usage_short() {
+    eprintln!("  USAGE:");
+    eprintln!("    depsguard                  Interactive mode (TUI)");
+    eprintln!("    depsguard --scan           Scan only, no changes");
+    eprintln!("    depsguard --help           Show this help");
+    eprintln!("    depsguard --version        Show version");
+    eprintln!("    depsguard --restore        Restore config files from backup");
+    eprintln!("    depsguard --no-color       Disable colored output");
+    eprintln!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search");
+    eprintln!("    depsguard --delay-days N   Set release delay (default: 7)");
+    eprintln!();
 }
 
 fn run_scan_only() {
