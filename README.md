@@ -22,7 +22,7 @@ DepsGuard scans your system for installed package managers and `pnpm-workspace.y
 |---------|--------|---------|-------|---------|
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay new versions by 7 days |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Block malicious install scripts |
-| pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `4320` (min) | Delay new versions by 3 days |
+| pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (min) | Delay new versions by 7 days (default) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts |

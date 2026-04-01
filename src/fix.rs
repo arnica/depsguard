@@ -16,10 +16,34 @@ fn backup_dir() -> PathBuf {
 
 /// Convert a config path to a backup filename (replace / with __ ).
 fn backup_name(path: &Path) -> String {
+    // Percent-encode the path for reversible backup filenames (safe on Windows)
     path.to_string_lossy()
-        .replace('/', "__")
-        .replace('\\', "__")
-        .replace(':', "_") // Windows drive letter colon
+        .bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' => String::from(b as char),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+fn percent_decode(s: &str) -> String {
+    let mut result = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+            {
+                result.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        result.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&result).into_owned()
 }
 
 /// Backup a config file before modifying it. Only backs up once per path per session.
@@ -55,9 +79,8 @@ pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
-            // Reconstruct original path from __ -separated name
-            let original = name.replacen("__", "/", name.matches("__").count());
-            let original = PathBuf::from(original);
+            // Reconstruct original path by decoding percent-encoded name
+            let original = PathBuf::from(percent_decode(&name));
             // Skip temp files (created by tests)
             let temp = std::env::temp_dir();
             if original.starts_with(&temp) {
