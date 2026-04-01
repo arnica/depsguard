@@ -414,29 +414,45 @@ pub fn print_diff_preview(
         writeln!(w, "  {BOLD}{CYAN}--- {dp}{RESET}")?;
         writeln!(w, "  {BOLD}{CYAN}+++ {dp}{RESET} {DIM}(after fix){RESET}")?;
 
-        // Read current file content
-        let content = std::fs::read_to_string(path).unwrap_or_default();
-        let current_keys: std::collections::HashMap<&str, &str> = content
-            .lines()
-            .filter_map(|l| {
-                let t = l.trim();
-                // Handle key=value and key: value and key = value
-                t.split_once('=')
-                    .or_else(|| t.split_once(':'))
-                    .map(|(k, v)| (k.trim(), v.split('#').next().unwrap_or(v).trim()))
-            })
-            .collect();
+        // Determine format based on file type
+        let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let is_npmrc = fname == ".npmrc";
+        let is_yaml = ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml");
 
         for (_item, rec) in fixes {
-            match current_keys.get(rec.key.as_str()) {
-                Some(current_val) => {
-                    // Key exists with different value
-                    writeln!(w, "  {RED}-  {} = {}{RESET}", rec.key, current_val)?;
-                    writeln!(w, "  {GREEN}+  {} = {}{RESET}", rec.key, rec.expected)?;
+            // For TOML dotted keys like "install.minimumReleaseAge", look up the
+            // leaf key within its section using the real TOML reader
+            let current_val = if rec.key.contains('.') {
+                crate::manager::read_toml_value(path, &rec.key)
+            } else if is_yaml {
+                crate::manager::read_yaml_value(path, &rec.key)
+            } else {
+                let flat = crate::manager::read_flat_config(path);
+                flat.get(&rec.key).cloned()
+            };
+
+            // Format separator to match what apply_fix actually writes
+            let fmt = |k: &str, v: &str| -> String {
+                if is_npmrc {
+                    format!("{k}={v}")
+                } else if is_yaml {
+                    format!("{k}: {v}")
+                } else {
+                    format!("{k} = {v}")
+                }
+            };
+
+            match current_val {
+                Some(ref cv) if cv != &rec.expected => {
+                    writeln!(w, "  {RED}-  {}{RESET}", fmt(&rec.key, cv))?;
+                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&rec.key, &rec.expected))?;
+                }
+                Some(_) => {
+                    // Already correct, skip
                 }
                 None => {
-                    // Key doesn't exist yet
-                    writeln!(w, "  {GREEN}+  {} = {}{RESET}", rec.key, rec.expected)?;
+                    writeln!(w, "  {GREEN}+  {}{RESET}", fmt(&rec.key, &rec.expected))?;
                 }
             }
         }
