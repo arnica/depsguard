@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-# Don't run on forked PRs to prevent secret exfiltration
 permissions:
   contents: read
 
@@ -18,19 +17,16 @@ jobs:
   check:
     name: Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Skip if PR is from a fork
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+      - uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Clippy
@@ -40,17 +36,14 @@ jobs:
       - name: Test
         run: cargo test --bin depsguard
 
-  # Linux-only: run integration tests (needs npm, pnpm, bun, uv)
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
-      - uses: actions/setup-node@49933ea5288caeca8642195f2ed94f21bf2f2e36 # v4.4.0
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Install pnpm
@@ -65,9 +58,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Verify tools
         run: |
-          node --version
-          npm --version
-          pnpm --version
+          node --version && npm --version && pnpm --version
           bun --version
           uv --version
       - name: Run integration tests
