@@ -54,7 +54,15 @@ pub fn list_backups() -> Vec<(PathBuf, PathBuf)> {
                 .to_string();
             // Reconstruct original path from __ -separated name
             let original = name.replacen("__", "/", name.matches("__").count());
-            results.push((PathBuf::from(original), backup_path));
+            let original = PathBuf::from(original);
+            // Skip temp files (created by tests)
+            let temp = std::env::temp_dir();
+            if original.starts_with(&temp) {
+                // Clean up stale test backup
+                let _ = fs::remove_file(&backup_path);
+                continue;
+            }
+            results.push((original, backup_path));
         }
     }
     results.sort();

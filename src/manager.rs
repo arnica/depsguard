@@ -481,13 +481,15 @@ fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
 }
 
 fn scan_pnpm_workspace(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let minutes = days * 24 * 60;
     vec![
         check_yaml(
             path,
             "minimumReleaseAge",
-            "4320",
-            "Delay new versions by 3 days",
-            YamlCheck::MinInt(4320),
+            &minutes.to_string(),
+            &format!("Delay new versions by {days} days"),
+            YamlCheck::MinInt(minutes),
         ),
         check_yaml(
             path,
@@ -544,21 +546,21 @@ fn check_yaml(
 }
 
 fn scan_bun(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let seconds = days * 86400;
     let delay = read_toml_value(path, "install.minimumReleaseAge");
     let delay_status = match &delay {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= 604800 => CheckStatus::Ok,
+            Ok(n) if n >= seconds => CheckStatus::Ok,
             Ok(_) => CheckStatus::WrongValue(v.clone()),
             Err(_) => CheckStatus::WrongValue(v.clone()),
         },
         None => CheckStatus::Missing,
     };
-    // Bun uses a trusted-dependencies allow-list by default, so scripts are
-    // already restricted. We still recommend awareness but mark it OK.
     vec![Recommendation {
         key: "install.minimumReleaseAge".into(),
-        description: "Delay new versions by 7 days".into(),
-        expected: "604800".into(),
+        description: format!("Delay new versions by {days} days"),
+        expected: seconds.to_string(),
         status: delay_status,
     }]
 }
@@ -580,17 +582,18 @@ fn parse_relative_days(s: &str) -> Option<u64> {
 }
 
 fn scan_uv(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
     let val = read_toml_value(path, "exclude-newer");
     let status = match &val {
         Some(v) => {
             // Accept relative durations (e.g. "7 days") or absolute dates old enough
-            if let Some(days) = parse_relative_days(v) {
-                if days >= DELAY_DAYS {
+            if let Some(d) = parse_relative_days(v) {
+                if d >= days {
                     CheckStatus::Ok
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }
-            } else if is_date_old_enough(v, DELAY_DAYS) {
+            } else if is_date_old_enough(v, days) {
                 CheckStatus::Ok
             } else {
                 CheckStatus::WrongValue(v.clone())
@@ -600,8 +603,8 @@ fn scan_uv(path: &Path) -> Vec<Recommendation> {
     };
     vec![Recommendation {
         key: "exclude-newer".into(),
-        description: "Delay new versions by 7 days".into(),
-        expected: "7 days".into(),
+        description: format!("Delay new versions by {days} days"),
+        expected: format!("{days} days"),
         status,
     }]
 }
