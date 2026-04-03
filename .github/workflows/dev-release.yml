@@ -35,6 +35,36 @@ jobs:
             archive: zip
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set unique dev version
+        shell: bash
+        env:
+          RUN_NO: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          with open("Cargo.toml", "rb") as f:
+              base = tomllib.load(f)["package"]["version"]
+
+          run_no = os.environ["RUN_NO"]
+          run_attempt = os.environ["RUN_ATTEMPT"]
+          if "-" in base:
+              dev = f"{base}.dev.{run_no}.{run_attempt}"
+          else:
+              dev = f"{base}-dev.{run_no}.{run_attempt}"
+
+          p = Path("Cargo.toml")
+          text = p.read_text()
+          updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{dev}"', text, count=1)
+          if text == updated:
+              raise SystemExit("failed to update Cargo.toml version")
+          p.write_text(updated)
+          print(f"Using dev crate version for build: {dev}")
+          PY
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable

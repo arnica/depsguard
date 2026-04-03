@@ -42,8 +42,7 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
         "{indent}{ARNICA}╭─{RESET}{BOLD}{WHITE}{title}{RESET}{ARNICA}{}{RESET}{ARNICA}╮{RESET}",
         "─".repeat(remaining)
     )?;
-
-    // Art lines inside box (centered)
+    // Art lines inside box (left padded, no centering so glyphs render exactly)
     let art_lines: &[&str] = &[
         "     _",
         "  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |",
@@ -54,7 +53,7 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
     ];
     for line in art_lines {
         let display_len = line.chars().count();
-        let left = (BOX_WIDTH.saturating_sub(display_len)) / 2;
+        let left = 1;
         let right = BOX_WIDTH.saturating_sub(display_len + left);
         writeln!(
             w,
