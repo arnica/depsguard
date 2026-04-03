@@ -42,6 +42,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 envsubst <"${ROOT}/packaging/homebrew/depsguard.rb.in" >/tmp/depsguard.rb
 
 git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP}.git" /tmp/homebrew-tap
+mkdir -p /tmp/homebrew-tap/Formula
 cp /tmp/depsguard.rb /tmp/homebrew-tap/Formula/depsguard.rb
 cd /tmp/homebrew-tap
 git config user.name "github-actions[bot]"
