@@ -26,6 +26,8 @@ target
 /target
 .DS_Store
 
+# JS (pnpm workspace root + docs package)
+node_modules/
+
 # Docs: generated Tailwind CSS (built in CI or via pnpm run build:css)
-docs/node_modules/
 docs/styles.css

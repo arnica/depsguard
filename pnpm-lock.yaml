@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  docs:
     devDependencies:
       tailwindcss:
         specifier: 3.4.17
