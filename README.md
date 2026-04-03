@@ -85,7 +85,8 @@ depsguard --help
 #### macOS (Intel / Apple Silicon)
 
 ```bash
-# Homebrew
+# Homebrew tap
+brew tap arnica/depsguard
 brew install depsguard
 
 # Fallback: direct binaries
@@ -128,12 +129,12 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 |---------|-------|-------|---------|-----------------|
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after adding your apt source) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew | yes | yes | no | `brew install depsguard` |
+| Homebrew (custom tap) | yes | yes | no | `brew tap <org>/depsguard ; brew install depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/<org>/scoop-depsguard ; scoop install depsguard` |
 | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` |
 | GitHub Releases (direct binary) | yes | yes | yes | download + unpack from releases page |
 
-> Note: Homebrew/Scoop/WinGet availability depends on package publication status and review timelines.
+> Note: Scoop/WinGet availability depends on package publication status and review timelines.
 
 ### Build from source
 

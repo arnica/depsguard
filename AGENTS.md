@@ -93,23 +93,23 @@ Tag pushes run `.github/workflows/release.yml`. Optional secrets (omit to skip t
 | Secret | Purpose |
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
-| `HOMEBREW_CORE_TOKEN` | Push formula updates to your `homebrew-core` fork and open/update PR to `Homebrew/homebrew-core` |
+| `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to your tap repo (for example `<owner>/homebrew-depsguard`) |
 | `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
-Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-core.sh` and `publish-scoop-bucket.sh`.
+Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-tap.sh` and `publish-scoop-bucket.sh`.
 
 ### End-user install channels (optional)
 
 Document these in your org’s internal runbooks or public docs once the repos exist; **do not** duplicate in `README.md` unless you have stable public install channels.
 
-**Homebrew (homebrew-core)**
+**Homebrew (custom tap)**
 
-1. Fork `Homebrew/homebrew-core` to a writable repo (for example `<owner>/homebrew-core`).
-2. Set repo variable `HOMEBREW_CORE_FORK` to `<owner>/homebrew-core`.
-3. Set `HOMEBREW_CORE_TOKEN` (PAT with **repo** scope that can push to your fork and open PRs).
-4. Release workflow updates `Formula/d/depsguard.rb` on your fork and opens/updates the PR to `Homebrew/homebrew-core`.
-5. Users install with `brew install depsguard` once merged.
+1. Create `<owner>/homebrew-depsguard` with `Formula/depsguard.rb`.
+2. Set repo variable `HOMEBREW_TAP_REPO` to `<owner>/homebrew-depsguard`.
+3. Set `HOMEBREW_TAP_TOKEN` (PAT with **repo** scope and push access to the tap repo).
+4. Release workflow updates `Formula/depsguard.rb` in the tap repository on each tag.
+5. Users install with `brew tap <owner>/depsguard` then `brew install depsguard`.
 
 **Scoop (custom bucket)**
 
