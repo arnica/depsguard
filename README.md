@@ -11,7 +11,7 @@
 
 Harden your package manager configs against supply chain attacks. **Single static binary, zero Rust crate dependencies.**
 
-By **[Arnica](https://arnica.io)**
+By **[[arnica](https://arnica.io)]**
 
 ## Table of contents
 
