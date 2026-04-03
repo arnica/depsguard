@@ -185,7 +185,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          TAG_NAME: dev-${{ steps.meta.outputs.branch_slug }}
+          TAG_NAME: dev-${{ steps.meta.outputs.branch_slug }}-${{ steps.meta.outputs.short_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           RELEASE_NAME: dev/${{ github.ref_name }} (${{ steps.meta.outputs.short_sha }})
           NOTES: |
             Automated dev build for branch `${{ github.ref_name }}`.

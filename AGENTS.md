@@ -94,7 +94,7 @@ Tag pushes run `.github/workflows/release.yml`. Optional secrets (omit to skip t
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
 | `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to your tap repo (for example `<owner>/homebrew-depsguard`) |
-| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
+| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/depsguard` |
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-tap.sh` and `publish-scoop-bucket.sh`.
@@ -113,8 +113,8 @@ Document these in your org’s internal runbooks or public docs once the repos e
 
 **Scoop (custom bucket)**
 
-1. Create `<owner>/scoop-depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
-2. Users: `scoop bucket add <label> https://github.com/<owner>/scoop-depsguard` then `scoop install depsguard`.
+1. Create `<owner>/depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
+2. Users: `scoop bucket add <label> https://github.com/<owner>/depsguard` then `scoop install depsguard`.
 3. Set `SCOOP_BUCKET_TOKEN` with push access to the bucket repo.
 
 **WinGet**

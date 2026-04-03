@@ -66,19 +66,12 @@ Verify integrity using the matching `.sha256` file next to each asset on the rel
 #### Linux
 
 ```bash
-# APT (when your org/repo publishes a Debian apt repo)
-# sudo install -d -m 0755 /etc/apt/keyrings
-# curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
-# echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
-#   | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
-# sudo apt update
-# sudo apt install depsguard
-
-# Fallback: direct binary (x86_64 glibc)
-curl -L -o depsguard.tar.gz \
-  https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf depsguard.tar.gz
-sudo install -m 0755 depsguard /usr/local/bin/depsguard
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
+echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
+sudo apt update
+sudo apt install depsguard
 depsguard --help
 ```
 
@@ -88,17 +81,6 @@ depsguard --help
 # Homebrew tap
 brew tap arnica/depsguard
 brew install depsguard
-
-# Fallback: direct binaries
-# Intel:
-# curl -L -o depsguard.tar.gz \
-#   https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-apple-darwin.tar.gz
-# Apple Silicon (arm64):
-# curl -L -o depsguard.tar.gz \
-#   https://github.com/arnica/depsguard/releases/latest/download/depsguard-aarch64-apple-darwin.tar.gz
-
-# tar -xzf depsguard.tar.gz
-# sudo install -m 0755 depsguard /usr/local/bin/depsguard
 ```
 
 #### Windows (PowerShell)
@@ -129,10 +111,9 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 |---------|-------|-------|---------|-----------------|
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after adding your apt source) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew (custom tap) | yes | yes | no | `brew tap <org>/depsguard ; brew install depsguard` |
-| Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/<org>/scoop-depsguard ; scoop install depsguard` |
+| Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard ; brew install depsguard` |
+| Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/arnica/scoop-depsguard ; scoop install depsguard` |
 | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` |
-| GitHub Releases (direct binary) | yes | yes | yes | download + unpack from releases page |
 
 > Note: Scoop/WinGet availability depends on package publication status and review timelines.
 
