@@ -38,7 +38,7 @@ jobs:
       - name: Set unique dev version
         shell: bash
         env:
-          RUN_NO: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           python - <<'PY'
@@ -50,12 +50,12 @@ jobs:
           with open("Cargo.toml", "rb") as f:
               base = tomllib.load(f)["package"]["version"]
 
-          run_no = os.environ["RUN_NO"]
+          short_sha = os.environ["COMMIT_SHA"][:8]
           run_attempt = os.environ["RUN_ATTEMPT"]
           if "-" in base:
-              dev = f"{base}.dev.{run_no}.{run_attempt}"
+              dev = f"{base}.{short_sha}.{run_attempt}"
           else:
-              dev = f"{base}-dev.{run_no}.{run_attempt}"
+              dev = f"{base}-dev.{short_sha}.{run_attempt}"
 
           p = Path("Cargo.toml")
           text = p.read_text()
@@ -122,27 +122,28 @@ jobs:
         if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
         shell: bash
         env:
-          RUN_NO: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          BASE_VERSION="$(python3 - <<'PY'
-          import tomllib
-          with open("Cargo.toml", "rb") as f:
-              print(tomllib.load(f)["package"]["version"])
-          PY
-          )"
-          if [[ "$BASE_VERSION" == *-* ]]; then
-            DEV_VERSION="${BASE_VERSION}.dev.${RUN_NO}.${RUN_ATTEMPT}"
-          else
-            DEV_VERSION="${BASE_VERSION}-dev.${RUN_NO}.${RUN_ATTEMPT}"
-          fi
-          python3 - <<PY
-          from pathlib import Path
+          python - <<'PY'
+          import os
           import re
-          dev = "${DEV_VERSION}"
+          import tomllib
+          from pathlib import Path
+
+          with open("Cargo.toml", "rb") as f:
+              base = tomllib.load(f)["package"]["version"]
+
+          short_sha = os.environ["COMMIT_SHA"][:8]
+          run_attempt = os.environ["RUN_ATTEMPT"]
+          if "-" in base:
+              dev = f"{base}.{short_sha}.{run_attempt}"
+          else:
+              dev = f"{base}-dev.{short_sha}.{run_attempt}"
+
           p = Path("Cargo.toml")
           t = p.read_text()
-          t2 = re.sub(r'(?m)^version\\s*=\\s*\"[^\"]+\"', f'version = \"{dev}\"', t, count=1)
+          t2 = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{dev}"', t, count=1)
           if t == t2:
               raise SystemExit("failed to update Cargo.toml version")
           p.write_text(t2)

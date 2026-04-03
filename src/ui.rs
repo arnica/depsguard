@@ -44,12 +44,12 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
     )?;
     // Art lines inside box (left padded, no centering so glyphs render exactly)
     let art_lines: &[&str] = &[
-        "     _",
+        "     _                                          _",
         "  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |",
         " / _` |/ _ \\ '_ \\/ __|/ _` | | | |/ _` | '__/ _` |",
         "| (_| |  __/ |_) \\__ \\ (_| | |_| | (_| | | | (_| |",
         " \\__,_|\\___| .__/|___/\\__, |\\__,_|\\__,_|_|  \\__,_|",
-        "           |_|         |___/",
+        "           |_|        |___/",
     ];
     for line in art_lines {
         let display_len = line.chars().count();
