@@ -77,14 +77,19 @@ jobs:
 
   publish-crates-dev:
     name: Publish dev crate (temporary)
-    if: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
+      - name: Skip publish when token is missing
+        if: ${{ env.CARGO_REGISTRY_TOKEN == '' }}
+        run: echo "CARGO_REGISTRY_TOKEN is not set; skipping dev crate publish."
       - name: Set unique dev version
+        if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
         shell: bash
         env:
           RUN_NO: ${{ github.run_number }}
@@ -114,14 +119,15 @@ jobs:
           print(f"Using dev crate version: {dev}")
           PY
       - name: Publish to crates.io
+        if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN }}
         run: cargo publish
 
   publish:
     name: Publish prerelease
     needs: [build, publish-crates-dev]
-    if: ${{ always() && needs.build.result == 'success' && (needs.publish-crates-dev.result == 'success' || needs.publish-crates-dev.result == 'skipped') }}
+    if: ${{ always() && needs.build.result == 'success' && needs.publish-crates-dev.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
