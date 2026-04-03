@@ -119,10 +119,15 @@ jobs:
           print(f"Using dev crate version: {dev}")
           PY
       - name: Publish to crates.io
+        id: publish_dev_crate
         if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
+        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --allow-dirty
+      - name: Warn when dev crate publish fails
+        if: ${{ steps.publish_dev_crate.outcome == 'failure' }}
+        run: echo "::warning::Dev crate publish failed (likely crates.io account/token configuration). Continuing with prerelease artifacts."
 
   publish:
     name: Publish prerelease
