@@ -55,7 +55,7 @@ This project intentionally has **no external crates**. All functionality (termin
 ### Naming and structure
 
 - Follow Rust naming conventions: `snake_case` for functions/variables, `CamelCase` for types, `SCREAMING_SNAKE_CASE` for constants.
-- Keep modules focused — see the architecture section in `README.md` for module responsibilities.
+- Keep modules focused — see the **How it works** section in `README.md` for module responsibilities.
 - Prefer small, composable functions over long procedural blocks.
 
 ### Testing
@@ -75,6 +75,8 @@ This project intentionally has **no external crates**. All functionality (termin
 - Public functions and types should have a doc comment (`///`).
 - Keep comments focused on *why*, not *what*. The code should be self-explanatory for the *what*.
 
+- End-user documentation belongs in **`README.md`** (install, usage, troubleshooting). Maintainer-only topics (tests, releases, tap secrets) stay here.
+
 ## Build & verify
 
 ```bash
@@ -83,3 +85,54 @@ cargo clippy -- -D warnings  # lints
 cargo test             # all tests
 cargo build --release  # release binary
 ```
+
+## Release & distribution (CI secrets)
+
+Tag pushes run `.github/workflows/release.yml`. Optional secrets (omit to skip that publisher):
+
+| Secret | Purpose |
+|--------|---------|
+| `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
+| `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to `arnica/homebrew-depsguard` |
+| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
+| `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
+
+Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-tap.sh` and `publish-scoop-bucket.sh`.
+
+### End-user install channels (optional)
+
+Document these in your org’s internal runbooks or public docs once the repos exist; **do not** duplicate in `README.md` unless you have stable, public tap/bucket URLs.
+
+**Homebrew (custom tap)**
+
+1. Create `arnica/homebrew-depsguard` with `Formula/depsguard.rb` (seed from `packaging/homebrew/depsguard.rb.in` after substituting version and checksums, or let CI overwrite after the first successful run).
+2. Users: `brew tap arnica/depsguard` then `brew install depsguard`.
+3. Set `HOMEBREW_TAP_TOKEN` on the main repo (PAT with **contents** write on `arnica/homebrew-depsguard`).
+
+**Scoop (custom bucket)**
+
+1. Create `<owner>/scoop-depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
+2. Users: `scoop bucket add <label> https://github.com/<owner>/scoop-depsguard` then `scoop install depsguard`.
+3. Set `SCOOP_BUCKET_TOKEN` with push access to the bucket repo.
+
+**WinGet**
+
+- Optional job uses [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) when `WINGET_PKGS_TOKEN` is set.
+- At least one version of `Arnica.DepsGuard` must exist in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) (first manifest is usually manual); the token owner needs a fork of `winget-pkgs`.
+
+**Other templates in-repo**
+
+| Path | Purpose |
+|------|---------|
+| `packaging/conda/recipe/meta.yaml` | conda-forge / staged-recipes starting point |
+| `packaging/aur/PKGBUILD` | AUR binary package example (`updpkgsums` after release) |
+
+**Releasing a version**
+
+```bash
+cargo install cargo-release
+cargo release patch          # dry-run
+cargo release patch --execute  # bump, commit, tag, push — triggers release workflow on tag
+```
+
+Tag must match `version` in `Cargo.toml` (enforced in `release.yml`).

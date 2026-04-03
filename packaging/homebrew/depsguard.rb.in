@@ -1,0 +1,39 @@
+# frozen_string_literal: true
+# Rendered by scripts/release/publish-homebrew-tap.sh on each release.
+# Tap repository: arnica/homebrew-depsguard (set via HOMEBREW_TAP in CI).
+class Depsguard < Formula
+  desc "Harden package manager configs against supply chain attacks"
+  homepage "$REPO_HOMEPAGE"
+  version "$VERSION"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "$REPO_URL/releases/download/v$VERSION/depsguard-aarch64-apple-darwin.tar.gz"
+      sha256 "$SHA_AARCH64_APPLE_DARWIN"
+    end
+    on_intel do
+      url "$REPO_URL/releases/download/v$VERSION/depsguard-x86_64-apple-darwin.tar.gz"
+      sha256 "$SHA_X86_64_APPLE_DARWIN"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "$REPO_URL/releases/download/v$VERSION/depsguard-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "$SHA_AARCH64_UNKNOWN_LINUX_GNU"
+    end
+    on_intel do
+      url "$REPO_URL/releases/download/v$VERSION/depsguard-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "$SHA_X86_64_UNKNOWN_LINUX_GNU"
+    end
+  end
+
+  def install
+    bin.install "depsguard"
+  end
+
+  test do
+    system "#{bin}/depsguard", "--help"
+  end
+end

@@ -28,6 +28,7 @@ target
 
 # JS (pnpm workspace root + docs package)
 node_modules/
+dist/
 
 # Docs: generated Tailwind CSS (built in CI or via pnpm run build:css)
 docs/styles.css

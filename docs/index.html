@@ -64,6 +64,47 @@
     </div>
   </section>
 
+  <!-- Install -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">Install</h2>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">Homebrew (macOS/Linux)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code>brew tap arnica/depsguard
+brew install depsguard</code></pre>
+        <p class="text-xs text-gray-500 mt-3">Recommended for macOS; works on Linux with Homebrew too.</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">APT (Debian/Ubuntu)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code># If apt repo is configured:
+sudo apt install depsguard
+# setup instructions are in README</code></pre>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">WinGet (Windows)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code>winget install Arnica.DepsGuard
+# fallback: direct .zip from releases</code></pre>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">Scoop (Windows)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code>scoop bucket add arnica-depsguard https://github.com/arnica/scoop-depsguard
+scoop install depsguard</code></pre>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">crates.io (Rust/cargo)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code>cargo install depsguard</code></pre>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="font-bold text-lg mb-3">Direct binary (all platforms)</h3>
+        <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto text-sm"><code>https://github.com/arnica/depsguard/releases/latest</code></pre>
+      </div>
+    </div>
+    <p class="text-sm text-gray-500 mt-6">
+      Package availability can depend on published feeds/taps. For full setup and fallback commands, see the
+      <a class="text-arnica hover:underline" href="https://github.com/arnica/depsguard#install">README install guide</a>.
+    </p>
+  </section>
+
   <!-- What it checks -->
   <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
     <h2 class="text-2xl font-bold mb-8">What it protects</h2>

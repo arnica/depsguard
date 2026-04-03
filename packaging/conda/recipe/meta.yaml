@@ -1,0 +1,37 @@
+# Template for a conda-forge feedstock (submit via staged-recipes, not this repo's CI).
+# See https://conda-forge.org/docs/maintainer/adding_pkgs.html
+{% set version = "0.1.0" %}
+
+package:
+  name: depsguard
+  version: {{ version }}
+
+source:
+  url: https://github.com/arnica/depsguard/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: REPLACE_WITH_SOURCE_TARBALL_SHA256
+
+build:
+  number: 0
+  script: cargo install --locked --path . --root "${PREFIX}"
+  missing_dso_whitelist: []
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - {{ compiler('c') }}
+    - cargo-bundle-licenses
+
+test:
+  commands:
+    - depsguard --help
+
+about:
+  home: https://arnica.github.io/depsguard
+  license: MIT
+  license_file: LICENSE
+  summary: Harden package manager configs against supply chain attacks
+  dev_url: https://github.com/arnica/depsguard
+
+extra:
+  recipe-maintainers:
+    - YOUR_GITHUB_HANDLE

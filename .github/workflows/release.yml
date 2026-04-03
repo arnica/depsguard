@@ -25,7 +25,7 @@ jobs:
           echo "Tag v$TAG matches Cargo.toml version"
 
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.label }})
     needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
@@ -33,26 +33,38 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
+            label: linux-amd64-gnu
+            friendly: linux-amd64-gnu
             os: ubuntu-latest
             archive: tar.gz
           - target: x86_64-unknown-linux-musl
+            label: linux-amd64-musl
+            friendly: linux-amd64-musl
             os: ubuntu-latest
             archive: tar.gz
           - target: aarch64-unknown-linux-gnu
+            label: linux-arm64-gnu
+            friendly: linux-arm64-gnu
             os: ubuntu-latest
             archive: tar.gz
           - target: x86_64-apple-darwin
+            label: macos-amd64
+            friendly: macos-amd64
             os: macos-latest
             archive: tar.gz
           - target: aarch64-apple-darwin
+            label: macos-arm64
+            friendly: macos-arm64
             os: macos-latest
             archive: tar.gz
           - target: x86_64-pc-windows-msvc
+            label: windows-amd64
+            friendly: windows-amd64
             os: windows-latest
             archive: zip
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
@@ -81,6 +93,33 @@ jobs:
           tar czf ../../../depsguard-${{ matrix.target }}.tar.gz depsguard
           cd ../../..
           sha256sum depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          cp depsguard-${{ matrix.target }}.tar.gz depsguard-${{ matrix.friendly }}.tar.gz
+          cp depsguard-${{ matrix.target }}.tar.gz.sha256 depsguard-${{ matrix.friendly }}.tar.gz.sha256
+
+      - name: Package (deb)
+        if: contains(matrix.target, 'unknown-linux-gnu')
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu) DEB_ARCH="amd64" ;;
+            aarch64-unknown-linux-gnu) DEB_ARCH="arm64" ;;
+            *) echo "Skipping deb packaging for target ${{ matrix.target }}"; exit 0 ;;
+          esac
+          PKG_ROOT="pkg/deb-${{ matrix.target }}"
+          mkdir -p "${PKG_ROOT}/DEBIAN" "${PKG_ROOT}/usr/bin"
+          install -m 0755 "target/${{ matrix.target }}/release/depsguard" "${PKG_ROOT}/usr/bin/depsguard"
+          cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
+          Package: depsguard
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: Arnica <engineering@arnica.io>
+          Description: Harden package manager configs against supply chain attacks
+          EOF
+          DEB_FILE="depsguard_${VERSION}_${DEB_ARCH}.deb"
+          dpkg-deb --build "${PKG_ROOT}" "${DEB_FILE}"
+          sha256sum "${DEB_FILE}" > "${DEB_FILE}.sha256"
 
       - name: Package (windows)
         if: matrix.archive == 'zip'
@@ -90,12 +129,15 @@ jobs:
           7z a ../../../depsguard-${{ matrix.target }}.zip depsguard.exe
           cd ../../..
           sha256sum depsguard-${{ matrix.target }}.zip > depsguard-${{ matrix.target }}.zip.sha256
+          cp depsguard-${{ matrix.target }}.zip depsguard-${{ matrix.friendly }}.zip
+          cp depsguard-${{ matrix.target }}.zip.sha256 depsguard-${{ matrix.friendly }}.zip.sha256
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: depsguard-${{ matrix.target }}
           path: |
             depsguard-${{ matrix.target }}.*
+            depsguard_*.deb*
           retention-days: 1
 
   publish-github:
@@ -106,12 +148,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           merge-multiple: true
           path: artifacts
       - name: Create release
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
           draft: false
           generate_release_notes: true
@@ -121,15 +163,68 @@ jobs:
 
   publish-crates:
     name: Publish to crates.io
-    needs: build
+    needs: validate
+    if: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
       - name: Publish
-        if: env.CARGO_REGISTRY_TOKEN != ''
         run: cargo publish
+
+  publish-homebrew-tap:
+    name: Bump Homebrew tap
+    needs: publish-github
+    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gettext (envsubst)
+        run: sudo apt-get update -qq && sudo apt-get install -y gettext-base
+      - name: Push updated formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP: arnica/homebrew-depsguard
+          REPO_HOMEPAGE: https://arnica.github.io/depsguard
+        run: bash scripts/release/publish-homebrew-tap.sh
+
+  publish-scoop-bucket:
+    name: Bump Scoop bucket
+    needs: publish-github
+    if: ${{ secrets.SCOOP_BUCKET_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gettext (envsubst)
+        run: sudo apt-get update -qq && sudo apt-get install -y gettext-base
+      - name: Push updated manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          SCOOP_BUCKET: ${{ github.repository_owner }}/scoop-depsguard
+          REPO_HOMEPAGE: https://arnica.github.io/depsguard
+        run: bash scripts/release/publish-scoop-bucket.sh
+
+  publish-winget:
+    name: WinGet community PR
+    needs: publish-github
+    if: ${{ secrets.WINGET_PKGS_TOKEN != '' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: Arnica.DepsGuard
+          installers-regex: ^depsguard-x86_64-pc-windows-msvc\.zip$
+          token: ${{ secrets.WINGET_PKGS_TOKEN }}
+          fork-user: ${{ github.repository_owner }}

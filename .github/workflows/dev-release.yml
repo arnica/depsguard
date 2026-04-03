@@ -1,0 +1,114 @@
+name: Dev Release
+
+on:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ""
+            label: linux-amd64
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            label: macos-amd64
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            label: macos-arm64
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            label: windows-amd64
+            os: windows-latest
+            archive: zip
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo build --release --target "${{ matrix.target }}"
+          else
+            cargo build --release
+          fi
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cd target/${{ matrix.target }}/release
+          else
+            cd target/release
+          fi
+          tar czf ../../../depsguard-${{ matrix.label }}.tar.gz depsguard
+          cd ../../..
+          sha256sum depsguard-${{ matrix.label }}.tar.gz > depsguard-${{ matrix.label }}.tar.gz.sha256
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../depsguard-${{ matrix.label }}.zip depsguard.exe
+          cd ../../..
+          sha256sum depsguard-${{ matrix.label }}.zip > depsguard-${{ matrix.label }}.zip.sha256
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: depsguard-${{ matrix.label }}
+          path: |
+            depsguard-${{ matrix.label }}.*
+          retention-days: 1
+
+  publish:
+    name: Publish prerelease
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          merge-multiple: true
+          path: artifacts
+      - name: Prepare tag metadata
+        id: meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          BRANCH_SLUG="$(echo "$REF_NAME" | tr '/_' '-' | tr -cd '[:alnum:]-.' | cut -c1-40)"
+          SHORT_SHA="${COMMIT_SHA::8}"
+          echo "branch_slug=$BRANCH_SLUG" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+      - name: Create or update prerelease
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          tag_name: dev-${{ steps.meta.outputs.branch_slug }}
+          target_commitish: ${{ github.sha }}
+          name: dev/${{ github.ref_name }} (${{ steps.meta.outputs.short_sha }})
+          prerelease: true
+          make_latest: false
+          generate_release_notes: false
+          body: |
+            Automated dev build for branch `${{ github.ref_name }}`.
+
+            Commit: `${{ github.sha }}`
+            Workflow run: `${{ github.run_id }}`
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

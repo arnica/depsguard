@@ -12,7 +12,17 @@ keywords = ["security", "supply-chain", "npm", "pnpm", "uv"]
 categories = ["command-line-utilities", "development-tools"]
 authors = ["Arnica <engineering@arnica.io>"]
 rust-version = "1.74"
-exclude = ["docs/", ".github/", "tests/", "target/"]
+exclude = [
+  ".cursor/",
+  "dist/",
+  "docs/",
+  ".github/",
+  "node_modules/",
+  "packaging/",
+  "scripts/",
+  "tests/",
+  "target/",
+]
 
 [[bin]]
 name = "depsguard"
