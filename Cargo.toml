@@ -20,6 +20,11 @@ path = "src/main.rs"
 
 [dependencies]
 
+# Config for `cargo release` CLI tool (does not affect `cargo publish` in GitHub Actions).
+# crates.io publishing is handled by .github/workflows/release.yml when CARGO_REGISTRY_TOKEN is set.
+[package.metadata.release]
+publish = false
+
 [profile.release]
 opt-level = "z"
 lto = true
