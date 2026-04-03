@@ -25,3 +25,7 @@ target
 
 /target
 .DS_Store
+
+# Docs: generated Tailwind CSS (built in CI or via pnpm run build:css)
+docs/node_modules/
+docs/styles.css
