@@ -4,9 +4,8 @@ on:
   push:
     branches:
     - main
-    - docs
-    # paths:
-    #   - docs/**
+    paths:
+      - docs/**
   workflow_dispatch:
 
 permissions:
