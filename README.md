@@ -222,4 +222,4 @@ MIT
 
 ---
 
-**Links:** [Repository](https://github.com/arnica/depsguard) · [Documentation site](https://arnica.github.io/depsguard)
+**Links:** [Repository](https://github.com/arnica/depsguard) · [Documentation site](https://depsguard.com)

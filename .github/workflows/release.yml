@@ -261,7 +261,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SCOOP_BUCKET_TOKEN: ${{ env.SCOOP_BUCKET_TOKEN }}
           SCOOP_BUCKET: ${{ github.repository_owner }}/scoop-depsguard
-          REPO_HOMEPAGE: https://arnica.github.io/depsguard
+          REPO_HOMEPAGE: https://depsguard.com
         run: bash scripts/release/publish-scoop-bucket.sh
 
   publish-winget:
