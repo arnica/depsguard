@@ -86,7 +86,6 @@ depsguard --help
 
 ```bash
 # Homebrew
-brew tap arnica/depsguard
 brew install depsguard
 
 # Fallback: direct binaries
@@ -121,7 +120,7 @@ Requires a [Rust toolchain](https://rustup.rs/) with `cargo`.
 
 ### Package managers (when published by your vendor)
 
-If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their instructions. **Setting up or automating those feeds** (taps, buckets, WinGet PRs, CI secrets) is maintainer documentation — see [`AGENTS.md`](AGENTS.md) under *Release & distribution*.
+If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their instructions. **Setting up or automating those channels** (Homebrew core PRs, buckets, WinGet PRs, CI secrets) is maintainer documentation — see [`AGENTS.md`](AGENTS.md) under *Release & distribution*.
 
 #### App stores / package managers
 
@@ -129,12 +128,12 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 |---------|-------|-------|---------|-----------------|
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after adding your apt source) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew | yes | yes | no | `brew tap arnica/depsguard && brew install depsguard` |
+| Homebrew | yes | yes | no | `brew install depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/<org>/scoop-depsguard ; scoop install depsguard` |
 | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` |
 | GitHub Releases (direct binary) | yes | yes | yes | download + unpack from releases page |
 
-> Note: Homebrew/Scoop/WinGet availability depends on whether your org has published those package definitions yet.
+> Note: Homebrew/Scoop/WinGet availability depends on package publication status and review timelines.
 
 ### Build from source
 

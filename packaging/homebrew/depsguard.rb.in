@@ -1,39 +1,21 @@
 # frozen_string_literal: true
-# Rendered by scripts/release/publish-homebrew-tap.sh on each release.
-# Tap repository: arnica/homebrew-depsguard (set via HOMEBREW_TAP in CI).
+# Rendered by scripts/release/publish-homebrew-core.sh on each release.
+# Target repository: Homebrew/homebrew-core.
 class Depsguard < Formula
-  desc "Harden package manager configs against supply chain attacks"
-  homepage "$REPO_HOMEPAGE"
-  version "$VERSION"
+  desc "Harden package manager configs against supply chain attacks, built by Arnica"
+  homepage "https://depsguard.com"
+  url "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/v$VERSION.tar.gz"
+  sha256 "$SHA256_SOURCE"
   license "MIT"
+  head "https://github.com/$GITHUB_REPOSITORY.git", branch: "main"
 
-  on_macos do
-    on_arm do
-      url "$REPO_URL/releases/download/v$VERSION/depsguard-aarch64-apple-darwin.tar.gz"
-      sha256 "$SHA_AARCH64_APPLE_DARWIN"
-    end
-    on_intel do
-      url "$REPO_URL/releases/download/v$VERSION/depsguard-x86_64-apple-darwin.tar.gz"
-      sha256 "$SHA_X86_64_APPLE_DARWIN"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "$REPO_URL/releases/download/v$VERSION/depsguard-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "$SHA_AARCH64_UNKNOWN_LINUX_GNU"
-    end
-    on_intel do
-      url "$REPO_URL/releases/download/v$VERSION/depsguard-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "$SHA_X86_64_UNKNOWN_LINUX_GNU"
-    end
-  end
+  depends_on "rust" => :build
 
   def install
-    bin.install "depsguard"
+    system "cargo", "install", *std_cargo_args
   end
 
   test do
-    system "#{bin}/depsguard", "--help"
+    assert_match "depsguard", shell_output("#{bin}/depsguard --help")
   end
 end

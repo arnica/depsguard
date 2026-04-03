@@ -75,7 +75,7 @@ This project intentionally has **no external crates**. All functionality (termin
 - Public functions and types should have a doc comment (`///`).
 - Keep comments focused on *why*, not *what*. The code should be self-explanatory for the *what*.
 
-- End-user documentation belongs in **`README.md`** (install, usage, troubleshooting). Maintainer-only topics (tests, releases, tap secrets) stay here.
+- End-user documentation belongs in **`README.md`** (install, usage, troubleshooting). Maintainer-only topics (tests, releases, package automation secrets) stay here.
 
 ## Build & verify
 
@@ -93,21 +93,23 @@ Tag pushes run `.github/workflows/release.yml`. Optional secrets (omit to skip t
 | Secret | Purpose |
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
-| `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to `arnica/homebrew-depsguard` |
+| `HOMEBREW_CORE_TOKEN` | Push formula updates to your `homebrew-core` fork and open/update PR to `Homebrew/homebrew-core` |
 | `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
-Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-tap.sh` and `publish-scoop-bucket.sh`.
+Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-core.sh` and `publish-scoop-bucket.sh`.
 
 ### End-user install channels (optional)
 
-Document these in your org’s internal runbooks or public docs once the repos exist; **do not** duplicate in `README.md` unless you have stable, public tap/bucket URLs.
+Document these in your org’s internal runbooks or public docs once the repos exist; **do not** duplicate in `README.md` unless you have stable public install channels.
 
-**Homebrew (custom tap)**
+**Homebrew (homebrew-core)**
 
-1. Create `arnica/homebrew-depsguard` with `Formula/depsguard.rb` (seed from `packaging/homebrew/depsguard.rb.in` after substituting version and checksums, or let CI overwrite after the first successful run).
-2. Users: `brew tap arnica/depsguard` then `brew install depsguard`.
-3. Set `HOMEBREW_TAP_TOKEN` on the main repo (PAT with **contents** write on `arnica/homebrew-depsguard`).
+1. Fork `Homebrew/homebrew-core` to a writable repo (for example `<owner>/homebrew-core`).
+2. Set repo variable `HOMEBREW_CORE_FORK` to `<owner>/homebrew-core`.
+3. Set `HOMEBREW_CORE_TOKEN` (PAT with **repo** scope that can push to your fork and open PRs).
+4. Release workflow updates `Formula/d/depsguard.rb` on your fork and opens/updates the PR to `Homebrew/homebrew-core`.
+5. Users install with `brew install depsguard` once merged.
 
 **Scoop (custom bucket)**
 
