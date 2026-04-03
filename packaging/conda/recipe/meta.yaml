@@ -26,7 +26,7 @@ test:
     - depsguard --help
 
 about:
-  home: https://arnica.github.io/depsguard
+  home: https://depsguard.com
   license: MIT
   license_file: LICENSE
   summary: Harden package manager configs against supply chain attacks

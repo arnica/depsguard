@@ -11,7 +11,7 @@ TAG="${GITHUB_REF#refs/tags/}"
 VERSION="${TAG#v}"
 REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
 GITHUB_REPO_SLUG="${GITHUB_REPOSITORY}"
-REPO_HOMEPAGE="${REPO_HOMEPAGE:-https://arnica.github.io/depsguard}"
+REPO_HOMEPAGE="${REPO_HOMEPAGE:-https://depsguard.com}"
 
 mkdir -p /tmp/depsguard-sha
 gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "depsguard-x86_64-pc-windows-msvc.zip.sha256" -D /tmp/depsguard-sha
