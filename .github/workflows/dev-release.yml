@@ -51,23 +51,21 @@ jobs:
 
       - name: Package (unix)
         if: matrix.archive == 'tar.gz'
+        shell: bash
         run: |
           if [ -n "${{ matrix.target }}" ]; then
-            cd target/${{ matrix.target }}/release
+            BIN_DIR="target/${{ matrix.target }}/release"
           else
-            cd target/release
+            BIN_DIR="target/release"
           fi
-          tar czf ../../../depsguard-${{ matrix.label }}.tar.gz depsguard
-          cd ../../..
+          tar czf "depsguard-${{ matrix.label }}.tar.gz" -C "$BIN_DIR" depsguard
           sha256sum depsguard-${{ matrix.label }}.tar.gz > depsguard-${{ matrix.label }}.tar.gz.sha256
 
       - name: Package (windows)
         if: matrix.archive == 'zip'
         shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../depsguard-${{ matrix.label }}.zip depsguard.exe
-          cd ../../..
+          7z a "depsguard-${{ matrix.label }}.zip" "target/${{ matrix.target }}/release/depsguard.exe"
           sha256sum depsguard-${{ matrix.label }}.zip > depsguard-${{ matrix.label }}.zip.sha256
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -97,19 +95,20 @@ jobs:
           echo "branch_slug=$BRANCH_SLUG" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
       - name: Create or update prerelease
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
-        with:
-          tag_name: dev-${{ steps.meta.outputs.branch_slug }}
-          target_commitish: ${{ github.sha }}
-          name: dev/${{ github.ref_name }} (${{ steps.meta.outputs.short_sha }})
-          prerelease: true
-          make_latest: false
-          generate_release_notes: false
-          body: |
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: dev-${{ steps.meta.outputs.branch_slug }}
+          RELEASE_NAME: dev/${{ github.ref_name }} (${{ steps.meta.outputs.short_sha }})
+          NOTES: |
             Automated dev build for branch `${{ github.ref_name }}`.
 
             Commit: `${{ github.sha }}`
             Workflow run: `${{ github.run_id }}`
-          files: artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" artifacts/* --clobber
+            gh release edit "$TAG_NAME" --title "$RELEASE_NAME" --prerelease --latest=false --notes "$NOTES"
+          else
+            gh release create "$TAG_NAME" artifacts/* --target "${GITHUB_SHA}" --title "$RELEASE_NAME" --prerelease --latest=false --notes "$NOTES"
+          fi
