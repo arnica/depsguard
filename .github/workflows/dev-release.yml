@@ -41,6 +41,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build
+        shell: bash
         run: |
           if [ -n "${{ matrix.target }}" ]; then
             cargo build --release --target "${{ matrix.target }}"
