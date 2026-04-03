@@ -3,8 +3,8 @@
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::manager::{CheckStatus, ManagerInfo};
-use crate::term::*;
+use crate::manager::{self, CheckStatus, ManagerInfo};
+use crate::term::{BG_GREEN, BG_RED, BOLD, CYAN, DIM, GREEN, RED, RESET, WHITE, YELLOW};
 
 /// Return "1 config" or "3 configs" — simple singular/plural.
 fn plural(n: usize, singular: &str, plural_form: &str) -> String {
@@ -17,11 +17,7 @@ fn plural(n: usize, singular: &str, plural_form: &str) -> String {
 
 /// Display a path relative to the user's home directory (~/...).
 pub fn display_path(path: &Path) -> String {
-    let home = crate::manager::home_dir();
-    match path.strip_prefix(&home) {
-        Ok(rel) => format!("~/{}", rel.display()),
-        Err(_) => path.display().to_string(),
-    }
+    manager::display_path(path)
 }
 
 // ── Banner ────────────────────────────────────────────────────────────
@@ -82,7 +78,7 @@ pub fn print_banner(w: &mut impl Write) -> io::Result<()> {
 // ── Progress bar ─────────────────────────────────────────────────────
 
 /// Render a status line in-place (overwrites current line).
-pub fn print_progress(w: &mut impl Write, label: &str, _fraction: f32) -> io::Result<()> {
+pub fn print_progress(w: &mut impl Write, label: &str) -> io::Result<()> {
     let term_width = crate::term::terminal_size()
         .map(|(w, _)| w as usize)
         .unwrap_or(80);
@@ -104,9 +100,28 @@ pub fn print_progress(w: &mut impl Write, label: &str, _fraction: f32) -> io::Re
     w.flush()
 }
 
-/// Clear the progress bar line.
+/// Clear the progress line.
 pub fn clear_progress(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\r\x1b[K")
+}
+
+// ── Shared formatting ─────────────────────────────────────────────────
+
+/// Format a group header like `"📦 npm v10.0 · ⚡ pnpm v10.2"`.
+fn format_manager_header(managers: &[&ManagerInfo]) -> String {
+    managers
+        .iter()
+        .map(|m| {
+            let icon = m.kind.icon();
+            let space = if icon.is_empty() { "" } else { " " };
+            format!(
+                "{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}",
+                m.kind.name(),
+                m.version
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(&format!(" {DIM}·{RESET} "))
 }
 
 // ── Status rendering ──────────────────────────────────────────────────
@@ -127,6 +142,7 @@ fn status_color(s: &CheckStatus) -> &'static str {
     }
 }
 
+/// Render a summary of scan results grouped by config file, with status badges.
 pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::Result<()> {
     if managers.is_empty() {
         writeln!(
@@ -209,21 +225,8 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
     }
 
     for group in &groups {
-        // Build header: "📦 npm v10.0 · pnpm v10.20"
-        let header_parts: Vec<String> = group
-            .iter()
-            .map(|&idx| {
-                let mgr = &managers[idx];
-                let icon = mgr.kind.icon();
-                let space = if icon.is_empty() { "" } else { " " };
-                format!(
-                    "{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}",
-                    mgr.kind.name(),
-                    mgr.version
-                )
-            })
-            .collect();
-        let header = header_parts.join(&format!(" {DIM}·{RESET} "));
+        let group_managers: Vec<&ManagerInfo> = group.iter().map(|&idx| &managers[idx]).collect();
+        let header = format_manager_header(&group_managers);
 
         let all_ok = group.iter().all(|&idx| managers[idx].all_ok());
         let badge = if all_ok {
@@ -248,8 +251,8 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 if !seen_keys.insert(rec.key.clone()) {
                     continue;
                 }
-                let si = status_icon(&rec.status);
-                let sc = status_color(&rec.status);
+                let icon = status_icon(&rec.status);
+                let color = status_color(&rec.status);
                 let detail = match &rec.status {
                     CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
                     CheckStatus::Missing => format!("{RED}not set{RESET}"),
@@ -264,7 +267,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 };
                 writeln!(
                     w,
-                    "     {sc}{si}{RESET} {prefix}{sc}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
+                    "     {color}{icon}{RESET} {prefix}{color}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
                     rec.key, rec.description
                 )?;
             }
@@ -276,6 +279,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
 
 // ── Interactive selector ──────────────────────────────────────────────
 
+/// A fixable item in the interactive selection list.
 #[derive(Debug)]
 pub struct SelectItem {
     pub manager_idx: usize,
@@ -286,6 +290,7 @@ pub struct SelectItem {
     pub selected: bool,
 }
 
+/// Build the list of fixable items from scan results, deduplicating shared configs.
 pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
     let mut items = Vec::new();
     // Track (config_path, key) to avoid duplicate fix items when managers share a config
@@ -309,19 +314,7 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
                     continue;
                 }
                 let siblings = &path_managers[mgr.config_path.as_path()];
-                let group_header = siblings
-                    .iter()
-                    .map(|m| {
-                        let icon = m.kind.icon();
-                        let space = if icon.is_empty() { "" } else { " " };
-                        format!(
-                            "{icon}{space}{BOLD}{CYAN}{}{RESET} {DIM}v{}{RESET}",
-                            m.kind.name(),
-                            m.version
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(&format!(" {DIM}·{RESET} "));
+                let group_header = format_manager_header(siblings);
                 items.push(SelectItem {
                     manager_idx: mi,
                     rec_idx: ri,
@@ -336,6 +329,7 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
     items
 }
 
+/// Render the interactive fix selector with cursor position and toggle states.
 pub fn print_selector(w: &mut impl Write, items: &[SelectItem], cursor: usize) -> io::Result<()> {
     writeln!(
         w,

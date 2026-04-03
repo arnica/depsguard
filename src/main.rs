@@ -10,60 +10,34 @@ use manager::ManagerInfo;
 use term::Key;
 use ui::SelectItem;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+// ── CLI argument parsing ──────────────────────────────────────────────
 
-    // Check for --no-color flag or auto-detect
-    if args.iter().any(|a| a == "--no-color") || !term::should_use_colors() {
-        term::disable_colors();
-    }
-    if args.iter().any(|a| a == "--no-workspaces") {
-        manager::set_skip_workspaces(true);
-    }
-    if let Some(pos) = args.iter().position(|a| a == "--delay-days") {
-        if let Some(val) = args.get(pos + 1) {
-            match val.parse::<u64>() {
-                Ok(d) if d > 0 => manager::set_delay_days(d),
-                _ => {
-                    eprintln!(
-                        "{}{}Error:{} --delay-days requires a positive number",
-                        term::RED,
-                        term::BOLD,
-                        term::RESET
-                    );
-                    std::process::exit(1);
-                }
-            }
-        } else {
-            eprintln!(
-                "{}{}Error:{} --delay-days requires a value",
-                term::RED,
-                term::BOLD,
-                term::RESET
-            );
-            std::process::exit(1);
-        }
-    }
+/// The subcommand to execute.
+enum Command {
+    Interactive,
+    ScanOnly,
+    Help,
+    Version,
+    Restore,
+}
 
-    if args.iter().any(|a| a == "--scan" || a == "-s") {
-        run_scan_only();
-        return;
-    }
-    if args.iter().any(|a| a == "--help" || a == "-h") {
-        print_usage();
-        return;
-    }
-    if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("depsguard {}", env!("CARGO_PKG_VERSION"));
-        return;
-    }
-    if args.iter().any(|a| a == "--restore") {
-        run_restore();
-        return;
-    }
+/// Parsed CLI configuration.
+struct CliConfig {
+    command: Command,
+    no_color: bool,
+    no_workspaces: bool,
+    delay_days: u64,
+}
 
-    // Check for unrecognized flags
-    let known = &[
+/// Errors from argument parsing, with context for display.
+enum CliError {
+    UnknownFlag(String),
+    BadValue(String),
+}
+
+/// Parse command-line arguments into a structured configuration.
+fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
+    const KNOWN_FLAGS: &[&str] = &[
         "--scan",
         "-s",
         "--help",
@@ -75,32 +49,94 @@ fn main() {
         "--no-workspaces",
         "--delay-days",
     ];
-    let mut skip_next = false;
-    for arg in &args[1..] {
-        if skip_next {
-            skip_next = false;
-            continue;
+
+    let mut config = CliConfig {
+        command: Command::Interactive,
+        no_color: false,
+        no_workspaces: false,
+        delay_days: 7,
+    };
+
+    let mut i = 1;
+    while i < args.len() {
+        let arg = args[i].as_str();
+        match arg {
+            "--no-color" => config.no_color = true,
+            "--no-workspaces" => config.no_workspaces = true,
+            "--delay-days" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| CliError::BadValue("--delay-days requires a value".into()))?;
+                config.delay_days =
+                    val.parse::<u64>().ok().filter(|&d| d > 0).ok_or_else(|| {
+                        CliError::BadValue("--delay-days requires a positive number".into())
+                    })?;
+            }
+            "--scan" | "-s" => config.command = Command::ScanOnly,
+            "--help" | "-h" => config.command = Command::Help,
+            "--version" | "-V" => config.command = Command::Version,
+            "--restore" => config.command = Command::Restore,
+            _ if arg.starts_with('-') && !KNOWN_FLAGS.contains(&arg) => {
+                return Err(CliError::UnknownFlag(format!(
+                    "unrecognized option '{arg}'"
+                )));
+            }
+            _ => {}
         }
-        if arg == "--delay-days" {
-            skip_next = true;
-            continue;
-        }
-        if arg.starts_with('-') && !known.contains(&arg.as_str()) {
-            eprintln!(
-                "{}{}Error:{} unrecognized option '{arg}'",
-                term::RED,
-                term::BOLD,
-                term::RESET
-            );
+        i += 1;
+    }
+
+    Ok(config)
+}
+
+fn print_error(msg: &str) {
+    eprintln!("{}{}Error:{} {msg}", term::RED, term::BOLD, term::RESET);
+}
+
+fn progress_callback(label: &str, _frac: f32) {
+    let stdout = io::stdout();
+    let mut w = term::ColorWriter::new(stdout.lock());
+    ui::print_progress(&mut w, label).ok();
+}
+
+// ── Entry point ───────────────────────────────────────────────────────
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let config = match parse_args(&args) {
+        Ok(c) => c,
+        Err(CliError::UnknownFlag(msg)) => {
+            print_error(&msg);
             eprintln!();
             print_usage_short();
             std::process::exit(1);
         }
-    }
+        Err(CliError::BadValue(msg)) => {
+            print_error(&msg);
+            std::process::exit(1);
+        }
+    };
 
-    if let Err(e) = run_interactive() {
-        eprintln!("{}{}Error:{} {e}", term::RED, term::BOLD, term::RESET);
-        std::process::exit(1);
+    if config.no_color || !term::should_use_colors() {
+        term::disable_colors();
+    }
+    if config.no_workspaces {
+        manager::set_skip_workspaces(true);
+    }
+    manager::set_delay_days(config.delay_days);
+
+    match config.command {
+        Command::ScanOnly => run_scan_only(),
+        Command::Help => print_usage(),
+        Command::Version => println!("depsguard {}", env!("CARGO_PKG_VERSION")),
+        Command::Restore => run_restore(),
+        Command::Interactive => {
+            if let Err(e) = run_interactive() {
+                print_error(&e.to_string());
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -128,11 +164,7 @@ fn run_scan_only() {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
-    let managers = manager::scan_all_with_progress(|label, frac| {
-        let stdout = io::stdout();
-        let mut w = term::ColorWriter::new(stdout.lock());
-        ui::print_progress(&mut w, label, frac).ok();
-    });
+    let managers = manager::scan_all_with_progress(progress_callback);
     ui::clear_progress(&mut out).ok();
     writeln!(out).ok();
     ui::print_scan_results(&mut out, &managers).ok();
@@ -146,11 +178,7 @@ fn run_interactive() -> io::Result<()> {
         // Phase 1: Scan
         term::clear_screen(&mut out)?;
         ui::print_banner(&mut out)?;
-        let managers = manager::scan_all_with_progress(|label, frac| {
-            let stdout = io::stdout();
-            let mut w = term::ColorWriter::new(stdout.lock());
-            ui::print_progress(&mut w, label, frac).ok();
-        });
+        let managers = manager::scan_all_with_progress(progress_callback);
         ui::clear_progress(&mut out)?;
         writeln!(out)?;
         ui::print_scan_results(&mut out, &managers)?;
@@ -285,7 +313,7 @@ fn run_restore() {
     let backups = fix::list_backups_with_progress(&mut |label| {
         let stdout = io::stdout();
         let mut w = term::ColorWriter::new(stdout.lock());
-        ui::print_progress(&mut w, label, 0.0).ok();
+        ui::print_progress(&mut w, label).ok();
     });
     ui::clear_progress(&mut out).ok();
 
@@ -316,7 +344,7 @@ fn run_restore() {
     let mut last_original: Option<&std::path::Path> = None;
     for (i, (original, backup)) in backups.iter().enumerate() {
         if last_original != Some(original.as_path()) {
-            let display = ui::display_path(original);
+            let display = manager::display_path(original);
             writeln!(out, "\n    {}{}{}:", term::BOLD, display, term::RESET).ok();
             last_original = Some(original.as_path());
         }
@@ -401,7 +429,7 @@ fn restore_latest(backups: &[(PathBuf, PathBuf)], out: &mut impl Write) {
 }
 
 fn restore_one(backup: &Path, original: &Path, out: &mut impl Write) {
-    let display = ui::display_path(original);
+    let display = manager::display_path(original);
     match fix::restore_backup(backup, original) {
         Ok(()) => {
             writeln!(out, "  {}✓{} Restored {display}", term::GREEN, term::RESET).ok();

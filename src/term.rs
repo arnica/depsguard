@@ -1,5 +1,4 @@
 // Zero-dependency terminal handling: raw mode, ANSI codes, input parsing.
-#![allow(dead_code)]
 
 use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,13 +36,14 @@ pub fn should_use_colors() -> bool {
     }
     #[cfg(windows)]
     {
+        const STD_OUTPUT_HANDLE: u32 = 0xFFFF_FFF5; // (DWORD)-11
         extern "system" {
             fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
             fn GetConsoleMode(h: *mut std::ffi::c_void, mode: *mut u32) -> i32;
         }
         // SAFETY: GetStdHandle with STD_OUTPUT_HANDLE is always safe; GetConsoleMode
         // reads into a valid &mut u32 pointer. Both are standard Win32 console APIs.
-        let handle = unsafe { GetStdHandle(0xFFFF_FFF5) };
+        let handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
         let mut mode = 0u32;
         if unsafe { GetConsoleMode(handle, &mut mode) } == 0 {
             return false;
@@ -56,7 +56,11 @@ pub fn colors_enabled() -> bool {
     COLORS_ENABLED.load(Ordering::Relaxed)
 }
 
-// ── ANSI helpers ──────────────────────────────────────────────────────
+// ── ANSI escape codes ─────────────────────────────────────────────────
+//
+// These are the SGR (Select Graphic Rendition) sequences used for
+// styled terminal output. Stripped automatically by `ColorWriter`
+// when colors are disabled.
 
 pub const RESET: &str = "\x1b[0m";
 pub const BOLD: &str = "\x1b[1m";
@@ -65,6 +69,7 @@ pub const GREEN: &str = "\x1b[32m";
 pub const RED: &str = "\x1b[31m";
 pub const YELLOW: &str = "\x1b[33m";
 pub const CYAN: &str = "\x1b[36m";
+#[allow(dead_code)]
 pub const MAGENTA: &str = "\x1b[35m";
 pub const WHITE: &str = "\x1b[97m";
 pub const BG_GREEN: &str = "\x1b[42m";
@@ -80,6 +85,7 @@ impl<W: Write> ColorWriter<W> {
         Self { inner }
     }
 
+    #[allow(dead_code)]
     pub fn into_inner(self) -> W {
         self.inner
     }
@@ -135,6 +141,7 @@ pub fn hide_cursor(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[?25l")
 }
 
+#[allow(dead_code)]
 pub fn show_cursor(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[?25h")
 }
@@ -150,6 +157,7 @@ impl Drop for CursorGuard {
     }
 }
 
+#[allow(dead_code)]
 pub fn move_to(w: &mut impl Write, row: u16, col: u16) -> io::Result<()> {
     write!(w, "\x1b[{};{}H", row, col)
 }
@@ -173,9 +181,9 @@ pub fn terminal_size() -> Option<(u16, u16)> {
     };
     // TIOCGWINSZ = 0x5413 on Linux, 0x40087468 on macOS
     #[cfg(target_os = "linux")]
-    const TIOCGWINSZ: u64 = 0x5413;
+    const TIOCGWINSZ: std::ffi::c_ulong = 0x5413;
     #[cfg(target_os = "macos")]
-    const TIOCGWINSZ: u64 = 0x40087468;
+    const TIOCGWINSZ: std::ffi::c_ulong = 0x40087468;
     let ret = unsafe { libc_ioctl(1, TIOCGWINSZ, &mut ws as *mut Winsize as *mut u8) };
     if ret == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
         Some((ws.ws_col, ws.ws_row))
@@ -233,7 +241,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
 #[cfg(unix)]
 extern "C" {
     #[link_name = "ioctl"]
-    fn libc_ioctl(fd: i32, request: u64, ...) -> i32;
+    fn libc_ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
 }
 
 // ── Raw mode ──────────────────────────────────────────────────────────
@@ -268,8 +276,8 @@ mod raw {
         pub const ICANON: TcFlag = 0o2;
         pub const ISIG: TcFlag = 0o1;
         pub const IEXTEN: TcFlag = 0o100000;
-        pub const TCGETS: u64 = 0x5401;
-        pub const TCSETS: u64 = 0x5402;
+        pub const TCGETS: std::ffi::c_ulong = 0x5401;
+        pub const TCSETS: std::ffi::c_ulong = 0x5402;
     }
 
     // macOS: tcflag_t = u64 (unsigned long on 64-bit), NCCS = 20
@@ -294,15 +302,15 @@ mod raw {
         pub const ICANON: TcFlag = 0x00000100;
         pub const ISIG: TcFlag = 0x00000080;
         pub const IEXTEN: TcFlag = 0x00000400;
-        pub const TCGETS: u64 = 0x40487413; // TIOCGETA
-        pub const TCSETS: u64 = 0x80487414; // TIOCSETA
+        pub const TCGETS: std::ffi::c_ulong = 0x40487413; // TIOCGETA
+        pub const TCSETS: std::ffi::c_ulong = 0x80487414; // TIOCSETA
     }
 
     use platform::Termios;
 
     extern "C" {
         #[link_name = "ioctl"]
-        fn libc_ioctl(fd: i32, request: u64, ...) -> i32;
+        fn libc_ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
     }
 
     pub struct RawMode {
@@ -329,6 +337,8 @@ mod raw {
 
     impl Drop for RawMode {
         fn drop(&mut self) {
+            // SAFETY: Restoring the original termios struct saved in `enable()`.
+            // The pointer is valid for the lifetime of `self`.
             unsafe {
                 libc_ioctl(0, platform::TCSETS, &self.original as *const Termios);
             }
@@ -409,6 +419,8 @@ mod raw {
 
     impl Drop for RawMode {
         fn drop(&mut self) {
+            // SAFETY: Restoring the original console modes saved in `enable()`.
+            // The handles remain valid for the process lifetime.
             unsafe {
                 SetConsoleMode(self.input_handle, self.original_input_mode);
                 SetConsoleMode(self.output_handle, self.original_output_mode);
@@ -422,6 +434,7 @@ pub use raw::RawMode;
 
 // ── Key input ─────────────────────────────────────────────────────────
 
+/// A parsed keyboard input event.
 #[derive(Debug, PartialEq)]
 pub enum Key {
     Up,
@@ -433,6 +446,7 @@ pub enum Key {
     Unknown,
 }
 
+/// Read a single key press from stdin (blocking). Handles ANSI escape sequences for arrow keys.
 pub fn read_key() -> io::Result<Key> {
     let stdin = io::stdin();
     let mut stdin = stdin.lock();

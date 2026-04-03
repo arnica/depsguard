@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::manager::{self, ManagerKind, Recommendation};
-use crate::ui;
 
 // ── Backup / Restore ─────────────────────────────────────────────────
 
@@ -18,25 +17,13 @@ fn iso_timestamp() -> String {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default();
     let secs = dur.as_secs();
-    // Manual UTC breakdown (no leap-second handling needed for filenames)
     let days = secs / 86400;
     let time = secs % 86400;
     let h = time / 3600;
     let m = (time % 3600) / 60;
     let s = time % 60;
 
-    // Date from days since 1970-01-01 (civil calendar algorithm)
-    let z = days as i64 + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = (z - era * 146097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let mon = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if mon <= 2 { y + 1 } else { y };
-
+    let (y, mon, d) = manager::days_to_ymd(days);
     format!("{y:04}-{mon:02}-{d:02}T{h:02}-{m:02}-{s:02}")
 }
 
@@ -79,8 +66,8 @@ pub fn list_backups_with_progress(on_progress: &mut dyn FnMut(&str)) -> Vec<(Pat
     // Discover pnpm-workspace.yaml files with live progress (same as scan),
     // unless --no-workspaces was specified
     if !manager::skip_workspaces_enabled() {
-        for ws in manager::find_pnpm_workspaces_with_callback(&mut |dir| {
-            on_progress(&format!("Scanning {}", ui::display_path(dir)));
+        for ws in manager::find_pnpm_workspaces(&mut |dir| {
+            on_progress(&format!("Scanning {}", manager::display_path(dir)));
         }) {
             config_paths.push(ws);
         }
@@ -152,13 +139,21 @@ fn scan_backups_for(config: &Path, results: &mut Vec<(PathBuf, PathBuf)>) {
 }
 
 /// Restore a single backup file to its original location.
-pub fn restore_backup(backup: &Path, original: &Path) -> Result<(), String> {
+pub fn restore_backup(backup: &Path, original: &Path) -> io::Result<()> {
     if let Some(parent) = original.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    fs::copy(backup, original)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    fs::copy(backup, original).map(|_| ())
+}
+
+/// Read a config file, returning an empty string if the file does not exist.
+/// Propagates other errors (e.g. permission denied) instead of silently ignoring them.
+fn read_or_create(path: &Path) -> io::Result<String> {
+    match fs::read_to_string(path) {
+        Ok(content) => Ok(content),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e),
+    }
 }
 
 /// Apply a single recommendation fix to the config file at `path`.
@@ -176,7 +171,7 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
 
 /// Set `key=value` in a flat (.npmrc-style) config file.
 fn apply_flat_fix(path: &Path, key: &str, value: &str) -> io::Result<String> {
-    let content = fs::read_to_string(path).unwrap_or_default();
+    let content = read_or_create(path)?;
     let line = format!("{key}={value}");
     let mut found = false;
     let mut lines: Vec<String> = content
@@ -208,7 +203,7 @@ fn apply_flat_fix(path: &Path, key: &str, value: &str) -> io::Result<String> {
 /// Set a key in a simple TOML file. Supports `section.key` notation.
 /// If `quote` is true, wraps value in double quotes.
 fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io::Result<String> {
-    let content = fs::read_to_string(path).unwrap_or_default();
+    let content = read_or_create(path)?;
     let parts: Vec<&str> = dotted_key.splitn(2, '.').collect();
     let (section, key) = if parts.len() == 2 {
         (Some(parts[0]), parts[1])
@@ -226,14 +221,14 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
     let mut lines: Vec<String> = Vec::new();
     let mut current_section: Option<String> = None;
     let mut found = false;
-    let mut section_exists = false;
+    let mut section_header_idx: Option<usize> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            current_section = Some(trimmed[1..trimmed.len() - 1].trim().to_string());
+        if let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            current_section = Some(inner.trim().to_string());
             if section.is_some_and(|s| current_section.as_deref() == Some(s)) {
-                section_exists = true;
+                section_header_idx = Some(lines.len());
             }
         }
 
@@ -256,36 +251,16 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
 
     if !found {
         if let Some(sec) = section {
-            if !section_exists {
-                if !lines.is_empty() && !lines.last().unwrap().is_empty() {
+            if let Some(idx) = section_header_idx {
+                lines.insert(idx + 1, target_line.clone());
+            } else {
+                if lines.last().is_some_and(|l| !l.is_empty()) {
                     lines.push(String::new());
                 }
                 lines.push(format!("[{sec}]"));
-            }
-            // Find the section and append after it
-            if section_exists {
-                let mut inserted = false;
-                let mut new_lines = Vec::new();
-                for line in &lines {
-                    new_lines.push(line.clone());
-                    if !inserted {
-                        let trimmed = line.trim();
-                        // Match section header by trimming interior whitespace
-                        if trimmed.starts_with('[') && trimmed.ends_with(']') {
-                            let inner = trimmed[1..trimmed.len() - 1].trim();
-                            if inner == sec {
-                                new_lines.push(target_line.clone());
-                                inserted = true;
-                            }
-                        }
-                    }
-                }
-                lines = new_lines;
-            } else {
                 lines.push(target_line.clone());
             }
         } else {
-            // Top-level key, prepend before any sections
             let first_section = lines.iter().position(|l| l.trim().starts_with('['));
             match first_section {
                 Some(idx) => lines.insert(idx, target_line.clone()),
@@ -305,7 +280,7 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
 /// Set a top-level key in a YAML file (pnpm-workspace.yaml style).
 /// If `quote` is true, wraps value in double quotes.
 fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Result<String> {
-    let content = fs::read_to_string(path).unwrap_or_default();
+    let content = read_or_create(path)?;
     let formatted_val = if quote {
         format!("\"{value}\"")
     } else {
@@ -335,7 +310,7 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
     }
 
     if !found {
-        if !lines.is_empty() && !lines.last().unwrap().is_empty() {
+        if lines.last().is_some_and(|l| !l.is_empty()) {
             lines.push(String::new());
         }
         lines.push(target_line.clone());

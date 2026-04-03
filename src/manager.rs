@@ -10,32 +10,41 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static SKIP_WORKSPACES: AtomicBool = AtomicBool::new(false);
 static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
 
+/// Enable or disable the `--no-workspaces` flag (skip pnpm-workspace.yaml search).
 pub fn set_skip_workspaces(skip: bool) {
     SKIP_WORKSPACES.store(skip, Ordering::Relaxed);
 }
 
+/// Check whether workspace scanning is disabled.
 pub fn skip_workspaces_enabled() -> bool {
     SKIP_WORKSPACES.load(Ordering::Relaxed)
 }
 
+/// Set the minimum release age in days (default: 7).
 pub fn set_delay_days(days: u64) {
     DELAY_DAYS_SETTING.store(days, Ordering::Relaxed);
 }
 
+/// Get the currently configured release delay in days.
 pub fn get_delay_days() -> u64 {
     DELAY_DAYS_SETTING.load(Ordering::Relaxed)
 }
 
 // ── Core types ────────────────────────────────────────────────────────
 
+/// Result of checking a single security setting against its expected value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckStatus {
+    /// The setting matches the expected value.
     Ok,
+    /// The setting is not configured at all.
     Missing,
+    /// The setting exists but has an incorrect value.
     WrongValue(String),
 }
 
 impl CheckStatus {
+    #[must_use]
     pub fn is_ok(&self) -> bool {
         matches!(self, CheckStatus::Ok)
     }
@@ -51,6 +60,7 @@ impl std::fmt::Display for CheckStatus {
     }
 }
 
+/// A single security recommendation for a package manager config file.
 #[derive(Debug, Clone)]
 pub struct Recommendation {
     pub key: String,
@@ -60,11 +70,13 @@ pub struct Recommendation {
 }
 
 impl Recommendation {
+    #[must_use]
     pub fn needs_fix(&self) -> bool {
         !self.status.is_ok()
     }
 }
 
+/// Supported package managers that DepsGuard can scan and fix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ManagerKind {
     Npm,
@@ -103,6 +115,7 @@ impl ManagerKind {
     }
 }
 
+/// A detected package manager with its version, config location, and security check results.
 #[derive(Debug, Clone)]
 pub struct ManagerInfo {
     pub kind: ManagerKind,
@@ -112,6 +125,7 @@ pub struct ManagerInfo {
 }
 
 impl ManagerInfo {
+    #[must_use]
     pub fn all_ok(&self) -> bool {
         self.recommendations.iter().all(|r| r.status.is_ok())
     }
@@ -119,6 +133,7 @@ impl ManagerInfo {
 
 // ── Detection ─────────────────────────────────────────────────────────
 
+/// Detect the installed version of a package manager by running `<name> --version`.
 pub fn detect_version(name: &str) -> Option<String> {
     // On Windows, try the command directly first, then with .cmd extension
     // (npm, pnpm are .cmd shims on Windows)
@@ -137,6 +152,7 @@ pub fn detect_version(name: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
+/// Return the user's home directory (`$HOME` on Unix, `%USERPROFILE%` on Windows).
 pub fn home_dir() -> PathBuf {
     env::var("HOME")
         .or_else(|_| env::var("USERPROFILE"))
@@ -149,6 +165,15 @@ fn appdata_dir() -> PathBuf {
     env::var("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home_dir().join("AppData/Roaming"))
+}
+
+/// Display a path relative to the user's home directory (e.g. `~/foo/bar`).
+pub fn display_path(path: &Path) -> String {
+    let home = home_dir();
+    match path.strip_prefix(&home) {
+        Ok(rel) => format!("~/{}", rel.display()),
+        Err(_) => path.display().to_string(),
+    }
 }
 
 /// Target OS for config path resolution. Allows testing all platforms from any host.
@@ -197,6 +222,7 @@ fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs
     }
 }
 
+/// Resolve the config file path for a package manager on the current OS.
 pub fn config_path(kind: ManagerKind) -> PathBuf {
     let home = home_dir();
     let appdata = appdata_dir();
@@ -241,8 +267,8 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        if line.starts_with('[') && line.ends_with(']') {
-            current_section = Some(line[1..line.len() - 1].trim());
+        if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            current_section = Some(inner.trim());
             continue;
         }
         if let Some((k, v)) = line.split_once('=') {
@@ -258,7 +284,25 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
     None
 }
 
-// ── Exclude-newer date calculation ────────────────────────────────────
+// ── Date calculation ──────────────────────────────────────────────────
+
+/// Convert days since Unix epoch to `(year, month, day)`.
+///
+/// Uses the civil calendar algorithm with signed arithmetic to correctly
+/// handle all eras. For modern dates (year > 400), the `u64` cast is safe.
+pub(crate) fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+    let z = days as i64 + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mon = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mon <= 2 { y + 1 } else { y };
+    (y as u64, mon, d)
+}
 
 #[cfg(test)]
 fn date_days_ago(days: u64) -> String {
@@ -276,21 +320,6 @@ fn epoch_to_date(epoch: u64) -> String {
     let days_since_epoch = epoch / 86400;
     let (year, month, day) = days_to_ymd(days_since_epoch);
     format!("{year:04}-{month:02}-{day:02}T00:00:00Z")
-}
-
-#[cfg(test)]
-fn days_to_ymd(days: u64) -> (u64, u64, u64) {
-    let z = days + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d)
 }
 
 /// Parse a YYYY-MM-DD prefix from a date string (also works with RFC 3339 timestamps).
@@ -402,15 +431,11 @@ const SKIP_DIRS: &[&str] = &[
 /// Max depth for downward search to avoid excessive traversal.
 const MAX_SEARCH_DEPTH: usize = 8;
 
-/// Find workspaces with a progress callback showing each directory being scanned.
-/// Used by both scan and restore to show the same live progress UI.
-pub fn find_pnpm_workspaces_with_callback(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
-    find_pnpm_workspaces_with_progress(on_dir)
-}
-
 /// Find pnpm-workspace.yaml files by searching from the user's home directory downward.
+///
+/// Calls `on_dir` for each directory visited to enable live progress display.
 /// Returns all unique paths found.
-fn find_pnpm_workspaces_with_progress(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
+pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
     let mut results = Vec::new();
     let home = home_dir();
 
@@ -648,6 +673,7 @@ fn check_flat(
     }
 }
 
+/// Scan a single package manager: detect version, read config, and return recommendations.
 pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
     let version = detect_version(kind.name())?;
     let path = config_path(kind);
@@ -675,7 +701,7 @@ fn scan_pnpm_workspaces_with_progress(
         Some(v) => v,
         None => return Vec::new(),
     };
-    let paths = find_pnpm_workspaces_with_progress(&mut |dir| {
+    let paths = find_pnpm_workspaces(&mut |dir| {
         // Show a pulsing progress in the workspace-search fraction range (base_frac..1.0)
         let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("...");
         on_progress(

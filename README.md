@@ -20,7 +20,7 @@ DepsGuard scans your system for installed package managers and `pnpm-workspace.y
 
 | Manager | Config | Setting | Value | Purpose |
 |---------|--------|---------|-------|---------|
-| npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay new versions by 7 days |
+| npm/pnpm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay new versions by 7 days |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Block malicious install scripts |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (min) | Delay new versions by 7 days (default) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
@@ -119,6 +119,16 @@ src/
   manager.rs    Package manager detection, config scanning, recommendations
   fix.rs        Config file modification (flat .npmrc, TOML, YAML) + backup/restore
   ui.rs         TUI rendering: banner, status table, interactive selector
+```
+
+## Releasing
+
+Releases are automated via GitHub Actions. Pushing a `v*` tag builds binaries for all platforms and creates a GitHub Release.
+
+```bash
+cargo install cargo-release
+cargo release patch        # dry-run — shows what will happen
+cargo release patch --execute  # bump, commit, tag, push
 ```
 
 ## License
