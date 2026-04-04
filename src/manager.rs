@@ -10,12 +10,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static SKIP_WORKSPACES: AtomicBool = AtomicBool::new(false);
 static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
 
-/// Enable or disable the `--no-workspaces` flag (skip pnpm-workspace.yaml search).
+use std::sync::Mutex;
+static EXCLUDED_MANAGERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Enable or disable the `--no-search` flag (skip repo config file discovery).
 pub fn set_skip_workspaces(skip: bool) {
     SKIP_WORKSPACES.store(skip, Ordering::Relaxed);
 }
 
-/// Check whether workspace scanning is disabled.
+/// Check whether repo config search is disabled.
 pub fn skip_workspaces_enabled() -> bool {
     SKIP_WORKSPACES.load(Ordering::Relaxed)
 }
@@ -30,6 +33,24 @@ pub fn get_delay_days() -> u64 {
     DELAY_DAYS_SETTING.load(Ordering::Relaxed)
 }
 
+/// Set the list of excluded manager names.
+pub fn set_excluded_managers(names: Vec<String>) {
+    *EXCLUDED_MANAGERS.lock().unwrap_or_else(|e| e.into_inner()) = names;
+}
+
+/// Check whether a manager kind is excluded by the user.
+pub fn is_excluded(kind: ManagerKind) -> bool {
+    let excluded = EXCLUDED_MANAGERS.lock().unwrap_or_else(|e| e.into_inner());
+    if excluded.is_empty() {
+        return false;
+    }
+    let name = kind.name();
+    excluded.iter().any(|e| {
+        e.eq_ignore_ascii_case(name)
+            || (kind == ManagerKind::PnpmWorkspace && e.eq_ignore_ascii_case("pnpm"))
+    })
+}
+
 // ── Core types ────────────────────────────────────────────────────────
 
 /// Result of checking a single security setting against its expected value.
@@ -41,12 +62,19 @@ pub enum CheckStatus {
     Missing,
     /// The setting exists but has an incorrect value.
     WrongValue(String),
+    /// The feature is not available (e.g. tool version too old). Not auto-fixable.
+    Unsupported(String),
 }
 
 impl CheckStatus {
     #[must_use]
     pub fn is_ok(&self) -> bool {
         matches!(self, CheckStatus::Ok)
+    }
+
+    #[must_use]
+    pub fn is_unsupported(&self) -> bool {
+        matches!(self, CheckStatus::Unsupported(_))
     }
 }
 
@@ -56,6 +84,7 @@ impl std::fmt::Display for CheckStatus {
             CheckStatus::Ok => write!(f, "OK"),
             CheckStatus::Missing => write!(f, "Not set"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),
+            CheckStatus::Unsupported(v) => write!(f, "{v}"),
         }
     }
 }
@@ -72,7 +101,32 @@ pub struct Recommendation {
 impl Recommendation {
     #[must_use]
     pub fn needs_fix(&self) -> bool {
-        !self.status.is_ok()
+        !self.status.is_ok() && !self.status.is_unsupported()
+    }
+}
+
+/// Parse a semantic version string into (major, minor, patch).
+pub fn parse_semver(version: &str) -> Option<(u64, u64, u64)> {
+    let version = version.trim();
+    let mut parts = version.splitn(3, '.');
+    let major: u64 = parts.next()?.parse().ok()?;
+    let minor: u64 = parts.next()?.parse().ok()?;
+    let patch_str = parts.next().unwrap_or("0");
+    // Handle pre-release suffixes like "11.10.0-beta.1"
+    let patch: u64 = patch_str
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .unwrap_or("0")
+        .parse()
+        .unwrap_or(0);
+    Some((major, minor, patch))
+}
+
+/// Check if a version is at least (min_major, min_minor).
+fn version_at_least(version: &str, min_major: u64, min_minor: u64) -> bool {
+    match parse_semver(version) {
+        Some((major, minor, _)) => major > min_major || (major == min_major && minor >= min_minor),
+        None => false,
     }
 }
 
@@ -84,15 +138,30 @@ pub enum ManagerKind {
     PnpmWorkspace,
     Bun,
     Uv,
+    Yarn,
+    Renovate,
+    Dependabot,
 }
 
 impl ManagerKind {
+    /// Managers scanned via user-level config (version detection + fixed path).
+    pub const USER_LEVEL: &[ManagerKind] = &[
+        ManagerKind::Npm,
+        ManagerKind::Pnpm,
+        ManagerKind::Bun,
+        ManagerKind::Uv,
+        ManagerKind::Yarn,
+    ];
+
     pub const ALL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
         ManagerKind::PnpmWorkspace,
         ManagerKind::Bun,
         ManagerKind::Uv,
+        ManagerKind::Yarn,
+        ManagerKind::Renovate,
+        ManagerKind::Dependabot,
     ];
 
     pub fn name(self) -> &'static str {
@@ -102,6 +171,9 @@ impl ManagerKind {
             ManagerKind::PnpmWorkspace => "pnpm-workspace",
             ManagerKind::Bun => "bun",
             ManagerKind::Uv => "uv",
+            ManagerKind::Yarn => "yarn",
+            ManagerKind::Renovate => "renovate",
+            ManagerKind::Dependabot => "dependabot",
         }
     }
 
@@ -111,7 +183,40 @@ impl ManagerKind {
             ManagerKind::Pnpm | ManagerKind::PnpmWorkspace => "⚡",
             ManagerKind::Bun => "🥟",
             ManagerKind::Uv => "🐍",
+            ManagerKind::Yarn => "🧶",
+            ManagerKind::Renovate => "🔄",
+            ManagerKind::Dependabot => "🤖",
         }
+    }
+
+    /// Look up a ManagerKind by its CLI name (case-insensitive).
+    pub fn from_name(name: &str) -> Option<ManagerKind> {
+        ManagerKind::ALL
+            .iter()
+            .find(|k| k.name().eq_ignore_ascii_case(name))
+            .copied()
+    }
+
+    /// All valid names for use in `--exclude` (user-facing).
+    pub fn valid_names() -> Vec<&'static str> {
+        // Deduplicate: show "pnpm" once (covers both Pnpm and PnpmWorkspace)
+        let mut names: Vec<&str> = Vec::new();
+        for k in Self::ALL {
+            let n = k.name();
+            if n != "pnpm-workspace" && !names.contains(&n) {
+                names.push(n);
+            }
+        }
+        names
+    }
+
+    /// Whether this kind is only discovered in repos (not user-level config).
+    #[cfg(test)]
+    pub fn is_repo_only(self) -> bool {
+        matches!(
+            self,
+            ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot
+        )
     }
 }
 
@@ -122,6 +227,8 @@ pub struct ManagerInfo {
     pub version: String,
     pub config_path: PathBuf,
     pub recommendations: Vec<Recommendation>,
+    /// True if this entry was found via search (not a user-level global config).
+    pub discovered: bool,
 }
 
 impl ManagerInfo {
@@ -207,13 +314,12 @@ pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf 
 
 fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
     match kind {
-        // npm/pnpm: ~/.npmrc on all platforms (including Windows %USERPROFILE%\.npmrc)
         ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
-        // pnpm-workspace: discovered dynamically, not a fixed path
-        ManagerKind::PnpmWorkspace => PathBuf::new(),
-        // bun: ~/.bunfig.toml on all platforms
+        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
+            PathBuf::new()
+        }
         ManagerKind::Bun => home.join(".bunfig.toml"),
-        // uv: OS-specific
+        ManagerKind::Yarn => home.join(".yarnrc.yml"),
         ManagerKind::Uv => match os {
             TargetOs::MacOs => home.join("Library/Application Support/uv/uv.toml"),
             TargetOs::Windows => appdata.join("uv/uv.toml"),
@@ -395,6 +501,145 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
     None
 }
 
+// ── Duration parsing ──────────────────────────────────────────────────
+
+/// Parse a compact duration string like "7d", "3d", "1440m", "24h" into days.
+fn parse_duration_string(s: &str) -> Option<u64> {
+    let s = s.trim().trim_matches('"').trim_matches('\'');
+    if s.is_empty() {
+        return None;
+    }
+    let (num_part, unit) = s.split_at(s.len().saturating_sub(1));
+    let n: u64 = num_part.parse().ok()?;
+    match unit {
+        "d" => Some(n),
+        "h" => Some(n / 24),
+        "m" => Some(n / (24 * 60)),
+        _ => None,
+    }
+}
+
+// ── JSON reading ──────────────────────────────────────────────────────
+
+/// Read a top-level string value from a simple JSON/JSONC file.
+/// Matches `"key": "value"` or `"key": number` at the start of a line (after whitespace).
+/// Ignores `//` comments and won't false-match keys embedded inside string values.
+pub fn read_json_string_value(path: &Path, key: &str) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    let needle = format!("\"{}\"", key);
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") {
+            continue;
+        }
+        // Only match if the key appears at the very start of the trimmed line
+        // (a JSON property), not embedded in a value string.
+        if !trimmed.starts_with(&needle) {
+            continue;
+        }
+        let after = trimmed[needle.len()..].trim();
+        let after = after.strip_prefix(':')?;
+        let after = after.trim().trim_end_matches(',');
+        let val = after.trim().trim_matches('"');
+        return Some(val.to_string());
+    }
+    None
+}
+
+// ── Dependabot YAML reading ──────────────────────────────────────────
+
+/// A parsed update entry from a dependabot.yml file.
+#[derive(Debug, Clone)]
+pub struct DependabotEntry {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub ecosystem: String,
+    pub cooldown_default_days: Option<u64>,
+}
+
+/// Parse all `updates` entries from a dependabot.yml file, extracting
+/// each entry's ecosystem name and optional `cooldown.default-days` value.
+pub fn read_dependabot_entries(path: &Path) -> Vec<DependabotEntry> {
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let lines: Vec<&str> = content.lines().collect();
+    let mut entries = Vec::new();
+
+    let mut i = 0;
+    while i < lines.len() {
+        let trimmed = lines[i].trim();
+        // Detect a new update entry by `- package-ecosystem:`
+        if trimmed.starts_with("- package-ecosystem:")
+            || trimmed.starts_with("- package-ecosystem :")
+        {
+            let ecosystem = trimmed
+                .split_once(':')
+                .map(|(_, v)| v.trim().trim_matches('"').trim_matches('\'').to_string())
+                .unwrap_or_default();
+            let _entry_line = i;
+            // Determine the base indentation of this entry's properties
+            let entry_indent = lines[i].len() - lines[i].trim_start().len();
+            let prop_indent = entry_indent + 2; // properties are indented 2 more than the `-`
+
+            let mut cooldown_days: Option<u64> = None;
+            let mut j = i + 1;
+            while j < lines.len() {
+                let line = lines[j];
+                let line_trimmed = line.trim();
+                if line_trimmed.is_empty() || line_trimmed.starts_with('#') {
+                    j += 1;
+                    continue;
+                }
+                let line_indent = line.len() - line.trim_start().len();
+                // A new entry at same or lesser indent means we left this entry
+                if line_indent <= entry_indent && line_trimmed.starts_with('-') {
+                    break;
+                }
+                // Check for top-level keys outside updates block
+                if line_indent == 0
+                    && !line_trimmed.starts_with('-')
+                    && !line_trimmed.starts_with('#')
+                {
+                    break;
+                }
+                if line_trimmed == "cooldown:" && line_indent >= prop_indent {
+                    // Read children of cooldown
+                    let cooldown_indent = line_indent;
+                    let mut k = j + 1;
+                    while k < lines.len() {
+                        let cl = lines[k];
+                        let cl_trimmed = cl.trim();
+                        if cl_trimmed.is_empty() || cl_trimmed.starts_with('#') {
+                            k += 1;
+                            continue;
+                        }
+                        let cl_indent = cl.len() - cl.trim_start().len();
+                        if cl_indent <= cooldown_indent {
+                            break;
+                        }
+                        if cl_trimmed.starts_with("default-days:") {
+                            if let Some(val) = cl_trimmed.split_once(':').map(|(_, v)| v.trim()) {
+                                cooldown_days = val.parse().ok();
+                            }
+                        }
+                        k += 1;
+                    }
+                }
+                j += 1;
+            }
+            entries.push(DependabotEntry {
+                ecosystem,
+                cooldown_default_days: cooldown_days,
+            });
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    entries
+}
+
 /// Directories to skip when searching downward for project files.
 const SKIP_DIRS: &[&str] = &[
     // macOS system (enormous, never contains project files)
@@ -431,27 +676,88 @@ const SKIP_DIRS: &[&str] = &[
 /// Max depth for downward search to avoid excessive traversal.
 const MAX_SEARCH_DEPTH: usize = 8;
 
-/// Find pnpm-workspace.yaml files by searching from the user's home directory downward.
+/// Types of config files discovered in repositories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepoConfigKind {
+    PnpmWorkspace,
+    Npmrc,
+    YarnRc,
+    Renovate,
+    Dependabot,
+}
+
+/// Filenames that indicate a Renovate config.
+const RENOVATE_FILENAMES: &[&str] = &[
+    "renovate.json",
+    "renovate.json5",
+    ".renovaterc",
+    ".renovaterc.json",
+    ".renovaterc.json5",
+];
+
+/// Find pnpm-workspace.yaml files (backward-compat wrapper around `find_repo_configs`).
+#[cfg(test)]
+pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
+    find_repo_configs(on_dir)
+        .into_iter()
+        .filter(|(_, kind)| *kind == RepoConfigKind::PnpmWorkspace)
+        .map(|(p, _)| p)
+        .collect()
+}
+
+/// Search from the user's home directory downward for all recognized repo config files.
 ///
 /// Calls `on_dir` for each directory visited to enable live progress display.
-/// Returns all unique paths found.
-pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
+/// Skips files at the HOME level for `.npmrc` and `.yarnrc.yml` (handled by user-level scan).
+pub fn find_repo_configs(on_dir: &mut dyn FnMut(&Path)) -> Vec<(PathBuf, RepoConfigKind)> {
     let mut results = Vec::new();
     let home = home_dir();
-
-    // Search downward from home (skip known large dirs)
-    search_downward(&home, 0, &mut results, on_dir);
-
-    // Deduplicate
-    results.sort();
-    results.dedup();
+    search_downward(&home, 0, &home, &mut results, on_dir);
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results.dedup_by(|a, b| a.0 == b.0);
     results
+}
+
+fn classify_file(name: &str, parent: &Path, home: &Path) -> Option<RepoConfigKind> {
+    match name {
+        "pnpm-workspace.yaml" => Some(RepoConfigKind::PnpmWorkspace),
+        ".npmrc" => {
+            if parent == home {
+                None // user-level, handled separately
+            } else {
+                Some(RepoConfigKind::Npmrc)
+            }
+        }
+        ".yarnrc.yml" => {
+            if parent == home {
+                None
+            } else {
+                Some(RepoConfigKind::YarnRc)
+            }
+        }
+        "dependabot.yml" | "dependabot.yaml" => {
+            let parent_name = parent.file_name().and_then(|n| n.to_str());
+            if parent_name == Some(".github") {
+                Some(RepoConfigKind::Dependabot)
+            } else {
+                None
+            }
+        }
+        _ => {
+            if RENOVATE_FILENAMES.contains(&name) {
+                Some(RepoConfigKind::Renovate)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 fn search_downward(
     dir: &Path,
     depth: usize,
-    results: &mut Vec<PathBuf>,
+    home: &Path,
+    results: &mut Vec<(PathBuf, RepoConfigKind)>,
     on_dir: &mut dyn FnMut(&Path),
 ) {
     if depth > MAX_SEARCH_DEPTH {
@@ -469,8 +775,10 @@ fn search_downward(
         };
         let path = entry.path();
         if !file_type.is_dir() {
-            if path.file_name().and_then(|n| n.to_str()) == Some("pnpm-workspace.yaml") {
-                results.push(path);
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if let Some(kind) = classify_file(name, dir, home) {
+                    results.push((path, kind));
+                }
             }
             continue;
         }
@@ -482,11 +790,10 @@ fn search_downward(
             Some(n) => n,
             None => continue,
         };
-        // Skip hidden dirs (except those we explicitly handle) and known large dirs
-        if name.starts_with('.') || SKIP_DIRS.contains(&name) {
-            continue;
+        // Allow .github (for dependabot), skip other hidden dirs and known large dirs
+        if name == ".github" || (!name.starts_with('.') && !SKIP_DIRS.contains(&name)) {
+            search_downward(&path, depth + 1, home, results, on_dir);
         }
-        search_downward(&path, depth + 1, results, on_dir);
     }
 }
 
@@ -494,16 +801,28 @@ fn search_downward(
 
 // Default delay is 7 days, configurable via --delay-days
 
-fn scan_npm(path: &Path) -> Vec<Recommendation> {
+fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let cfg = read_flat_config(path);
-    vec![
+    let release_age = if version_at_least(version, 11, 10) {
         check_flat(
             &cfg,
             "min-release-age",
             &days.to_string(),
             &format!("Delay new versions by {days} days"),
-        ),
+        )
+    } else {
+        Recommendation {
+            key: "min-release-age".into(),
+            description: format!("Delay new versions by {days} days"),
+            expected: days.to_string(),
+            status: CheckStatus::Unsupported(format!(
+                "requires npm \u{2265} 11.10 (have {version})"
+            )),
+        }
+    };
+    vec![
+        release_age,
         check_flat(
             &cfg,
             "ignore-scripts",
@@ -654,6 +973,97 @@ fn scan_uv(path: &Path) -> Vec<Recommendation> {
     }]
 }
 
+fn scan_yarn(path: &Path, version: &str) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    if !version_at_least(version, 4, 10) {
+        return vec![Recommendation {
+            key: "npmMinimalAgeGate".into(),
+            description: format!("Delay new versions by {days} days"),
+            expected: format!("{days}d"),
+            status: CheckStatus::Unsupported(format!(
+                "requires yarn \u{2265} 4.10 (have {version})"
+            )),
+        }];
+    }
+    let val = read_yaml_value(path, "npmMinimalAgeGate");
+    let status = match &val {
+        Some(v) => {
+            if let Some(d) = parse_duration_string(v) {
+                if d >= days {
+                    CheckStatus::Ok
+                } else {
+                    CheckStatus::WrongValue(v.clone())
+                }
+            } else if let Ok(minutes) = v.parse::<u64>() {
+                // Bare number is treated as minutes per yarn docs
+                let d = minutes / (24 * 60);
+                if d >= days {
+                    CheckStatus::Ok
+                } else {
+                    CheckStatus::WrongValue(v.clone())
+                }
+            } else {
+                CheckStatus::WrongValue(v.clone())
+            }
+        }
+        None => CheckStatus::Missing,
+    };
+    vec![Recommendation {
+        key: "npmMinimalAgeGate".into(),
+        description: format!("Delay new versions by {days} days"),
+        expected: format!("{days}d"),
+        status,
+    }]
+}
+
+fn scan_renovate(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let val = read_json_string_value(path, "minimumReleaseAge");
+    let status = match &val {
+        Some(v) => {
+            if let Some(d) = parse_relative_days(v) {
+                if d >= days {
+                    CheckStatus::Ok
+                } else {
+                    CheckStatus::WrongValue(v.clone())
+                }
+            } else {
+                CheckStatus::WrongValue(v.clone())
+            }
+        }
+        None => CheckStatus::Missing,
+    };
+    vec![Recommendation {
+        key: "minimumReleaseAge".into(),
+        description: format!("Delay new versions by {days} days"),
+        expected: format!("{days} days"),
+        status,
+    }]
+}
+
+fn scan_dependabot(path: &Path) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let entries = read_dependabot_entries(path);
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    let mut recs = Vec::new();
+    for entry in &entries {
+        let status = match entry.cooldown_default_days {
+            Some(d) if d >= days => CheckStatus::Ok,
+            Some(d) => CheckStatus::WrongValue(d.to_string()),
+            None => CheckStatus::Missing,
+        };
+        recs.push(Recommendation {
+            key: "cooldown.default-days".into(),
+            description: format!("Delay updates by {days} days"),
+            expected: days.to_string(),
+            status,
+        });
+    }
+    recs
+}
+
 fn check_flat(
     cfg: &HashMap<String, String>,
     key: &str,
@@ -678,49 +1088,118 @@ pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
     let version = detect_version(kind.name())?;
     let path = config_path(kind);
     let recommendations = match kind {
-        ManagerKind::Npm => scan_npm(&path),
+        ManagerKind::Npm => scan_npm(&path, &version),
         ManagerKind::Pnpm => scan_pnpm(&path),
         ManagerKind::Bun => scan_bun(&path),
         ManagerKind::Uv => scan_uv(&path),
-        ManagerKind::PnpmWorkspace => unreachable!("use scan_pnpm_workspaces instead"),
+        ManagerKind::Yarn => scan_yarn(&path, &version),
+        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
+            unreachable!("repo-level managers are scanned via find_repo_configs")
+        }
     };
     Some(ManagerInfo {
         kind,
         version,
         config_path: path,
         recommendations,
+        discovered: false,
     })
 }
 
-/// Scan all discovered pnpm-workspace.yaml files (requires pnpm installed).
-fn scan_pnpm_workspaces_with_progress(
+/// Scan discovered repo configs and return ManagerInfo entries.
+/// Uses cached detected versions to avoid re-running `--version`.
+fn scan_repo_configs_with_progress(
     on_progress: &mut dyn FnMut(&str, f32),
     base_frac: f32,
+    detected_versions: &HashMap<&'static str, String>,
 ) -> Vec<ManagerInfo> {
-    let version = match detect_version("pnpm") {
-        Some(v) => v,
-        None => return Vec::new(),
-    };
-    let paths = find_pnpm_workspaces(&mut |dir| {
-        // Show a pulsing progress in the workspace-search fraction range (base_frac..1.0)
+    let configs = find_repo_configs(&mut |dir| {
         let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("...");
         on_progress(
-            &format!("Searching for workspace configs in ~/{}...", dir_name),
+            &format!("Searching for configs in ~/{}...", dir_name),
             base_frac,
         );
     });
-    paths
-        .into_iter()
-        .map(|path| {
-            let recommendations = scan_pnpm_workspace(&path);
-            ManagerInfo {
-                kind: ManagerKind::PnpmWorkspace,
-                version: version.clone(),
-                config_path: path,
-                recommendations,
+
+    let mut results = Vec::new();
+    for (path, kind) in configs {
+        match kind {
+            RepoConfigKind::PnpmWorkspace => {
+                if !is_excluded(ManagerKind::PnpmWorkspace) {
+                    if let Some(ver) = detected_versions.get("pnpm") {
+                        let recs = scan_pnpm_workspace(&path);
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::PnpmWorkspace,
+                            version: ver.clone(),
+                            config_path: path,
+                            recommendations: recs,
+                            discovered: true,
+                        });
+                    }
+                }
             }
-        })
-        .collect()
+            RepoConfigKind::Npmrc => {
+                if !is_excluded(ManagerKind::Npm) {
+                    if let Some(ver) = detected_versions.get("npm") {
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::Npm,
+                            version: ver.clone(),
+                            config_path: path.clone(),
+                            recommendations: scan_npm(&path, ver),
+                            discovered: true,
+                        });
+                    }
+                }
+                if !is_excluded(ManagerKind::Pnpm) {
+                    if let Some(ver) = detected_versions.get("pnpm") {
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::Pnpm,
+                            version: ver.clone(),
+                            config_path: path.clone(),
+                            recommendations: scan_pnpm(&path),
+                            discovered: true,
+                        });
+                    }
+                }
+            }
+            RepoConfigKind::YarnRc => {
+                if !is_excluded(ManagerKind::Yarn) {
+                    if let Some(ver) = detected_versions.get("yarn") {
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::Yarn,
+                            version: ver.clone(),
+                            config_path: path.clone(),
+                            recommendations: scan_yarn(&path, ver),
+                            discovered: true,
+                        });
+                    }
+                }
+            }
+            RepoConfigKind::Renovate => {
+                if !is_excluded(ManagerKind::Renovate) {
+                    results.push(ManagerInfo {
+                        kind: ManagerKind::Renovate,
+                        version: String::new(),
+                        config_path: path.clone(),
+                        recommendations: scan_renovate(&path),
+                        discovered: true,
+                    });
+                }
+            }
+            RepoConfigKind::Dependabot => {
+                if !is_excluded(ManagerKind::Dependabot) {
+                    results.push(ManagerInfo {
+                        kind: ManagerKind::Dependabot,
+                        version: String::new(),
+                        config_path: path.clone(),
+                        recommendations: scan_dependabot(&path),
+                        discovered: true,
+                    });
+                }
+            }
+        }
+    }
+    results
 }
 
 #[cfg(test)]
@@ -731,13 +1210,14 @@ pub fn scan_all() -> Vec<ManagerInfo> {
 /// Scan all managers, calling `on_progress(step_description, fraction)` after each step.
 /// `fraction` is a value from 0.0 to 1.0.
 pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<ManagerInfo> {
-    let managers: Vec<ManagerKind> = ManagerKind::ALL
+    let managers: Vec<ManagerKind> = ManagerKind::USER_LEVEL
         .iter()
         .copied()
-        .filter(|&k| k != ManagerKind::PnpmWorkspace)
+        .filter(|k| !is_excluded(*k))
         .collect();
-    let base_steps = managers.len() + 1; // +1 for workspace search
+    let base_steps = managers.len() + 1; // +1 for repo search
     let mut results = Vec::new();
+    let mut detected_versions: HashMap<&'static str, String> = HashMap::new();
 
     for (i, &kind) in managers.iter().enumerate() {
         on_progress(
@@ -745,14 +1225,16 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
             i as f32 / base_steps as f32,
         );
         if let Some(info) = scan_manager(kind) {
+            detected_versions.insert(kind.name(), info.version.clone());
             results.push(info);
         }
     }
 
-    if !SKIP_WORKSPACES.load(Ordering::Relaxed) {
+    if !skip_workspaces_enabled() {
         let base_frac = managers.len() as f32 / base_steps as f32;
-        let workspace_infos = scan_pnpm_workspaces_with_progress(&mut on_progress, base_frac);
-        results.extend(workspace_infos);
+        let repo_infos =
+            scan_repo_configs_with_progress(&mut on_progress, base_frac, &detected_versions);
+        results.extend(repo_infos);
     }
 
     on_progress("Done", 1.0);
@@ -950,6 +1432,7 @@ mod tests {
                 expected: "v".into(),
                 status: CheckStatus::Ok,
             }],
+            discovered: false,
         };
         assert!(info.all_ok());
     }
@@ -957,7 +1440,7 @@ mod tests {
     #[test]
     fn scan_npm_checks() {
         let f = tmp_file("min-release-age=7\nignore-scripts=true\n");
-        let recs = scan_npm(f.path());
+        let recs = scan_npm(f.path(), "11.10.0");
         assert_eq!(recs.len(), 2);
         assert!(recs[0].status.is_ok());
         assert!(recs[1].status.is_ok());
@@ -966,16 +1449,24 @@ mod tests {
     #[test]
     fn scan_npm_missing() {
         let f = tmp_file("");
-        let recs = scan_npm(f.path());
+        let recs = scan_npm(f.path(), "11.10.0");
         assert!(recs.iter().all(|r| r.needs_fix()));
     }
 
     #[test]
     fn scan_npm_wrong_values() {
         let f = tmp_file("min-release-age=1\nignore-scripts=false\n");
-        let recs = scan_npm(f.path());
+        let recs = scan_npm(f.path(), "11.10.0");
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
         assert!(matches!(recs[1].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_npm_old_version_unsupported() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = scan_npm(f.path(), "10.8.0");
+        assert!(recs[0].status.is_unsupported());
+        assert!(recs[1].status.is_ok());
     }
 
     #[test]
@@ -1248,5 +1739,250 @@ mod tests {
         let f = tmp_file("minimumReleaseAge: 100\n");
         let recs = scan_pnpm_workspace(f.path());
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    // ── parse_semver tests ───────────────────────────────────────────
+
+    #[test]
+    fn parse_semver_basic() {
+        assert_eq!(parse_semver("11.10.0"), Some((11, 10, 0)));
+        assert_eq!(parse_semver("4.10.2"), Some((4, 10, 2)));
+        assert_eq!(parse_semver("1.0.0"), Some((1, 0, 0)));
+    }
+
+    #[test]
+    fn parse_semver_with_prerelease() {
+        assert_eq!(parse_semver("11.10.0-beta.1"), Some((11, 10, 0)));
+    }
+
+    #[test]
+    fn parse_semver_invalid() {
+        assert!(parse_semver("").is_none());
+        assert!(parse_semver("abc").is_none());
+        assert!(parse_semver("1").is_none());
+    }
+
+    #[test]
+    fn version_at_least_checks() {
+        assert!(version_at_least("11.10.0", 11, 10));
+        assert!(version_at_least("12.0.0", 11, 10));
+        assert!(!version_at_least("11.9.0", 11, 10));
+        assert!(!version_at_least("10.0.0", 11, 10));
+        assert!(version_at_least("4.10.0", 4, 10));
+        assert!(!version_at_least("4.9.2", 4, 10));
+    }
+
+    // ── parse_duration_string tests ──────────────────────────────────
+
+    #[test]
+    fn parse_duration_days() {
+        assert_eq!(parse_duration_string("7d"), Some(7));
+        assert_eq!(parse_duration_string("3d"), Some(3));
+        assert_eq!(parse_duration_string("\"7d\""), Some(7));
+    }
+
+    #[test]
+    fn parse_duration_hours() {
+        assert_eq!(parse_duration_string("168h"), Some(7));
+        assert_eq!(parse_duration_string("48h"), Some(2));
+    }
+
+    #[test]
+    fn parse_duration_invalid() {
+        assert!(parse_duration_string("").is_none());
+        assert!(parse_duration_string("abc").is_none());
+    }
+
+    // ── read_json_string_value tests ─────────────────────────────────
+
+    #[test]
+    fn read_json_basic() {
+        let f = tmp_file("{\n  \"minimumReleaseAge\": \"7 days\"\n}\n");
+        assert_eq!(
+            read_json_string_value(f.path(), "minimumReleaseAge"),
+            Some("7 days".into())
+        );
+    }
+
+    #[test]
+    fn read_json_with_comments() {
+        let f = tmp_file("{\n  // some comment\n  \"minimumReleaseAge\": \"3 days\"\n}\n");
+        assert_eq!(
+            read_json_string_value(f.path(), "minimumReleaseAge"),
+            Some("3 days".into())
+        );
+    }
+
+    #[test]
+    fn read_json_missing_key() {
+        let f = tmp_file("{\n  \"other\": \"value\"\n}\n");
+        assert_eq!(read_json_string_value(f.path(), "minimumReleaseAge"), None);
+    }
+
+    // ── read_dependabot_entries tests ────────────────────────────────
+
+    #[test]
+    fn read_dependabot_single_entry_with_cooldown() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 7\n",
+        );
+        let entries = read_dependabot_entries(f.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].ecosystem, "npm");
+        assert_eq!(entries[0].cooldown_default_days, Some(7));
+    }
+
+    #[test]
+    fn read_dependabot_no_cooldown() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"pip\"\n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n",
+        );
+        let entries = read_dependabot_entries(f.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].ecosystem, "pip");
+        assert_eq!(entries[0].cooldown_default_days, None);
+    }
+
+    #[test]
+    fn read_dependabot_multiple_entries() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 5\n  - package-ecosystem: \"pip\"\n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n",
+        );
+        let entries = read_dependabot_entries(f.path());
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].cooldown_default_days, Some(5));
+        assert_eq!(entries[1].cooldown_default_days, None);
+    }
+
+    // ── scan_yarn tests ──────────────────────────────────────────────
+
+    #[test]
+    fn scan_yarn_ok() {
+        let f = tmp_file("npmMinimalAgeGate: \"7d\"\n");
+        let recs = scan_yarn(f.path(), "4.10.0");
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_yarn_too_low() {
+        let f = tmp_file("npmMinimalAgeGate: \"3d\"\n");
+        let recs = scan_yarn(f.path(), "4.10.0");
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_yarn_missing() {
+        let f = tmp_file("");
+        let recs = scan_yarn(f.path(), "4.10.0");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_yarn_old_version_unsupported() {
+        let f = tmp_file("");
+        let recs = scan_yarn(f.path(), "4.9.2");
+        assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_yarn_minutes_format() {
+        let f = tmp_file("npmMinimalAgeGate: 10080\n");
+        let recs = scan_yarn(f.path(), "4.10.0");
+        assert!(recs[0].status.is_ok()); // 10080 minutes = 7 days
+    }
+
+    // ── scan_renovate tests ──────────────────────────────────────────
+
+    #[test]
+    fn scan_renovate_ok() {
+        let f = tmp_file("{\n  \"minimumReleaseAge\": \"7 days\"\n}\n");
+        let recs = scan_renovate(f.path());
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_renovate_missing() {
+        let f = tmp_file("{\n  \"extends\": [\"config:recommended\"]\n}\n");
+        let recs = scan_renovate(f.path());
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_renovate_too_short() {
+        let f = tmp_file("{\n  \"minimumReleaseAge\": \"2 days\"\n}\n");
+        let recs = scan_renovate(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    // ── scan_dependabot tests ────────────────────────────────────────
+
+    #[test]
+    fn scan_dependabot_ok() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 7\n",
+        );
+        let recs = scan_dependabot(f.path());
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_dependabot_missing_cooldown() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n",
+        );
+        let recs = scan_dependabot(f.path());
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_dependabot_too_low() {
+        let f = tmp_file(
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 2\n",
+        );
+        let recs = scan_dependabot(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_dependabot_empty() {
+        let f = tmp_file("version: 2\n");
+        let recs = scan_dependabot(f.path());
+        assert!(recs.is_empty());
+    }
+
+    // ── config_path_yarn tests ───────────────────────────────────────
+
+    #[test]
+    fn config_path_yarn_linux() {
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Yarn, home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.yarnrc.yml"));
+    }
+
+    #[test]
+    fn config_path_yarn_macos() {
+        let home = Path::new("/Users/testuser");
+        let p = config_path_for(ManagerKind::Yarn, home, TargetOs::MacOs);
+        assert_eq!(p, PathBuf::from("/Users/testuser/.yarnrc.yml"));
+    }
+
+    #[test]
+    fn read_json_no_false_positive_in_value() {
+        let f = tmp_file(
+            "{\n  \"description\": \"set minimumReleaseAge to 7 days\",\n  \"minimumReleaseAge\": \"3 days\"\n}\n",
+        );
+        let val = read_json_string_value(f.path(), "minimumReleaseAge");
+        assert_eq!(val, Some("3 days".into()));
+    }
+
+    #[test]
+    fn read_json_no_match_in_nested_value() {
+        let f = tmp_file("{\n  \"note\": \"minimumReleaseAge is important\"\n}\n");
+        let val = read_json_string_value(f.path(), "minimumReleaseAge");
+        assert_eq!(val, None);
     }
 }

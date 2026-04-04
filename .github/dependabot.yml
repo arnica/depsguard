@@ -6,12 +6,16 @@ updates:
       interval: weekly
     commit-message:
       prefix: "deps(cargo):"
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     commit-message:
       prefix: "deps(actions):"
+    cooldown:
+      default-days: 7
   - package-ecosystem: npm
     directory: /docs
     schedule:
