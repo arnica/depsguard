@@ -11,7 +11,7 @@ VERSION="${TAG#v}"
 REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
 SOURCE_URL="${REPO_URL}/archive/refs/tags/v${VERSION}.tar.gz"
 
-TAP_REPO="${HOMEBREW_TAP_REPO:-${GITHUB_REPOSITORY}}"
+TAP_REPO="${HOMEBREW_TAP_REPO:-}"
 if [[ -z "${TAP_REPO}" || "${TAP_REPO}" != */* ]]; then
   echo "error: HOMEBREW_TAP_REPO must be in owner/repo format (got '${TAP_REPO}')" >&2
   exit 1

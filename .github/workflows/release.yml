@@ -224,7 +224,7 @@ jobs:
         if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+        run: cargo publish --allow-dirty
 
   publish-homebrew-tap:
     name: Bump Homebrew tap
