@@ -16,7 +16,7 @@
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "$REPO_URL/releases/download/v$version/depsguard-x86_64-pc-windows-msvc.zip"
+        "url": "$REPO_URL/releases/download/v$$version/depsguard-x86_64-pc-windows-msvc.zip"
       }
     }
   }

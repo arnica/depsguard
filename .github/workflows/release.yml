@@ -82,11 +82,19 @@ jobs:
               raise SystemExit("normalized release version is empty")
           p = Path("Cargo.toml")
           text = p.read_text()
-          updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
-          if text == updated:
+          version_pattern = r'(?m)^version\s*=\s*"[^"]+"'
+          desired_line = f'version = "{version}"'
+          match = re.search(version_pattern, text)
+          if not match:
               raise SystemExit("failed to update Cargo.toml version")
-          p.write_text(updated)
-          print(f"Using release version from tag: {raw_version} -> {version}")
+          if match.group(0) == desired_line:
+              print(f"Using release version from tag: {raw_version} -> {version} (Cargo.toml already up to date)")
+          else:
+              updated = re.sub(version_pattern, desired_line, text, count=1)
+              if text == updated:
+                  raise SystemExit("failed to update Cargo.toml version")
+              p.write_text(updated)
+              print(f"Using release version from tag: {raw_version} -> {version}")
           PY
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -208,11 +216,19 @@ jobs:
               raise SystemExit("normalized release version is empty")
           p = Path("Cargo.toml")
           text = p.read_text()
-          updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
-          if text == updated:
+          version_pattern = r'(?m)^version\s*=\s*"[^"]+"'
+          desired_line = f'version = "{version}"'
+          match = re.search(version_pattern, text)
+          if not match:
               raise SystemExit("failed to update Cargo.toml version")
-          p.write_text(updated)
-          print(f"Using release version from tag: {raw_version} -> {version}")
+          if match.group(0) == desired_line:
+              print(f"Using release version from tag: {raw_version} -> {version} (Cargo.toml already up to date)")
+          else:
+              updated = re.sub(version_pattern, desired_line, text, count=1)
+              if text == updated:
+                  raise SystemExit("failed to update Cargo.toml version")
+              p.write_text(updated)
+              print(f"Using release version from tag: {raw_version} -> {version}")
           PY
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
