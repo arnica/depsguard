@@ -93,8 +93,8 @@ Tag pushes run `.github/workflows/release.yml`. Optional secrets (omit to skip t
 | Secret | Purpose |
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
-| `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to your tap repo (for example `<owner>/homebrew-depsguard`) |
-| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/depsguard` |
+| `HOMEBREW_TAP_TOKEN` | Push updated `Formula/depsguard.rb` to your tap repo (default: same repo, for example `<owner>/depsguard`) |
+| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Templates live under `packaging/`; render scripts are `scripts/release/publish-homebrew-tap.sh` and `publish-scoop-bucket.sh`.
@@ -105,16 +105,16 @@ Document these in your org’s internal runbooks or public docs once the repos e
 
 **Homebrew (custom tap)**
 
-1. Create `<owner>/homebrew-depsguard` with `Formula/depsguard.rb`.
-2. Set repo variable `HOMEBREW_TAP_REPO` to `<owner>/homebrew-depsguard`.
+1. Use `<owner>/depsguard` as the tap repo (default behavior), or set `HOMEBREW_TAP_REPO` to override.
+2. Ensure `Formula/depsguard.rb` exists in the tap repository.
 3. Set `HOMEBREW_TAP_TOKEN` (PAT with **repo** scope and push access to the tap repo).
 4. Release workflow updates `Formula/depsguard.rb` in the tap repository on each tag.
 5. Users install with `brew tap <owner>/depsguard` then `brew install depsguard`.
 
 **Scoop (custom bucket)**
 
-1. Create `<owner>/depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
-2. Users: `scoop bucket add <label> https://github.com/<owner>/depsguard` then `scoop install depsguard`.
+1. Create `<owner>/scoop-depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
+2. Users: `scoop bucket add <label> https://github.com/<owner>/scoop-depsguard` then `scoop install depsguard`.
 3. Set `SCOOP_BUCKET_TOKEN` with push access to the bucket repo.
 
 **WinGet**
@@ -126,7 +126,6 @@ Document these in your org’s internal runbooks or public docs once the repos e
 
 | Path | Purpose |
 |------|---------|
-| `packaging/conda/recipe/meta.yaml` | conda-forge / staged-recipes starting point |
 | `packaging/aur/PKGBUILD` | AUR binary package example (`updpkgsums` after release) |
 
 **Releasing a version**

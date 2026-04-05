@@ -13,10 +13,12 @@ REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
 GITHUB_REPO_SLUG="${GITHUB_REPOSITORY}"
 REPO_HOMEPAGE="${REPO_HOMEPAGE:-https://depsguard.com}"
 
-mkdir -p /tmp/depsguard-sha
-gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "depsguard-x86_64-pc-windows-msvc.zip.sha256" -D /tmp/depsguard-sha
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
 
-sha_file="/tmp/depsguard-sha/depsguard-x86_64-pc-windows-msvc.zip.sha256"
+gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "depsguard-x86_64-pc-windows-msvc.zip.sha256" -D "${TMP_DIR}"
+
+sha_file="${TMP_DIR}/depsguard-x86_64-pc-windows-msvc.zip.sha256"
 if [[ ! -f "$sha_file" ]]; then
   echo "error: missing Windows zip checksum" >&2
   exit 1
@@ -30,11 +32,13 @@ export REPO_HOMEPAGE
 export SHA_X86_64_PC_WINDOWS_MSVC_ZIP
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-envsubst <"${ROOT}/packaging/scoop/depsguard.json.in" >/tmp/depsguard.json
+envsubst <"${ROOT}/packaging/scoop/depsguard.json.in" >"${TMP_DIR}/depsguard.json"
 
-git clone --depth 1 "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/${SCOOP_BUCKET}.git" /tmp/scoop-bucket
-cp /tmp/depsguard.json /tmp/scoop-bucket/depsguard.json
-cd /tmp/scoop-bucket
+AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SCOOP_BUCKET_TOKEN}" | base64 | tr -d '\n')"
+git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+  clone --depth 1 "https://github.com/${SCOOP_BUCKET}.git" "${TMP_DIR}/scoop-bucket"
+cp "${TMP_DIR}/depsguard.json" "${TMP_DIR}/scoop-bucket/depsguard.json"
+cd "${TMP_DIR}/scoop-bucket"
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git add depsguard.json
@@ -45,4 +49,4 @@ fi
 git commit -m "depsguard: ${VERSION}
 
 Synced from ${REPO_URL}/releases/tag/${TAG}"
-git push origin HEAD
+git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin HEAD
