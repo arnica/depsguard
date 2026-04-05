@@ -41,7 +41,7 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
 mkdir -p Formula
 cp "${TMP_DIR}/depsguard.rb" Formula/depsguard.rb
-git add Formula/depsguard.rb
+git add -f Formula/depsguard.rb
 
 if git diff --cached --quiet; then
   echo "Homebrew tap formula unchanged; nothing to commit."

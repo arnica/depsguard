@@ -81,15 +81,16 @@ brew install depsguard</code></pre>
         <p class="text-xs text-gray-500 mt-3">Recommended for macOS; works on Linux with Homebrew too.</p>
       </div>
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">APT (Linux Debian/Ubuntu)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy APT install commands">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
-echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
-sudo apt update
-sudo apt install depsguard</code></pre>
+        <h3 class="font-bold text-lg mb-3">APT (Linux Debian/Ubuntu) - coming soon</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="curl -L -o depsguard.tar.gz https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz&#10;tar -xzf depsguard.tar.gz&#10;sudo install -m 0755 depsguard /usr/local/bin/depsguard">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy Linux fallback install commands">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code># APT repository is not published yet.
+# Temporary Linux install:
+curl -L -o depsguard.tar.gz https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf depsguard.tar.gz
+sudo install -m 0755 depsguard /usr/local/bin/depsguard</code></pre>
         </div>
+        <p class="text-xs text-gray-500 mt-3">Follow <a class="text-arnica hover:underline" href="/apt">/apt</a> for repository status.</p>
       </div>
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
         <h3 class="font-bold text-lg mb-3">WinGet (Windows)</h3>

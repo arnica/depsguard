@@ -20,11 +20,12 @@ jobs:
         run: |
           python - <<'PY'
           import os, re, sys
-          tag = os.environ["TAG_NAME"]
+          raw_tag = os.environ["TAG_NAME"]
+          tag = raw_tag[1:] if raw_tag.startswith("v") else raw_tag
           if not re.match(r'^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$', tag):
-              print(f"::error::Tag v{tag} is not a valid semver-like version")
+              print(f"::error::Tag {raw_tag} is not a valid semver-like version")
               sys.exit(1)
-          print(f"Tag v{tag} format is valid")
+          print(f"Tag {raw_tag} format is valid")
           PY
 
   build:
@@ -75,14 +76,17 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import os, re
-          version = os.environ["RELEASE_VERSION"]
+          raw_version = os.environ["RELEASE_VERSION"]
+          version = raw_version[1:] if raw_version.startswith("v") else raw_version
+          if not version:
+              raise SystemExit("normalized release version is empty")
           p = Path("Cargo.toml")
           text = p.read_text()
           updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
           if text == updated:
               raise SystemExit("failed to update Cargo.toml version")
           p.write_text(updated)
-          print(f"Using release version from tag: {version}")
+          print(f"Using release version from tag: {raw_version} -> {version}")
           PY
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -128,15 +132,15 @@ jobs:
           PKG_ROOT="pkg/deb-${{ matrix.target }}"
           mkdir -p "${PKG_ROOT}/DEBIAN" "${PKG_ROOT}/usr/bin"
           install -m 0755 "target/${{ matrix.target }}/release/depsguard" "${PKG_ROOT}/usr/bin/depsguard"
-          cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
-          Package: depsguard
-          Version: ${VERSION}
-          Section: utils
-          Priority: optional
-          Architecture: ${DEB_ARCH}
-          Maintainer: Arnica <engineering@arnica.io>
-          Description: Harden package manager configs against supply chain attacks
-          EOF
+          {
+            printf 'Package: depsguard\n'
+            printf 'Version: %s\n' "${VERSION}"
+            printf 'Section: utils\n'
+            printf 'Priority: optional\n'
+            printf 'Architecture: %s\n' "${DEB_ARCH}"
+            printf 'Maintainer: Arnica <engineering@arnica.io>\n'
+            printf 'Description: Harden package manager configs against supply chain attacks\n'
+          } > "${PKG_ROOT}/DEBIAN/control"
           DEB_FILE="depsguard_${VERSION}_${DEB_ARCH}.deb"
           dpkg-deb --build "${PKG_ROOT}" "${DEB_FILE}"
           sha256sum "${DEB_FILE}" > "${DEB_FILE}.sha256"
@@ -157,6 +161,7 @@ jobs:
           name: depsguard-${{ matrix.target }}
           path: |
             depsguard-${{ matrix.target }}.*
+            depsguard-${{ matrix.friendly }}.*
             depsguard_*.deb*
           retention-days: 1
 
@@ -183,7 +188,7 @@ jobs:
 
   publish-crates:
     name: Publish to crates.io
-    needs: validate
+    needs: build
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -197,14 +202,17 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import os, re
-          version = os.environ["RELEASE_VERSION"]
+          raw_version = os.environ["RELEASE_VERSION"]
+          version = raw_version[1:] if raw_version.startswith("v") else raw_version
+          if not version:
+              raise SystemExit("normalized release version is empty")
           p = Path("Cargo.toml")
           text = p.read_text()
           updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
           if text == updated:
               raise SystemExit("failed to update Cargo.toml version")
           p.write_text(updated)
-          print(f"Using release version from tag: {version}")
+          print(f"Using release version from tag: {raw_version} -> {version}")
           PY
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:

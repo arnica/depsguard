@@ -136,4 +136,4 @@ cargo release patch          # dry-run
 cargo release patch --execute  # bump, commit, tag, push — triggers release workflow on tag
 ```
 
-Tag must match `version` in `Cargo.toml` (enforced in `release.yml`).
+Use release tags in `v<semver>` format (for example `v0.1.1`).

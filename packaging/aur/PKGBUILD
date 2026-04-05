@@ -1,7 +1,7 @@
 # Maintainer: submit to AUR manually (aurpublish / makepkg).
 # Upstream: https://github.com/arnica/depsguard
 pkgname=depsguard-bin
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Harden package manager configs against supply chain attacks'
 arch=('x86_64' 'aarch64')
