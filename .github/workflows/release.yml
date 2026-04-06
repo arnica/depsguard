@@ -345,7 +345,7 @@ jobs:
           set -euo pipefail
           git config user.name "depsguard-release-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/apt/
+          git add -f docs/apt/
           if git diff --cached --quiet; then
             echo "APT repo unchanged for ${RELEASE_TAG}; skipping commit."
             exit 0

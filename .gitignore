@@ -40,6 +40,7 @@ depsguard-*.zip
 depsguard-*.zip.sha256
 depsguard_*.deb
 depsguard_*.deb.sha256
+!docs/apt/pool/**/*.deb
 pkg/
 artifacts/
 
