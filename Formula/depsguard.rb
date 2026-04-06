@@ -1,13 +1,12 @@
 # frozen_string_literal: true
-# Rendered by .github/workflows/release.yml for automated formula sync PRs.
-# Target repository: this repository (`Formula/depsguard.rb`).
+
 class Depsguard < Formula
   desc "Harden package manager configs against supply chain attacks, built by Arnica"
   homepage "https://depsguard.com"
-  url "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/v$VERSION.tar.gz"
-  sha256 "$SHA256_SOURCE"
+  url "https://github.com/arnica/depsguard/archive/refs/tags/v0.1.3.tar.gz"
+  sha256 "f38842eba32e9f39760e48309f62adf0344bce2be6f05e307fd4bb703d556737"
   license "MIT"
-  head "https://github.com/$GITHUB_REPOSITORY.git", branch: "main"
+  head "https://github.com/arnica/depsguard.git", branch: "main"
 
   depends_on "rust" => :build
 
