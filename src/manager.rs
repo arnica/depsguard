@@ -503,8 +503,9 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
 
 // ── Duration parsing ──────────────────────────────────────────────────
 
-/// Parse a compact duration string like "7d", "3d", "1440m", "24h" into days.
-fn parse_duration_string(s: &str) -> Option<u64> {
+/// Parse a compact duration string like "7d", "3d", "1440m", "24h" into minutes.
+/// Returns minutes to avoid precision loss from integer division.
+fn parse_duration_minutes(s: &str) -> Option<u64> {
     let s = s.trim().trim_matches('"').trim_matches('\'');
     if s.is_empty() {
         return None;
@@ -512,9 +513,9 @@ fn parse_duration_string(s: &str) -> Option<u64> {
     let (num_part, unit) = s.split_at(s.len().saturating_sub(1));
     let n: u64 = num_part.parse().ok()?;
     match unit {
-        "d" => Some(n),
-        "h" => Some(n / 24),
-        "m" => Some(n / (24 * 60)),
+        "d" => Some(n.saturating_mul(24 * 60)),
+        "h" => Some(n.saturating_mul(60)),
+        "m" => Some(n),
         _ => None,
     }
 }
@@ -986,18 +987,17 @@ fn scan_yarn(path: &Path, version: &str) -> Vec<Recommendation> {
         }];
     }
     let val = read_yaml_value(path, "npmMinimalAgeGate");
+    let required_minutes = days.saturating_mul(24).saturating_mul(60);
     let status = match &val {
         Some(v) => {
-            if let Some(d) = parse_duration_string(v) {
-                if d >= days {
+            if let Some(configured_minutes) = parse_duration_minutes(v) {
+                if configured_minutes >= required_minutes {
                     CheckStatus::Ok
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }
-            } else if let Ok(minutes) = v.parse::<u64>() {
-                // Bare number is treated as minutes per yarn docs
-                let d = minutes / (24 * 60);
-                if d >= days {
+            } else if let Ok(raw_minutes) = v.parse::<u64>() {
+                if raw_minutes >= required_minutes {
                     CheckStatus::Ok
                 } else {
                     CheckStatus::WrongValue(v.clone())
@@ -1267,12 +1267,15 @@ mod tests {
 
         impl NamedTempFile {
             pub fn new() -> io::Result<Self> {
+                use std::sync::atomic::{AtomicU64, Ordering};
+                static COUNTER: AtomicU64 = AtomicU64::new(0);
+                let n = COUNTER.fetch_add(1, Ordering::Relaxed);
                 let id = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_nanos();
                 let path = std::env::temp_dir()
-                    .join(format!("depsguard_test_{id}_{}", std::process::id()));
+                    .join(format!("depsguard_test_{id}_{}_{n}", std::process::id()));
                 let file = fs::File::create(&path)?;
                 Ok(Self { path, file })
             }
@@ -1776,21 +1779,22 @@ mod tests {
 
     #[test]
     fn parse_duration_days() {
-        assert_eq!(parse_duration_string("7d"), Some(7));
-        assert_eq!(parse_duration_string("3d"), Some(3));
-        assert_eq!(parse_duration_string("\"7d\""), Some(7));
+        assert_eq!(parse_duration_minutes("7d"), Some(7 * 24 * 60));
+        assert_eq!(parse_duration_minutes("3d"), Some(3 * 24 * 60));
+        assert_eq!(parse_duration_minutes("\"7d\""), Some(7 * 24 * 60));
     }
 
     #[test]
     fn parse_duration_hours() {
-        assert_eq!(parse_duration_string("168h"), Some(7));
-        assert_eq!(parse_duration_string("48h"), Some(2));
+        assert_eq!(parse_duration_minutes("168h"), Some(168 * 60));
+        assert_eq!(parse_duration_minutes("48h"), Some(48 * 60));
+        assert_eq!(parse_duration_minutes("10h"), Some(600));
     }
 
     #[test]
     fn parse_duration_invalid() {
-        assert!(parse_duration_string("").is_none());
-        assert!(parse_duration_string("abc").is_none());
+        assert!(parse_duration_minutes("").is_none());
+        assert!(parse_duration_minutes("abc").is_none());
     }
 
     // ── read_json_string_value tests ─────────────────────────────────

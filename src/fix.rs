@@ -55,22 +55,35 @@ fn encode_path(path: &Path) -> String {
 }
 
 /// Decode a backup filename back to the original path.
+/// Iterates by `char` (not byte) so multi-byte UTF-8 sequences survive intact.
 fn decode_path(encoded: &str) -> PathBuf {
     let mut out = String::with_capacity(encoded.len());
-    let bytes = encoded.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hi = bytes[i + 1];
-            let lo = bytes[i + 2];
-            if let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo)) {
-                out.push((h << 4 | l) as char);
-                i += 3;
-                continue;
+    let mut chars = encoded.chars();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hi = chars.next();
+            let lo = chars.next();
+            match (hi, lo) {
+                (Some(h), Some(l)) if h.is_ascii() && l.is_ascii() => {
+                    match (hex_val(h as u8), hex_val(l as u8)) {
+                        (Some(hv), Some(lv)) => out.push((hv << 4 | lv) as char),
+                        _ => {
+                            out.push(c);
+                            out.push(h);
+                            out.push(l);
+                        }
+                    }
+                }
+                _ => {
+                    out.push(c);
+                    if let Some(h) = hi {
+                        out.push(h);
+                    }
+                }
             }
+        } else {
+            out.push(c);
         }
-        out.push(bytes[i] as char);
-        i += 1;
     }
     PathBuf::from(out)
 }
@@ -384,16 +397,21 @@ fn apply_npm_config_set(key: &str, value: &str) -> io::Result<String> {
         }
         Err(e) => {
             if cfg!(target_os = "windows") {
-                std::process::Command::new("npm.cmd")
+                let win = std::process::Command::new("npm.cmd")
                     .args(["config", "set", &setting, "--location=user"])
                     .output()
-                    .map_err(|_| e)?
+                    .map_err(|_| e)?;
+                if !win.status.success() {
+                    let stderr = String::from_utf8_lossy(&win.stderr);
+                    return Err(io::Error::other(format!("npm config set failed: {stderr}")));
+                }
+                win
             } else {
                 return Err(e);
             }
         }
     };
-    let _ = output; // success already confirmed
+    let _ = output;
     Ok(setting)
 }
 
@@ -468,13 +486,28 @@ fn apply_dependabot_fix(path: &Path, _key: &str, value: &str) -> io::Result<Stri
     let target_line = format!("default-days: {value}");
     let mut modified = false;
 
-    // First pass: update existing `default-days:` lines
+    // First pass: update existing `default-days:` lines only within `cooldown:` blocks
+    let mut in_cooldown = false;
+    let mut cooldown_indent = 0usize;
     for line in &mut lines {
         let trimmed = line.trim();
-        if trimmed.starts_with("default-days:") {
-            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-            *line = format!("{indent}default-days: {value}");
-            modified = true;
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        if trimmed == "cooldown:" {
+            in_cooldown = true;
+            cooldown_indent = indent;
+            continue;
+        }
+        if in_cooldown {
+            if indent <= cooldown_indent {
+                in_cooldown = false;
+            } else if trimmed.starts_with("default-days:") {
+                let indent_str: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+                *line = format!("{indent_str}default-days: {value}");
+                modified = true;
+            }
         }
     }
 
@@ -577,12 +610,15 @@ mod tests {
     use std::io::Write;
 
     fn tmp_file(content: &str) -> TmpFile {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("depsguard_fix_test_{id}_{}", std::process::id()));
+        let path = std::env::temp_dir()
+            .join(format!("depsguard_fix_test_{id}_{}_{n}", std::process::id()));
         let mut f = fs::File::create(&path).unwrap();
         f.write_all(content.as_bytes()).unwrap();
         TmpFile(path)
@@ -939,6 +975,14 @@ mod tests {
     #[test]
     fn encode_decode_round_trip_with_percent() {
         let path = Path::new("/home/user/100%done/.npmrc");
+        let encoded = super::encode_path(path);
+        let decoded = super::decode_path(&encoded);
+        assert_eq!(decoded, path);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_non_ascii() {
+        let path = Path::new("/home/user/プロジェクト/.npmrc");
         let encoded = super::encode_path(path);
         let decoded = super::decode_path(&encoded);
         assert_eq!(decoded, path);
