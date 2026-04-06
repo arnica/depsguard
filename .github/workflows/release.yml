@@ -414,6 +414,10 @@ jobs:
           fi
           git commit -m "chore(homebrew): sync formula for ${RELEASE_TAG} [skip ci]"
           git push origin HEAD:main
+      - name: Trigger Pages deployment
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref main
 
   publish-scoop-bucket:
     name: Bump Scoop bucket
