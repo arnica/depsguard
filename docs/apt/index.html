@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DepsGuard APT Repository</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #030712;
+      color: #e5e7eb;
+      line-height: 1.6;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+    }
+    p {
+      color: #9ca3af;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    pre {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 14px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      color: #f9fafb;
+    }
+    a {
+      color: #22d3ee;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .card {
+      margin-top: 24px;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 18px;
+      background: #0b1220;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DepsGuard APT Repository</h1>
+    <p>
+      The Debian/Ubuntu APT feed is not published yet. This page exists so
+      <code>/apt</code> is a valid route while packaging automation is finalized.
+    </p>
+
+    <div class="card">
+      <strong>Current Linux install fallback</strong>
+      <pre>curl -L -o depsguard.tar.gz https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf depsguard.tar.gz
+sudo install -m 0755 depsguard /usr/local/bin/depsguard</pre>
+    </div>
+
+    <p>
+      Back to the main docs: <a href="/">depsguard.com</a><br>
+      Project repository: <a href="https://github.com/arnica/depsguard">github.com/arnica/depsguard</a>
+    </p>
+  </main>
+</body>
+</html>

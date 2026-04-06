@@ -1,0 +1,21 @@
+# frozen_string_literal: true
+# Rendered by scripts/release/publish-homebrew-tap.sh on each release.
+# Target repository: Homebrew tap (default: same repo, e.g. arnica/depsguard).
+class Depsguard < Formula
+  desc "Harden package manager configs against supply chain attacks, built by Arnica"
+  homepage "https://depsguard.com"
+  url "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/v$VERSION.tar.gz"
+  sha256 "$SHA256_SOURCE"
+  license "MIT"
+  head "https://github.com/$GITHUB_REPOSITORY.git", branch: "main"
+
+  depends_on "rust" => :build
+
+  def install
+    system "cargo", "install", "--locked", "--path", ".", *std_cargo_args
+  end
+
+  test do
+    assert_match "depsguard", shell_output("#{bin}/depsguard --help")
+  end
+end

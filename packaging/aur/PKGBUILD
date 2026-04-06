@@ -1,0 +1,21 @@
+# Maintainer: submit to AUR manually (aurpublish / makepkg).
+# Upstream: https://github.com/arnica/depsguard
+pkgname=depsguard-bin
+pkgver=0.1.1
+pkgrel=1
+pkgdesc='Harden package manager configs against supply chain attacks'
+arch=('x86_64' 'aarch64')
+url='https://depsguard.com'
+license=('MIT')
+provides=('depsguard')
+conflicts=('depsguard')
+
+source_x86_64=("depsguard-${pkgver}-x86_64.tar.gz::https://github.com/arnica/depsguard/releases/download/v${pkgver}/depsguard-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("depsguard-${pkgver}-aarch64.tar.gz::https://github.com/arnica/depsguard/releases/download/v${pkgver}/depsguard-aarch64-unknown-linux-gnu.tar.gz")
+# Update sha256sums after each release: updpkgsums
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  install -Dm755 depsguard "${pkgdir}/usr/bin/depsguard"
+}
