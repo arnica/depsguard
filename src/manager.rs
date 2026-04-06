@@ -7,20 +7,20 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-static SKIP_WORKSPACES: AtomicBool = AtomicBool::new(false);
+static SKIP_SEARCH: AtomicBool = AtomicBool::new(false);
 static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
 
 use std::sync::Mutex;
 static EXCLUDED_MANAGERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Enable or disable the `--no-search` flag (skip repo config file discovery).
-pub fn set_skip_workspaces(skip: bool) {
-    SKIP_WORKSPACES.store(skip, Ordering::Relaxed);
+pub fn set_skip_search(skip: bool) {
+    SKIP_SEARCH.store(skip, Ordering::Relaxed);
 }
 
 /// Check whether repo config search is disabled.
-pub fn skip_workspaces_enabled() -> bool {
-    SKIP_WORKSPACES.load(Ordering::Relaxed)
+pub fn skip_search_enabled() -> bool {
+    SKIP_SEARCH.load(Ordering::Relaxed)
 }
 
 /// Set the minimum release age in days (default: 7).
@@ -1230,7 +1230,7 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
         }
     }
 
-    if !skip_workspaces_enabled() {
+    if !skip_search_enabled() {
         let base_frac = managers.len() as f32 / base_steps as f32;
         let repo_infos =
             scan_repo_configs_with_progress(&mut on_progress, base_frac, &detected_versions);

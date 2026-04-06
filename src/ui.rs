@@ -934,10 +934,14 @@ pub fn print_diff_preview(
         let original = std::fs::read_to_string(path).unwrap_or_default();
         let mgr = &managers[fixes[0].0.manager_idx];
 
-        // Apply all fixes for this path to a temp copy
+        // Apply all fixes for this path to a temp copy with unpredictable name
         let tmp_dir = std::env::temp_dir();
-        let tmp_path = tmp_dir.join(format!(".depsguard-preview-{}", std::process::id()));
-        let _ = std::fs::write(&tmp_path, &original);
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let tmp_path = tmp_dir.join(format!(".depsguard-preview-{}-{nonce}", std::process::id()));
+        std::fs::write(&tmp_path, &original)?;
         for (_item, rec) in fixes {
             let _ = crate::fix::apply_fix(mgr.kind, &tmp_path, rec);
         }

@@ -124,7 +124,11 @@ jobs:
           cd target/${{ matrix.target }}/release
           tar czf ../../../depsguard-${{ matrix.target }}.tar.gz depsguard
           cd ../../..
-          sha256sum depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          else
+            sha256sum depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          fi
           cp depsguard-${{ matrix.target }}.tar.gz depsguard-${{ matrix.friendly }}.tar.gz
           cp depsguard-${{ matrix.target }}.tar.gz.sha256 depsguard-${{ matrix.friendly }}.tar.gz.sha256
 

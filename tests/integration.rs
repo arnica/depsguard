@@ -87,7 +87,7 @@ fn help_flag_works() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success());
     assert!(stdout.contains("USAGE"));
-    assert!(stdout.contains("scan"));
+    assert!(stdout.contains("depsguard scan"));
 }
 
 #[test]

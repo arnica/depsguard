@@ -147,7 +147,7 @@ fn main() {
         term::disable_colors();
     }
     if config.no_search {
-        manager::set_skip_workspaces(true);
+        manager::set_skip_search(true);
     }
     if !config.exclude.is_empty() {
         manager::set_excluded_managers(config.exclude);
@@ -370,6 +370,17 @@ fn selection_loop(
             Key::End => {
                 if vis_len > 0 {
                     vis_cursor = vis_len - 1;
+                    let max_lines = ui::max_item_lines_for(has_toggles);
+                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
+                    let mut s = 0;
+                    while s < vis_len {
+                        let e = view_page_end(&view, s, max_lines);
+                        if e >= vis_len {
+                            break;
+                        }
+                        s = e;
+                    }
+                    vis_page_start = s;
                 }
             }
             Key::Space => {

@@ -149,7 +149,12 @@ pub fn list_backups() -> (Vec<(PathBuf, PathBuf)>, usize) {
                     .all(|c| c.is_ascii_digit() || c == 'T' || c == '-')
             {
                 let original = decode_path(encoded);
-                results.push((original, p));
+                // Agentic Rule (ARNIE_PATH_BOUNDARY_CHECKING): reject paths outside home directory
+                if original.starts_with(&manager::home_dir()) {
+                    results.push((original, p));
+                } else {
+                    stale += 1;
+                }
             } else {
                 stale += 1;
             }

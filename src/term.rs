@@ -495,6 +495,8 @@ pub fn read_key() -> io::Result<Key> {
             let _ = stdin.read(&mut tilde)?;
             if tilde[0] == b'~' {
                 return Ok(match letter {
+                    b'1' | b'7' => Key::Home,
+                    b'4' | b'8' => Key::End,
                     b'5' => Key::PageUp,
                     b'6' => Key::PageDown,
                     _ => Key::Unknown,

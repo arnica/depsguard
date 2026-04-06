@@ -45,7 +45,7 @@ fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
 
 #[cfg(target_os = "linux")]
 #[test]
-fn linux_uv_path_layout() {
+fn uv_config_scan_succeeds() {
     let home = TmpDir::new("linux_uv");
     let uv_dir = home.path().join(".config/uv");
     fs::create_dir_all(&uv_dir).unwrap();
