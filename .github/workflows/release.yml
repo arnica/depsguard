@@ -49,6 +49,26 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [ "${CURRENT_VERSION}" != "${VERSION}" ]; then
+            python - <<'PY2'
+            from pathlib import Path
+            import os, re
+
+            version = os.environ["VERSION"]
+            p = Path("Cargo.toml")
+            text = p.read_text()
+            updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
+            if text == updated:
+              raise SystemExit("failed to sync Cargo.toml version")
+            p.write_text(updated)
+            print(f"Updated Cargo.toml version to {version}")
+            PY2
+            git add Cargo.toml
+            git commit -m "chore(release): prepare ${TAG} [skip ci]"
+          fi
+
           git tag -a "${TAG}" -m "Release ${TAG}"
           git push origin "${TAG}"
 
@@ -332,7 +352,7 @@ jobs:
             echo "Formula unchanged for ${RELEASE_TAG}; skipping commit."
             exit 0
           fi
-          git commit -m "chore(homebrew): sync formula for ${RELEASE_TAG}"
+          git commit -m "chore(homebrew): sync formula for ${RELEASE_TAG} [skip ci]"
           git push origin HEAD:main
 
   publish-scoop-bucket:
