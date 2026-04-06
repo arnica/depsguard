@@ -309,14 +309,14 @@ jobs:
       - name: Validate Homebrew formula render
         run: |
           set -euo pipefail
-          if rg -n 'system "cargo", "install".*--path".*\*std_cargo_args' \
+          if grep -En 'system "cargo", "install".*--path".*\*std_cargo_args' \
             packaging/homebrew/depsguard.rb.in Formula/depsguard.rb; then
             echo "Found invalid cargo install invocation in Homebrew formula files."
             echo "Do not combine --path with *std_cargo_args."
             exit 1
           fi
 
-          if ! rg -q 'system "cargo", "install", \*std_cargo_args' Formula/depsguard.rb; then
+          if ! grep -Eq 'system "cargo", "install", \*std_cargo_args' Formula/depsguard.rb; then
             echo "Rendered formula is missing expected cargo install invocation."
             exit 1
           fi
