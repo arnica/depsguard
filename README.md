@@ -63,23 +63,22 @@ Verify integrity using the matching `.sha256` file next to each asset on the rel
 
 ### Install by platform
 
-#### Linux
+#### Linux (Debian/Ubuntu via APT)
 
 ```bash
-curl -L -o depsguard.tar.gz https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf depsguard.tar.gz
-sudo install -m 0755 depsguard /usr/local/bin/depsguard
-depsguard --help
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
+echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
+sudo apt update
+sudo apt install depsguard
 ```
-
-APT repository publishing is in progress. Track status at [depsguard.com/apt](https://depsguard.com/apt).
 
 #### macOS (Intel / Apple Silicon)
 
 ```bash
 # Homebrew tap
-brew tap arnica/depsguard
-brew install depsguard
+brew tap arnica/depsguard https://github.com/arnica/depsguard
+brew install arnica/depsguard/depsguard
 ```
 
 #### Windows (PowerShell)
@@ -108,9 +107,9 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 
 | Channel | Linux | macOS | Windows | Install command |
 |---------|-------|-------|---------|-----------------|
-| APT (custom repo) | coming soon | no | no | see [depsguard.com/apt](https://depsguard.com/apt) |
+| APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after repo setup above) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard ; brew install depsguard` |
+| Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard https://github.com/arnica/depsguard ; brew install arnica/depsguard/depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/arnica/scoop-depsguard ; scoop install depsguard` |
 | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` |
 
