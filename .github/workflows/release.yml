@@ -52,19 +52,7 @@ jobs:
 
           CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           if [ "${CURRENT_VERSION}" != "${VERSION}" ]; then
-            python - <<'PY2'
-            from pathlib import Path
-            import os, re
-
-            version = os.environ["VERSION"]
-            p = Path("Cargo.toml")
-            text = p.read_text()
-            updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
-            if text == updated:
-              raise SystemExit("failed to sync Cargo.toml version")
-            p.write_text(updated)
-            print(f"Updated Cargo.toml version to {version}")
-            PY2
+            sed -i -E '0,/^version[[:space:]]*=[[:space:]]*"[^"]+"/s//version = "'"${VERSION}"'"/' Cargo.toml
             git add Cargo.toml
             git commit -m "chore(release): prepare ${TAG} [skip ci]"
           fi
