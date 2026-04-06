@@ -1,0 +1,10 @@
+{
+  "name": "depsguard-docs",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./tailwind.input.css -o ./styles.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

@@ -1,0 +1,368 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "packaging/**"
+      - "scripts/**"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Resolve version and tag
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          TAG="v${CARGO_VERSION}"
+
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1)
+            LATEST_VERSION="${LATEST_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_VERSION}"
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            TAG="v${VERSION}"
+            echo "Auto-bumping from latest tag ${LATEST_TAG} -> ${TAG}"
+          else
+            VERSION="${CARGO_VERSION}"
+            echo "Using version from Cargo.toml: ${VERSION} (tag ${TAG} does not exist yet)"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.label }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            label: linux-amd64-gnu
+            friendly: linux-amd64-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-unknown-linux-musl
+            label: linux-amd64-musl
+            friendly: linux-amd64-musl
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            label: linux-arm64-gnu
+            friendly: linux-arm64-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            label: macos-amd64
+            friendly: macos-amd64
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            label: macos-arm64
+            friendly: macos-arm64
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            label: windows-amd64
+            friendly: windows-amd64
+            os: windows-latest
+            archive: zip
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Sync Cargo.toml version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.tag }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+          raw_version = os.environ["RELEASE_VERSION"]
+          version = raw_version[1:] if raw_version.startswith("v") else raw_version
+          if not version:
+              raise SystemExit("normalized release version is empty")
+          p = Path("Cargo.toml")
+          text = p.read_text()
+          version_pattern = r'(?m)^version\s*=\s*"[^"]+"'
+          desired_line = f'version = "{version}"'
+          match = re.search(version_pattern, text)
+          if not match:
+              raise SystemExit("failed to update Cargo.toml version")
+          if match.group(0) == desired_line:
+              print(f"Cargo.toml already at {version}")
+          else:
+              updated = re.sub(version_pattern, desired_line, text, count=1)
+              if text == updated:
+                  raise SystemExit("failed to update Cargo.toml version")
+              p.write_text(updated)
+              print(f"Synced Cargo.toml to {version}")
+          PY
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../depsguard-${{ matrix.target }}.tar.gz depsguard
+          cd ../../..
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          else
+            sha256sum depsguard-${{ matrix.target }}.tar.gz > depsguard-${{ matrix.target }}.tar.gz.sha256
+          fi
+          cp depsguard-${{ matrix.target }}.tar.gz depsguard-${{ matrix.friendly }}.tar.gz
+          cp depsguard-${{ matrix.target }}.tar.gz.sha256 depsguard-${{ matrix.friendly }}.tar.gz.sha256
+
+      - name: Package (deb)
+        if: contains(matrix.target, 'unknown-linux-gnu')
+        env:
+          DEB_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          VERSION="${DEB_VERSION}"
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu) DEB_ARCH="amd64" ;;
+            aarch64-unknown-linux-gnu) DEB_ARCH="arm64" ;;
+            *) echo "Skipping deb packaging for target ${{ matrix.target }}"; exit 0 ;;
+          esac
+          PKG_ROOT="pkg/deb-${{ matrix.target }}"
+          mkdir -p "${PKG_ROOT}/DEBIAN" "${PKG_ROOT}/usr/bin"
+          install -m 0755 "target/${{ matrix.target }}/release/depsguard" "${PKG_ROOT}/usr/bin/depsguard"
+          {
+            printf 'Package: depsguard\n'
+            printf 'Version: %s\n' "${VERSION}"
+            printf 'Section: utils\n'
+            printf 'Priority: optional\n'
+            printf 'Architecture: %s\n' "${DEB_ARCH}"
+            printf 'Maintainer: Arnica <engineering@arnica.io>\n'
+            printf 'Description: Harden package manager configs against supply chain attacks\n'
+          } > "${PKG_ROOT}/DEBIAN/control"
+          DEB_FILE="depsguard_${VERSION}_${DEB_ARCH}.deb"
+          dpkg-deb --build "${PKG_ROOT}" "${DEB_FILE}"
+          sha256sum "${DEB_FILE}" > "${DEB_FILE}.sha256"
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../depsguard-${{ matrix.target }}.zip depsguard.exe
+          cd ../../..
+          sha256sum depsguard-${{ matrix.target }}.zip > depsguard-${{ matrix.target }}.zip.sha256
+          cp depsguard-${{ matrix.target }}.zip depsguard-${{ matrix.friendly }}.zip
+          cp depsguard-${{ matrix.target }}.zip.sha256 depsguard-${{ matrix.friendly }}.zip.sha256
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: depsguard-${{ matrix.target }}
+          path: |
+            depsguard-${{ matrix.target }}.*
+            depsguard-${{ matrix.friendly }}.*
+            depsguard_*.deb*
+          retention-days: 1
+
+  publish-github:
+    name: GitHub Release
+    needs: [build, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          merge-multiple: true
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: [build, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Sync Cargo.toml version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.tag }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+          raw_version = os.environ["RELEASE_VERSION"]
+          version = raw_version[1:] if raw_version.startswith("v") else raw_version
+          if not version:
+              raise SystemExit("normalized release version is empty")
+          p = Path("Cargo.toml")
+          text = p.read_text()
+          version_pattern = r'(?m)^version\s*=\s*"[^"]+"'
+          desired_line = f'version = "{version}"'
+          match = re.search(version_pattern, text)
+          if not match:
+              raise SystemExit("failed to update Cargo.toml version")
+          if match.group(0) == desired_line:
+              print(f"Cargo.toml already at {version}")
+          else:
+              updated = re.sub(version_pattern, desired_line, text, count=1)
+              if text == updated:
+                  raise SystemExit("failed to update Cargo.toml version")
+              p.write_text(updated)
+              print(f"Synced Cargo.toml to {version}")
+          PY
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+      - name: Authenticate to crates.io (Trusted Publishing)
+        id: crates_auth
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates_auth.outputs.token }}
+        run: cargo publish --allow-dirty
+
+  sync-homebrew-formula:
+    name: Sync Homebrew formula on main
+    needs: [publish-github, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Install gettext (envsubst)
+        run: sudo apt-get update -qq && sudo apt-get install -y gettext-base
+      - name: Render Formula/depsguard.rb for release tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          TARBALL_URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz"
+          TMP_TARBALL="$(mktemp)"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "${TARBALL_URL}" \
+            -o "${TMP_TARBALL}"
+          SHA256_SOURCE="$(sha256sum "${TMP_TARBALL}" | awk '{print $1}')"
+          export VERSION GITHUB_REPOSITORY SHA256_SOURCE
+          mkdir -p Formula
+          envsubst < packaging/homebrew/depsguard.rb.in > Formula/depsguard.rb
+      - name: Commit and push formula update to main
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "depsguard-release-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/depsguard.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged for ${RELEASE_TAG}; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore(homebrew): sync formula for ${RELEASE_TAG}"
+          git push origin HEAD:main
+
+  publish-scoop-bucket:
+    name: Bump Scoop bucket
+    needs: [publish-github, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gettext (envsubst)
+        run: sudo apt-get update -qq && sudo apt-get install -y gettext-base
+      - name: Skip bucket publish when token is missing
+        if: ${{ env.SCOOP_BUCKET_TOKEN == '' }}
+        run: echo "SCOOP_BUCKET_TOKEN is not set; skipping Scoop bucket update."
+      - name: Push updated manifest
+        if: ${{ env.SCOOP_BUCKET_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ env.SCOOP_BUCKET_TOKEN }}
+          SCOOP_BUCKET: ${{ github.repository_owner }}/scoop-depsguard
+          REPO_HOMEPAGE: https://depsguard.com
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: bash scripts/release/publish-scoop-bucket.sh
+
+  publish-winget:
+    name: WinGet community PR
+    needs: [publish-github, prepare]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      WINGET_PKGS_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
+    steps:
+      - name: Skip WinGet publish when token is missing
+        if: ${{ env.WINGET_PKGS_TOKEN == '' }}
+        run: echo "WINGET_PKGS_TOKEN is not set; skipping WinGet publish."
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        if: ${{ env.WINGET_PKGS_TOKEN != '' }}
+        with:
+          identifier: Arnica.DepsGuard
+          release-tag: ${{ needs.prepare.outputs.tag }}
+          installers-regex: ^depsguard-x86_64-pc-windows-msvc\.zip$
+          token: ${{ env.WINGET_PKGS_TOKEN }}
+          fork-user: ${{ github.repository_owner }}

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DepsGuard - Supply Chain Defense</title>
+  <meta name="description" content="Harden your package manager configs against supply chain attacks. Zero dependencies. One command.">
+  <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
+  <link rel="shortcut icon" href="img/favicon/favicon.ico">
+  <link rel="manifest" href="img/favicon/site.webmanifest">
+  <meta name="theme-color" content="#0a0e16">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+    .fade-in-delay { animation: fadeIn 0.6s ease-out 0.2s forwards; opacity: 0; }
+    .fade-in-delay-2 { animation: fadeIn 0.6s ease-out 0.4s forwards; opacity: 0; }
+    pre code { font-size: 0.875rem; }
+    .install-code-wrap pre { margin: 0; }
+    .install-copy-btn { font-size: 0.75rem; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-xl font-bold text-arnica">DepsGuard</span>
+        <span class="text-sm text-gray-500">by</span>
+        <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-5 opacity-70 hover:opacity-100 transition-opacity"></a>
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com/arnica/depsguard" class="text-gray-400 hover:text-white transition-colors" title="GitHub">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <a href="https://crates.io/crates/depsguard" class="text-gray-400 hover:text-white transition-colors" title="Crates.io">
+          <img src="https://crates.io/assets/cargo.png" alt="Crates.io" class="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity">
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
+    <div class="fade-in">
+      <pre class="text-gold font-mono text-xs md:text-sm mb-8 text-left overflow-x-auto" style="line-height: 1.15"><code>     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</code></pre>
+    </div>
+
+    <h1 class="fade-in text-4xl md:text-4xl font-bold mb-6 leading-tight">
+      Harden your package managers
+      <span class="text-arnica">against supply chain attacks.</span>
+    </h1>
+
+    <p class="fade-in-delay text-lg text-gray-400 max-w-4xl mb-10">
+      One command to scan npm, pnpm, bun, and uv configs for security best practices.
+      Interactive terminal UI to apply fixes. Zero dependencies. Cross-platform. Free, MIT licensed.
+    </p>
+
+  </section>
+
+  <!-- Install -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">Install</h2>
+    <div class="grid grid-cols-1 gap-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">Homebrew tap (macOS first, Linux supported)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy Homebrew tap install commands">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
+brew install depsguard</code></pre>
+        </div>
+        <p class="text-xs text-gray-500 mt-3">Recommended for macOS; works on Linux with Homebrew too.</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">APT (Linux Debian/Ubuntu)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy APT install commands">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
+echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
+sudo apt update
+sudo apt install depsguard</code></pre>
+        </div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">WinGet (Windows)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="winget install Arnica.DepsGuard">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy WinGet install command">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>winget install Arnica.DepsGuard</code></pre>
+        </div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">Scoop (Windows)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="scoop bucket add arnica https://github.com/arnica/scoop-depsguard&#10;scoop install depsguard">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy Scoop install commands">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>scoop bucket add arnica https://github.com/arnica/scoop-depsguard
+scoop install depsguard</code></pre>
+        </div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">crates.io (Rust/cargo)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy cargo install command">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>cargo install depsguard</code></pre>
+        </div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
+        <h3 class="font-bold text-lg mb-3">Direct binary (all platforms)</h3>
+        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950">
+          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy releases URL">Copy</button>
+          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>https://github.com/arnica/depsguard/releases/latest</code></pre>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm text-gray-500 mt-6">
+      Package availability can depend on publication status and review timelines. For full setup commands, see the
+      <a class="text-arnica hover:underline" href="https://github.com/arnica/depsguard#install">README install guide</a>.
+    </p>
+  </section>
+
+  <!-- What it checks -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">What it protects</h2>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f4e6;</span>
+          <h3 class="font-bold text-lg">npm / pnpm <span class="text-xs font-normal text-gray-500">(.npmrc)</span></h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">min-release-age=7</code> &mdash; delays new versions by 7 days</li>
+          <li><code class="text-arnica">ignore-scripts=true</code> &mdash; blocks malicious install scripts</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x26a1;</span>
+          <h3 class="font-bold text-lg">pnpm <span class="text-xs font-normal text-gray-500">(workspace)</span></h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">minimumReleaseAge</code> &mdash; workspace-level release delay</li>
+          <li><code class="text-arnica">trustPolicy: no-downgrade</code> &mdash; blocks provenance downgrades</li>
+          <li><code class="text-arnica">strictDepBuilds: true</code> &mdash; fails on unreviewed scripts</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f95f;</span>
+          <h3 class="font-bold text-lg">bun</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">install.minimumReleaseAge=604800</code> &mdash; 7-day delay (seconds)</li>
+        </ul>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">&#x1f40d;</span>
+          <h3 class="font-bold text-lg">uv</h3>
+        </div>
+        <ul class="text-sm text-gray-400 space-y-2">
+          <li><code class="text-arnica">exclude-newer</code> &mdash; excludes recently published packages</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
+    <h2 class="text-2xl font-bold mb-8">How it works</h2>
+
+    <!-- Step 1: Scan -->
+    <div class="mb-12">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">1</div>
+        <div>
+          <h3 class="font-bold text-lg">Scan</h3>
+          <p class="text-sm text-gray-400">Detects installed package managers and shows what's configured, what's missing, and what needs fixing.</p>
+        </div>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
+        <img max-width="50%" src="img/scan.png" alt="DepsGuard scan showing detected package managers with ACTION NEEDED badges" class="w-full" loading="lazy">
+      </div>
+    </div>
+
+    <!-- Step 2: Select -->
+    <div class="mb-12">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">2</div>
+        <div>
+          <h3 class="font-bold text-lg">Select</h3>
+          <p class="text-sm text-gray-400">Pick which fixes to apply interactively. Arrow keys to navigate, space to toggle, enter to apply.</p>
+        </div>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
+        <img src="img/select.png" alt="DepsGuard fix selector showing npm and uv fixes ready to apply" class="w-full" loading="lazy">
+      </div>
+    </div>
+
+    <!-- Step 3: Fixed -->
+    <div class="mb-4">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-3xl font-bold text-arnica">3</div>
+        <div>
+          <h3 class="font-bold text-lg">Done</h3>
+          <p class="text-sm text-gray-400">Fixes applied with automatic backups. Use <code class="text-arnica">--restore</code> to undo anytime.</p>
+        </div>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
+        <img src="img/secure.png" alt="DepsGuard showing all checks passed with SECURE badges" class="w-full" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 mt-16">
+    <div class="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-gray-500">
+      <div class="flex items-center gap-2">Made with care by <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-4 inline-block"></a> in Atlanta</div>
+      <div class="flex gap-4">
+        <a href="https://github.com/arnica/depsguard" class="hover:text-gray-300 transition-colors">GitHub</a>
+        <a href="https://github.com/arnica/depsguard/blob/main/LICENSE" class="hover:text-gray-300 transition-colors">MIT License</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand('copy');
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+          document.body.removeChild(ta);
+        });
+      }
+
+      document.querySelectorAll('.install-code-wrap').forEach(function (wrap) {
+        var btn = wrap.querySelector('.install-copy-btn');
+        var code = wrap.querySelector('code');
+        if (!btn || !code) return;
+        var label = btn.textContent;
+        var aria = btn.getAttribute('aria-label') || 'Copy to clipboard';
+        btn.addEventListener('click', function () {
+          var text = (wrap.dataset.copy || code.textContent || '').trim();
+          if (!text) return;
+          copyText(text).then(
+            function () {
+              btn.textContent = 'Copied';
+              btn.setAttribute('aria-label', 'Copied to clipboard');
+              clearTimeout(btn._copyReset);
+              btn._copyReset = setTimeout(function () {
+                btn.textContent = label;
+                btn.setAttribute('aria-label', aria);
+              }, 2000);
+            },
+            function () {
+              btn.textContent = 'Failed';
+              clearTimeout(btn._copyReset);
+              btn._copyReset = setTimeout(function () {
+                btn.textContent = label;
+                btn.setAttribute('aria-label', aria);
+              }, 2000);
+            }
+          );
+        });
+      });
+    })();
+  </script>
+
+</body>
+</html>

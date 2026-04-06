@@ -1,0 +1,23 @@
+{
+  "version": "$VERSION",
+  "description": "Harden package manager configs against supply chain attacks",
+  "homepage": "$REPO_HOMEPAGE",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "$REPO_URL/releases/download/v$VERSION/depsguard-x86_64-pc-windows-msvc.zip",
+      "hash": "sha256:$SHA_X86_64_PC_WINDOWS_MSVC_ZIP"
+    }
+  },
+  "bin": "depsguard.exe",
+  "checkver": {
+    "github": "$GITHUB_REPO_SLUG"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "$REPO_URL/releases/download/v$$version/depsguard-x86_64-pc-windows-msvc.zip"
+      }
+    }
+  }
+}
