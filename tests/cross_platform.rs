@@ -43,6 +43,7 @@ fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
 // Tests config reading at the Linux uv path. macOS-specific path
 // resolution is covered by config_path_for unit tests in manager.rs.
 
+#[cfg(target_os = "linux")]
 #[test]
 fn linux_uv_path_layout() {
     let home = TmpDir::new("linux_uv");
@@ -282,6 +283,7 @@ fn bunfig_round_trip() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn uv_toml_round_trip() {
     let home = TmpDir::new("uv_roundtrip");

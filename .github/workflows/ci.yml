@@ -89,6 +89,8 @@ jobs:
           uv --version
       - name: Run integration tests
         run: cargo test --test integration
+      - name: Run cross-platform tests
+        run: cargo test --test cross_platform
       - name: Run network tests
         run: cargo test --test integration -- --ignored
         timeout-minutes: 5
