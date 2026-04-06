@@ -617,8 +617,10 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir()
-            .join(format!("depsguard_fix_test_{id}_{}_{n}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "depsguard_fix_test_{id}_{}_{n}",
+            std::process::id()
+        ));
         let mut f = fs::File::create(&path).unwrap();
         f.write_all(content.as_bytes()).unwrap();
         TmpFile(path)
