@@ -28,13 +28,13 @@ By **[[arnica](https://arnica.io)]**
 
 ## Overview
 
-DepsGuard looks for **npm**, **pnpm**, **bun**, and **uv** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
+DepsGuard looks for **npm**, **pnpm**, **yarn**, **bun**, and **uv** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It also scans for **Renovate** and **Dependabot** configs in your repos. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
 
 ### Key features
 
 - Interactive TUI: scan, review, toggle fixes, apply
-- `--scan` for read-only reporting
-- `--restore` to pick a backup and roll back a file
+- `scan` subcommand for read-only reporting
+- `restore` subcommand to pick a backup and roll back a file
 - Cross-platform: Linux, macOS, Windows
 - No bundled third-party Rust crates (stdlib + small amount of platform FFI for the terminal)
 
@@ -130,18 +130,18 @@ The binary is `target/release/depsguard` (`.exe` on Windows). Rust **1.74+** is 
 
 ```bash
 depsguard              # interactive: scan, choose fixes, apply
-depsguard --scan       # report only; no writes
-depsguard --restore    # restore from a previous backup
+depsguard scan         # report only; no writes
+depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
 ```
 
 ### Interactive flow
 
-1. Detects which of npm / pnpm / bun / uv are present and finds `pnpm-workspace.yaml` files under your home directory (see below).
+1. Detects which of npm / pnpm / yarn / bun / uv are present, and finds repo config files (Renovate, Dependabot, `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`) under your home directory.
 2. Shows a table of issues: missing settings, wrong values, or OK.
 3. Lets you select fixes per file; **Enter** applies selected changes.
 4. **Esc** goes back; **q** quits.
-5. Before writing, DepsGuard creates a timestamped backup next to the target file.
+5. Before writing, DepsGuard creates a timestamped backup.
 
 ### Keys (interactive)
 
@@ -157,33 +157,37 @@ depsguard --help       # CLI help
 
 | Manager | Config | Setting | Target | Why |
 |---------|--------|---------|--------|-----|
-| npm/pnpm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases |
+| npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
+| yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Same idea for workspace |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Stricter transitive deps |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Avoid provenance downgrade |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Stricter build scripts |
 | bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes |
+| renovate | `renovate.json` etc. | `minimumReleaseAge` | `7 days` | Delay dependency update PRs by 7 days |
+| dependabot | `.github/dependabot.yml` | `cooldown.default-days` | `7` | Delay dependency update PRs by 7 days |
 
 ## Config file locations
 
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
 | npm/pnpm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
-| pnpm workspaces | `pnpm-workspace.yaml` (discovered) | same | same |
+| yarn | `~/.yarnrc.yml` | `~/.yarnrc.yml` | `%USERPROFILE%\.yarnrc.yml` |
+| pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
 | bun | `~/.bunfig.toml` | `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
 | uv | `~/.config/uv/uv.toml` | `~/Library/Application Support/uv/uv.toml` | `%APPDATA%\uv\uv.toml` |
+| renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
+| dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-**pnpm workspace discovery:** starting from your home directory, DepsGuard searches for `pnpm-workspace.yaml` and skips heavy directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast.
+Config files are discovered by searching from the home directory downward, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched.
 
 ## Backups and restore
 
-Before modifying a file, DepsGuard writes a backup alongside it, for example:
+Before modifying a file, DepsGuard writes a backup to `~/.depsguard/backups/`.
 
-`~/.npmrc` → `~/.npmrc.2026-04-01T12-00-00Z.bak`
-
-Run `depsguard --restore` to list backups and restore one.
+Run `depsguard restore` to list backups and restore one.
 
 ## How it works
 

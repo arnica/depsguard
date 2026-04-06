@@ -87,7 +87,7 @@ fn help_flag_works() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success());
     assert!(stdout.contains("USAGE"));
-    assert!(stdout.contains("--scan"));
+    assert!(stdout.contains("scan"));
 }
 
 #[test]
@@ -141,13 +141,13 @@ fn npm_config_fix_and_rescan() {
     // Write the expected config manually (simulating what the fix would do)
     fs::write(&npmrc, "min-release-age=7\nignore-scripts=true\n").unwrap();
 
-    let out = run_depsguard(&["--scan"], home.path());
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("npm"), "npm not detected");
-    // After fix, should show OK
+    // ignore-scripts should show as configured
     assert!(
-        stdout.contains("SECURE") || stdout.contains("OK"),
-        "Expected SECURE after config fix:\n{stdout}"
+        stdout.contains("\u{2713}") && stdout.contains("ignore-scripts"),
+        "Expected ignore-scripts OK after config fix:\n{stdout}"
     );
 }
 
@@ -348,18 +348,24 @@ fn uv_config_fix_and_rescan() {
         return;
     }
     let home = TmpHome::new("uv_fix");
-    let uv_config = home.path().join(".config/uv/uv.toml");
+    // uv config path differs by OS
+    let uv_config = if cfg!(target_os = "macos") {
+        home.path().join("Library/Application Support/uv/uv.toml")
+    } else if cfg!(target_os = "windows") {
+        home.path().join("AppData/Roaming/uv/uv.toml")
+    } else {
+        home.path().join(".config/uv/uv.toml")
+    };
     fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
 
-    // Use a date well in the past
     fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
 
-    let out = run_depsguard(&["--scan"], home.path());
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("uv"), "uv not detected");
     assert!(
-        stdout.contains("SECURE") || stdout.contains("OK"),
-        "Expected SECURE after uv config:\n{stdout}"
+        stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
+        "Expected exclude-newer OK after uv config:\n{stdout}"
     );
 }
 
@@ -477,10 +483,15 @@ fn config_with_existing_content_is_preserved() {
 
     // Scan: depsguard should see both npm-managed keys as OK while preserving
     // the user's existing registry/auth settings
-    let out = run_depsguard(&["--scan"], home.path());
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
+    // ignore-scripts should show as configured; min-release-age may be OK or unsupported
     assert!(
-        stdout.contains("SECURE") || stdout.contains("OK"),
-        "Expected npm SECURE with all keys set:\n{stdout}"
+        stdout.contains("\u{2713}") && stdout.contains("ignore-scripts"),
+        "Expected ignore-scripts OK with all keys set:\n{stdout}"
     );
+    // Verify existing content was preserved
+    let content = fs::read_to_string(&npmrc).unwrap();
+    assert!(content.contains("registry=https://registry.npmjs.org"));
+    assert!(content.contains("always-auth=true"));
 }

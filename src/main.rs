@@ -25,8 +25,9 @@ enum Command {
 struct CliConfig {
     command: Command,
     no_color: bool,
-    no_workspaces: bool,
+    no_search: bool,
     delay_days: u64,
+    exclude: Vec<String>,
 }
 
 /// Errors from argument parsing, with context for display.
@@ -44,17 +45,21 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         "-h",
         "--version",
         "-V",
-        "--restore",
         "--no-color",
-        "--no-workspaces",
+        "--no-search",
+        "--no-workspaces", // backward compat alias
         "--delay-days",
+        "--exclude",
     ];
+
+    const SUBCOMMANDS: &[&str] = &["restore", "scan"];
 
     let mut config = CliConfig {
         command: Command::Interactive,
         no_color: false,
-        no_workspaces: false,
+        no_search: false,
         delay_days: 7,
+        exclude: Vec::new(),
     };
 
     let mut i = 1;
@@ -62,7 +67,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         let arg = args[i].as_str();
         match arg {
             "--no-color" => config.no_color = true,
-            "--no-workspaces" => config.no_workspaces = true,
+            "--no-search" | "--no-workspaces" => config.no_search = true,
             "--delay-days" => {
                 i += 1;
                 let val = args
@@ -73,14 +78,34 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
                         CliError::BadValue("--delay-days requires a positive number".into())
                     })?;
             }
-            "--scan" | "-s" => config.command = Command::ScanOnly,
+            "--exclude" => {
+                i += 1;
+                let val = args.get(i).ok_or_else(|| {
+                    CliError::BadValue(format!(
+                        "--exclude requires a manager name ({})",
+                        manager::ManagerKind::valid_names().join(", ")
+                    ))
+                })?;
+                if manager::ManagerKind::from_name(val).is_none() {
+                    return Err(CliError::BadValue(format!(
+                        "unknown manager '{}' (valid: {})",
+                        val,
+                        manager::ManagerKind::valid_names().join(", ")
+                    )));
+                }
+                config.exclude.push(val.to_lowercase());
+            }
+            "--scan" | "-s" | "scan" => config.command = Command::ScanOnly,
             "--help" | "-h" => config.command = Command::Help,
             "--version" | "-V" => config.command = Command::Version,
-            "--restore" => config.command = Command::Restore,
+            "--restore" | "restore" => config.command = Command::Restore,
             _ if arg.starts_with('-') && !KNOWN_FLAGS.contains(&arg) => {
                 return Err(CliError::UnknownFlag(format!(
                     "unrecognized option '{arg}'"
                 )));
+            }
+            _ if !arg.starts_with('-') && !SUBCOMMANDS.contains(&arg) => {
+                return Err(CliError::UnknownFlag(format!("unknown command '{arg}'")));
             }
             _ => {}
         }
@@ -121,8 +146,11 @@ fn main() {
     if config.no_color || !term::should_use_colors() {
         term::disable_colors();
     }
-    if config.no_workspaces {
+    if config.no_search {
         manager::set_skip_workspaces(true);
+    }
+    if !config.exclude.is_empty() {
+        manager::set_excluded_managers(config.exclude);
     }
     manager::set_delay_days(config.delay_days);
 
@@ -150,13 +178,17 @@ fn print_usage() {
 fn print_usage_short() {
     println!("  USAGE:");
     println!("    depsguard                  Interactive mode (TUI)");
-    println!("    depsguard --scan           Scan only, no changes");
+    println!("    depsguard scan             Scan only, no changes");
+    println!("    depsguard restore          Restore config files from backup");
     println!("    depsguard --help           Show this help");
     println!("    depsguard --version        Show version");
-    println!("    depsguard --restore        Restore config files from backup");
     println!("    depsguard --no-color       Disable colored output");
-    println!("    depsguard --no-workspaces  Skip pnpm-workspace.yaml search");
+    println!("    depsguard --no-search      Skip repo config file discovery");
     println!("    depsguard --delay-days N   Set release delay (default: 7)");
+    println!(
+        "    depsguard --exclude NAME   Skip a manager ({})",
+        manager::ManagerKind::valid_names().join(", ")
+    );
     println!();
 }
 
@@ -230,30 +262,124 @@ fn selection_loop(
     items: &mut [SelectItem],
     managers: &[ManagerInfo],
 ) -> io::Result<bool> {
-    let mut cursor: usize = 0;
+    let mut vis_cursor: usize = 0;
+    let mut vis_page_start: usize = 0;
+    let mut filter = ui::SelectFilter::All;
+    let toggle_keys = ui::build_toggle_keys(items, managers);
 
     loop {
+        let visible = ui::filtered_indices(items, filter);
+        let vis_len = visible.len();
+        let has_toggles = !toggle_keys.is_empty();
+
+        // Clamp cursor to visible range
+        if vis_len == 0 {
+            vis_cursor = 0;
+        } else if vis_cursor >= vis_len {
+            vis_cursor = vis_len - 1;
+        }
+        if vis_page_start >= vis_len {
+            vis_page_start = 0;
+        }
+
+        // Ensure page_start and cursor are consistent (page-flip logic)
+        if vis_len > 0 {
+            let max_lines = ui::max_item_lines_for(has_toggles);
+            let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
+            let page_end = view_page_end(&view, vis_page_start, max_lines);
+
+            if vis_cursor >= page_end && page_end < vis_len {
+                vis_page_start = page_end;
+            }
+            if vis_cursor < vis_page_start {
+                let mut s = 0;
+                let mut prev = 0;
+                while s < vis_len {
+                    let e = view_page_end(&view, s, max_lines);
+                    if vis_cursor >= s && vis_cursor < e {
+                        prev = s;
+                        break;
+                    }
+                    s = e;
+                }
+                vis_page_start = prev;
+            }
+        }
+
         term::clear_screen(out)?;
         term::hide_cursor(out)?;
-        ui::print_banner(out)?;
-        ui::print_selector(out, items, cursor)?;
+        ui::print_selector(
+            out,
+            items,
+            &visible,
+            vis_cursor,
+            vis_page_start,
+            &toggle_keys,
+            filter,
+        )?;
         out.flush()?;
 
         match term::read_key()? {
             Key::Up => {
-                cursor = cursor.saturating_sub(1);
+                vis_cursor = vis_cursor.saturating_sub(1);
             }
             Key::Down => {
-                if cursor + 1 < items.len() {
-                    cursor += 1;
+                if vis_len > 0 && vis_cursor + 1 < vis_len {
+                    vis_cursor += 1;
+                }
+            }
+            Key::PageUp => {
+                if vis_len > 0 {
+                    let max_lines = ui::max_item_lines_for(has_toggles);
+                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
+                    if vis_page_start > 0 {
+                        let mut s = 0;
+                        let mut prev = 0;
+                        while s < vis_len {
+                            let e = view_page_end(&view, s, max_lines);
+                            if e >= vis_page_start {
+                                break;
+                            }
+                            prev = s;
+                            s = e;
+                        }
+                        vis_page_start = prev;
+                        vis_cursor = vis_page_start;
+                    } else {
+                        vis_cursor = 0;
+                    }
+                }
+            }
+            Key::PageDown => {
+                if vis_len > 0 {
+                    let max_lines = ui::max_item_lines_for(has_toggles);
+                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
+                    let pe = view_page_end(&view, vis_page_start, max_lines);
+                    if pe < vis_len {
+                        vis_page_start = pe;
+                        vis_cursor = vis_page_start;
+                    } else {
+                        vis_cursor = vis_len - 1;
+                    }
+                }
+            }
+            Key::Home => {
+                vis_page_start = 0;
+                vis_cursor = 0;
+            }
+            Key::End => {
+                if vis_len > 0 {
+                    vis_cursor = vis_len - 1;
                 }
             }
             Key::Space => {
-                items[cursor].selected = !items[cursor].selected;
+                if vis_len > 0 {
+                    let real_idx = visible[vis_cursor];
+                    items[real_idx].selected = !items[real_idx].selected;
+                }
             }
             Key::Enter => {
                 let results = apply_selected(items, managers);
-                // Show errors inline before rescanning
                 let errors: Vec<_> = results.iter().filter(|(_, r)| r.is_err()).collect();
                 if !errors.is_empty() {
                     for (label, result) in &errors {
@@ -263,15 +389,24 @@ fn selection_loop(
                     }
                     out.flush()?;
                 }
-                return Ok(true); // loop back to main scan screen
+                return Ok(true);
             }
             Key::Char('d') => {
-                // Show diff preview of selected changes
                 term::clear_screen(out)?;
-                ui::print_banner(out)?;
                 ui::print_diff_preview(out, items, managers)?;
                 out.flush()?;
-                term::read_key()?; // wait for any key to go back
+                term::read_key()?;
+            }
+            Key::Char('f') => {
+                filter = filter.next();
+                vis_cursor = 0;
+                vis_page_start = 0;
+            }
+            Key::Char('a') => {
+                let any = items.iter().any(|i| i.selected);
+                for item in items.iter_mut() {
+                    item.selected = !any;
+                }
             }
             Key::Char('q') => {
                 return Ok(false);
@@ -279,9 +414,38 @@ fn selection_loop(
             Key::Escape => {
                 return Ok(true);
             }
+            Key::Char(c) => {
+                if let Some(tk) = toggle_keys.iter().find(|t| t.key == c) {
+                    ui::toggle_manager(items, managers, tk.kind);
+                }
+            }
             _ => {}
         }
     }
+}
+
+fn view_page_end(view: &[&ui::SelectItem], start: usize, max_lines: usize) -> usize {
+    let mut end = start;
+    let mut lines = 0;
+    let mut last_group: Option<&str> = None;
+    while end < view.len() {
+        let item = view[end];
+        let mut add = 0;
+        if last_group != Some(item.group_path.as_str()) {
+            if last_group.is_some() {
+                add += 1;
+            }
+            add += 2;
+            last_group = Some(&item.group_path);
+        }
+        add += 1;
+        if lines + add > max_lines && end > start {
+            break;
+        }
+        lines += add;
+        end += 1;
+    }
+    end.max(start + 1).min(view.len())
 }
 
 fn apply_selected(
@@ -310,12 +474,19 @@ fn run_restore() {
     let mut out = term::ColorWriter::new(stdout.lock());
     ui::print_banner(&mut out).ok();
 
-    let backups = fix::list_backups_with_progress(&mut |label| {
-        let stdout = io::stdout();
-        let mut w = term::ColorWriter::new(stdout.lock());
-        ui::print_progress(&mut w, label).ok();
-    });
-    ui::clear_progress(&mut out).ok();
+    let (backups, stale_count) = fix::list_backups();
+
+    if stale_count > 0 {
+        let dir = fix::data_dir().join("backups");
+        writeln!(
+            out,
+            "  {DIM}{stale_count} unrecognized file(s) in {}{RESET}",
+            manager::display_path(&dir),
+            DIM = term::DIM,
+            RESET = term::RESET,
+        )
+        .ok();
+    }
 
     if backups.is_empty() {
         writeln!(
@@ -465,6 +636,7 @@ mod tests {
                 expected: "true".into(),
                 status: CheckStatus::Missing,
             }],
+            discovered: false,
         }];
         let items = vec![SelectItem {
             manager_idx: 0,
@@ -493,6 +665,7 @@ mod tests {
                 expected: "true".into(),
                 status: CheckStatus::Missing,
             }],
+            discovered: false,
         }];
         let items = vec![SelectItem {
             manager_idx: 0,
@@ -534,6 +707,7 @@ mod tests {
                 expected: "v".into(),
                 status: CheckStatus::Missing,
             }],
+            discovered: false,
         }];
         let items = ui::build_fix_items(&managers);
         assert_eq!(items.len(), 1);

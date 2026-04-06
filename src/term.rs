@@ -439,6 +439,10 @@ pub use raw::RawMode;
 pub enum Key {
     Up,
     Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
     Space,
     Enter,
     Escape,
@@ -460,6 +464,10 @@ pub fn read_key() -> io::Result<Key> {
         return Ok(match first[0] {
             b' ' => Key::Space,
             13 | 10 => Key::Enter,
+            2 => Key::PageUp,   // Ctrl+B
+            6 => Key::PageDown, // Ctrl+F
+            4 => Key::PageDown, // Ctrl+D
+            21 => Key::PageUp,  // Ctrl+U
             c => Key::Char(c as char),
         });
     }
@@ -472,7 +480,6 @@ pub fn read_key() -> io::Result<Key> {
     }
 
     if seq[0] == b'[' {
-        // Got "ESC [", may need one more byte for the sequence letter.
         let letter = if n >= 2 {
             seq[1]
         } else {
@@ -482,9 +489,24 @@ pub fn read_key() -> io::Result<Key> {
             }
             last[0]
         };
+        // Extended sequences like ESC [5~ (PageUp), ESC [6~ (PageDown)
+        if letter.is_ascii_digit() {
+            let mut tilde = [0u8; 1];
+            let _ = stdin.read(&mut tilde)?;
+            if tilde[0] == b'~' {
+                return Ok(match letter {
+                    b'5' => Key::PageUp,
+                    b'6' => Key::PageDown,
+                    _ => Key::Unknown,
+                });
+            }
+            return Ok(Key::Unknown);
+        }
         return Ok(match letter {
             b'A' => Key::Up,
             b'B' => Key::Down,
+            b'H' => Key::Home,
+            b'F' => Key::End,
             _ => Key::Unknown,
         });
     }
