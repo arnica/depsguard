@@ -353,10 +353,11 @@ jobs:
           git commit -m "chore(apt): update APT repository for ${RELEASE_TAG} [skip ci]"
           git push origin HEAD:main
 
-
   sync-homebrew-formula:
     name: Sync Homebrew formula on main
-    needs: [publish-apt, prepare]
+    needs:
+      - publish-apt
+      - prepare
     runs-on: ubuntu-latest
     permissions:
       contents: write
