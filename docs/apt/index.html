@@ -59,15 +59,17 @@
   <main>
     <h1>DepsGuard APT Repository</h1>
     <p>
-      The Debian/Ubuntu APT feed is not published yet. This page exists so
-      <code>/apt</code> is a valid route while packaging automation is finalized.
+      Use these commands to configure the DepsGuard APT repository and install
+      the package on Debian/Ubuntu.
     </p>
 
     <div class="card">
-      <strong>Current Linux install fallback</strong>
-      <pre>curl -L -o depsguard.tar.gz https://github.com/arnica/depsguard/releases/latest/download/depsguard-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf depsguard.tar.gz
-sudo install -m 0755 depsguard /usr/local/bin/depsguard</pre>
+      <strong>Install from APT</strong>
+      <pre>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
+echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
+sudo apt update
+sudo apt install depsguard</pre>
     </div>
 
     <p>
