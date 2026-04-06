@@ -53,12 +53,16 @@ jobs:
           CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           if [ "${CURRENT_VERSION}" != "${VERSION}" ]; then
             sed -i -E '0,/^version[[:space:]]*=[[:space:]]*"[^"]+"/s//version = "'"${VERSION}"'"/' Cargo.toml
-            git add Cargo.toml
+          fi
+
+          cargo generate-lockfile
+          git add Cargo.toml Cargo.lock
+          if ! git diff --cached --quiet; then
             git commit -m "chore(release): prepare ${TAG} [skip ci]"
           fi
 
           git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "${TAG}"
+          git push origin HEAD:main "${TAG}"
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
