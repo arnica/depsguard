@@ -98,8 +98,8 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Homebrew formula is now maintained in this repository at `Formula/depsguard.rb`.
-On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and commits
-the updated formula directly to `main` in this repository.
+On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and opens
+an automated PR to sync the formula with the new tag and checksum.
 
 Templates live under `packaging/`; render script currently used by CI is `scripts/release/publish-scoop-bucket.sh`.
 
@@ -110,8 +110,9 @@ Document these in your org’s internal runbooks or public docs once the repos e
 **Homebrew (formula in this repo)**
 
 1. Keep `Formula/depsguard.rb` as the canonical formula path.
-2. Release workflow commits formula `url`/`sha256` updates directly to `main` for each release tag.
-3. Users tap with explicit repo URL: `brew tap <owner>/depsguard https://github.com/<owner>/depsguard`.
+2. Release workflow opens an automated PR to update formula `url`/`sha256` for each release tag.
+3. Merge that PR to make the new version available via Homebrew tap.
+4. Users tap with explicit repo URL: `brew tap <owner>/depsguard https://github.com/<owner>/depsguard`.
 
 **Scoop (custom bucket)**
 

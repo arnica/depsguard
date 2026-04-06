@@ -277,11 +277,12 @@ jobs:
         run: cargo publish --allow-dirty
 
   sync-homebrew-formula:
-    name: Sync Homebrew formula on main
+    name: Sync Homebrew formula PR
     needs: [publish-github, prepare]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -305,20 +306,44 @@ jobs:
           export VERSION GITHUB_REPOSITORY SHA256_SOURCE
           mkdir -p Formula
           envsubst < packaging/homebrew/depsguard.rb.in > Formula/depsguard.rb
-      - name: Commit and push formula update to main
+      - name: Open or update Homebrew formula PR
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
+          PR_TITLE="chore(homebrew): sync formula for ${RELEASE_TAG}"
+          EXISTING_PR_COUNT="$(gh pr list \
+            --state open \
+            --base main \
+            --search "\"${PR_TITLE}\" in:title" \
+            --json number \
+            --jq 'length')"
+          if [[ "${EXISTING_PR_COUNT}" -gt 0 ]]; then
+            echo "An open formula PR for ${RELEASE_TAG} already exists; skipping."
+            exit 0
+          fi
+
+          BRANCH="automation/homebrew-formula-${RELEASE_TAG}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
           git add Formula/depsguard.rb
           if git diff --cached --quiet; then
             echo "Formula unchanged for ${RELEASE_TAG}; skipping PR."
             exit 0
           fi
           git commit -m "chore(homebrew): sync formula for ${RELEASE_TAG}"
-          git push origin HEAD:main
+          git push -u origin "${BRANCH}"
+
+          PR_BODY="$(cat <<EOF
+          Automated update for \`Formula/depsguard.rb\` to match release \`${RELEASE_TAG}\`.
+
+          - Source tarball: \`https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz\`
+          - Generated from: \`packaging/homebrew/depsguard.rb.in\`
+          EOF
+          )"
+          gh pr create --base main --head "${BRANCH}" --title "${PR_TITLE}" --body "${PR_BODY}"
 
   publish-scoop-bucket:
     name: Bump Scoop bucket
