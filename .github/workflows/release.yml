@@ -354,7 +354,7 @@ jobs:
 
   sync-homebrew-formula:
     name: Sync Homebrew formula on main
-    needs: [publish-github, prepare]
+    needs: [publish-apt, prepare]
     runs-on: ubuntu-latest
     permissions:
       contents: write
