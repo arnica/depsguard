@@ -292,6 +292,66 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates_auth.outputs.token }}
         run: cargo publish --allow-dirty
 
+  publish-apt:
+    name: Publish APT repository
+    needs: [build, publish-github, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+    steps:
+      - name: Skip APT publish when signing key is missing
+        if: ${{ env.APT_GPG_PRIVATE_KEY == '' }}
+        run: echo "APT_GPG_PRIVATE_KEY is not set; skipping APT repository update."
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        with:
+          merge-multiple: true
+          path: deb-artifacts
+          pattern: depsguard-*-unknown-linux-gnu
+      - name: Install APT tooling
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y dpkg-dev apt-utils
+      - name: Import GPG signing key
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        id: gpg
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ env.APT_GPG_PRIVATE_KEY }}
+        run: |
+          echo "${APT_GPG_PRIVATE_KEY}" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format long 2>/dev/null \
+            | grep '^sec' | head -1 | sed 's|.*/\([^ ]*\).*|\1|')
+          echo "key_id=${GPG_KEY_ID}" >> "$GITHUB_OUTPUT"
+      - name: Build APT repository
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          GPG_KEY_ID: ${{ steps.gpg.outputs.key_id }}
+          APT_DIR: ${{ github.workspace }}/docs/apt
+          DEB_DIR: ${{ github.workspace }}/deb-artifacts
+        run: bash scripts/release/publish-apt-repo.sh
+      - name: Commit and push APT repository
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "depsguard-release-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/apt/
+          if git diff --cached --quiet; then
+            echo "APT repo unchanged for ${RELEASE_TAG}; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore(apt): update APT repository for ${RELEASE_TAG} [skip ci]"
+          git push origin HEAD:main
+
   sync-homebrew-formula:
     name: Sync Homebrew formula on main
     needs: [publish-github, prepare]
