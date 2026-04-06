@@ -150,7 +150,7 @@ pub fn list_backups() -> (Vec<(PathBuf, PathBuf)>, usize) {
             {
                 let original = decode_path(encoded);
                 // Agentic Rule (ARNIE_PATH_BOUNDARY_CHECKING): reject paths outside home directory
-                if original.starts_with(&manager::home_dir()) {
+                if original.starts_with(manager::home_dir()) {
                     results.push((original, p));
                 } else {
                     stale += 1;
