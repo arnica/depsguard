@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark" style="scroll-behavior: smooth;">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -12,6 +12,7 @@
 <meta name="color-scheme" content="dark light">
 <link rel="stylesheet" href="vendor/asciinema-player.css">
 <style>
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior:smooth; } }
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
     --bg:        #0a0e17;
@@ -82,6 +83,9 @@
   .fade-d1   { animation: fadeIn .6s ease-out .15s forwards; opacity:0; }
   .fade-d2   { animation: fadeIn .6s ease-out .3s forwards; opacity:0; }
   .fade-d3   { animation: fadeIn .6s ease-out .45s forwards; opacity:0; }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in, .fade-d1, .fade-d2, .fade-d3 { animation:none; opacity:1; }
+  }
 
   /* ── Nav ──────────────────────────── */
   .nav {
@@ -272,12 +276,12 @@
 <!-- Nav -->
 <nav class="nav">
   <div class="nav-inner">
-    <a href="/" class="nav-ascii">     _                                          _
+    <a href="./" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
   __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
  / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
 | (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
  \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
-           |_|        |___/</a>
+           |_|        |___/</span></a>
     <div class="nav-right">
       <a href="https://github.com/arnica/depsguard" title="GitHub">
         <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
