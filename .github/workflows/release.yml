@@ -417,7 +417,7 @@ jobs:
           git push origin HEAD:main
       - name: Trigger Pages deployment
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run pages.yml --ref main
 
   publish-scoop-bucket:
