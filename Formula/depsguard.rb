@@ -4,8 +4,8 @@
 class Depsguard < Formula
   desc "Harden package manager configs against supply chain attacks, built by Arnica"
   homepage "https://depsguard.com"
-  url "https://github.com/arnica/depsguard/archive/refs/tags/v0.1.24.tar.gz"
-  sha256 "ad83bff272e35e4ca833a53b86b90e2f1d636b5517fe21a8b5fbda17d713b6ab"
+  url "https://github.com/arnica/depsguard/archive/refs/tags/v0.1.25.tar.gz"
+  sha256 "de8f097f1c94e23a70732de2cb6055156ef0a15d9f49dc349ca161bb53b9b727"
   license "MIT"
   head "https://github.com/arnica/depsguard.git", branch: "main"
 
