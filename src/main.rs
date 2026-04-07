@@ -416,7 +416,7 @@ fn show_diff_pager(
     let lines: Vec<&str> = content.lines().collect();
 
     let term_rows = term::terminal_size().map(|(_, h)| h as usize).unwrap_or(24);
-    let page_rows = term_rows.saturating_sub(1);
+    let page_rows = term_rows.saturating_sub(2).max(1);
     let max_scroll = lines.len().saturating_sub(page_rows);
     let mut offset: usize = 0;
 

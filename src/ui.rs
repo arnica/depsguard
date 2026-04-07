@@ -657,8 +657,9 @@ pub fn print_selector(
 /// Return the exclusive end index of the page starting at `start`.
 ///
 /// A page is the longest prefix of `view[start..]` that fits in
-/// `max_lines` rendered terminal rows. Always returns at least
-/// `start + 1` (a page always contains at least one item).
+/// `max_lines` rendered terminal rows. For a non-empty view, always
+/// returns at least `start + 1` (a page contains at least one item).
+/// Returns `0` when `view` is empty.
 pub fn page_end(view: &[&SelectItem], start: usize, max_lines: usize) -> usize {
     let mut end = start;
     let mut lines = 0;
