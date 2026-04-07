@@ -414,17 +414,22 @@ fn show_diff_pager(
             writeln!(out, "{line}")?;
         }
         let end = (offset + page_rows).min(lines.len());
-        write!(
+        writeln!(
             out,
-            "  {DIM}lines {}-{} of {total} \u{2014} \
-             {YELLOW}↑↓{RESET}{DIM} scroll  \
-             {YELLOW}^u ^d{RESET}{DIM} page  \
-             any other key to go back{RESET}",
+            "  {DIM}lines {}-{} of {total}{RESET}",
             offset + 1,
             end,
             total = lines.len(),
             DIM = term::DIM,
+            RESET = term::RESET,
+        )?;
+        write!(
+            out,
+            "  {YELLOW}↑↓{RESET} {DIM}scroll{RESET}  \
+             {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
+             {DIM}any other key to go back{RESET}",
             YELLOW = term::YELLOW,
+            DIM = term::DIM,
             RESET = term::RESET,
         )?;
         out.flush()?;
