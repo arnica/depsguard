@@ -1,292 +1,456 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" style="scroll-behavior: smooth;">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DepsGuard - Supply Chain Defense</title>
-  <meta name="description" content="Harden your package manager configs against supply chain attacks. Zero dependencies. One command.">
-  <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
-  <link rel="shortcut icon" href="img/favicon/favicon.ico">
-  <link rel="manifest" href="img/favicon/site.webmanifest">
-  <meta name="theme-color" content="#0a0e16">
-  <link rel="stylesheet" href="styles.css">
-  <style>
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-in { animation: fadeIn 0.6s ease-out forwards; }
-    .fade-in-delay { animation: fadeIn 0.6s ease-out 0.2s forwards; opacity: 0; }
-    .fade-in-delay-2 { animation: fadeIn 0.6s ease-out 0.4s forwards; opacity: 0; }
-    pre code { font-size: 0.875rem; }
-    .install-code-wrap pre { margin: 0; }
-    .install-copy-btn { font-size: 0.75rem; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>DepsGuard - Supply Chain Defense</title>
+<meta name="description" content="Harden your package manager configs against supply chain attacks. Zero dependencies. One command.">
+<link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
+<link rel="apple-touch-icon" href="img/favicon/favicon.svg">
+<meta name="theme-color" content="#0a0e16">
+<link rel="stylesheet" href="vendor/asciinema-player.css">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg:        #0a0e17;
+    --surface:   #111827;
+    --surface-2: #1a2233;
+    --border:    #1f2937;
+    --border-hi: #374151;
+    --text:      #f3f4f6;
+    --text-dim:  #9ca3b8;
+    --text-mute: #6b7280;
+    --arnica:    #44bea4;
+    --gold:      #ebb838;
+    --mono:      'SF Mono','Menlo','Monaco','Cascadia Code','Fira Code','Courier New',monospace;
+    --sans:      -apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;
+  }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+  code { font-family: var(--mono); }
+  pre { margin: 0; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .fade-in   { animation: fadeIn .6s ease-out forwards; }
+  .fade-d1   { animation: fadeIn .6s ease-out .15s forwards; opacity:0; }
+  .fade-d2   { animation: fadeIn .6s ease-out .3s forwards; opacity:0; }
+  .fade-d3   { animation: fadeIn .6s ease-out .45s forwards; opacity:0; }
+
+  /* ── Nav ──────────────────────────── */
+  .nav {
+    position: sticky; top:0; z-index:100;
+    background: rgba(10,14,23,.85);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width:1140px; margin:0 auto; padding:0 1.5rem;
+    height:56px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .nav-ascii {
+    font-family:var(--mono); font-size:5px; line-height:1;
+    white-space:pre; letter-spacing:-0.3px;
+    color:var(--gold); transition:opacity .15s;
+  }
+  .nav-ascii:hover { opacity:.75; }
+  .nav-right { display:flex; align-items:center; gap:1.25rem; }
+  .nav-right a { color:var(--text-mute); transition:color .15s; display:flex; align-items:center; }
+  .nav-right a:hover { color:var(--text); }
+  .nav-right svg,.nav-right img { width:20px; height:20px; }
+  .nav-right img { opacity:.6; transition:opacity .15s; }
+  .nav-right a:hover img { opacity:1; }
+
+  /* ── Hero ─────────────────────────── */
+  .hero {
+    position:relative; max-width:1140px; margin:0 auto;
+    padding:5rem 1.5rem 4rem;
+    display:grid; grid-template-columns:1fr 1fr; gap:3rem; align-items:center;
+  }
+  .hero::before {
+    content:''; position:absolute; top:-80px; right:0;
+    width:600px; height:500px;
+    background:radial-gradient(ellipse at center,rgba(68,190,164,.04) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .hero-left { position:relative; z-index:1; }
+  .hero h1 { font-size:2.5rem; font-weight:700; line-height:1.2; letter-spacing:-.02em; margin-bottom:1rem; }
+  .hero h1 .accent { color:var(--arnica); }
+  .hero-desc { font-size:1rem; color:var(--text-dim); line-height:1.7; max-width:480px; margin-bottom:2rem; }
+
+  .plat-row { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
+  .plat-btn {
+    display:inline-flex; align-items:center; gap:.5rem;
+    background:var(--surface); border:1px solid var(--border-hi);
+    color:var(--text); font-size:.8125rem; font-weight:500;
+    padding:.55rem 1.1rem; border-radius:.5rem;
+    cursor:pointer; transition:all .15s; text-decoration:none;
+  }
+  .plat-btn:hover { border-color:var(--arnica); }
+  .plat-btn svg,.plat-btn img { width:16px; height:16px; flex-shrink:0; }
+  .plat-link {
+    display:inline-flex; align-items:center; gap:.3rem;
+    border:1px solid var(--border-hi); color:var(--text-mute);
+    font-size:.8125rem; padding:.55rem 1.1rem; border-radius:.5rem;
+    transition:all .15s;
+  }
+  .plat-link:hover { border-color:var(--text-mute); color:var(--text); }
+  .hero-note { font-size:.75rem; color:var(--text-mute); }
+
+  .hero-right { position:relative; z-index:1; }
+  .terminal-wrap {
+    border-radius:12px; overflow:hidden;
+    box-shadow:0 25px 60px -12px rgba(0,0,0,.6);
+    border:1px solid var(--border);
+  }
+  .terminal-chrome {
+    display:flex; align-items:center; gap:8px;
+    padding:12px 16px; background:#1e293b;
+  }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .dot-r { background:#ef4444cc; } .dot-y { background:#eab308cc; } .dot-g { background:#22c55ecc; }
+  #demo { background:#0f1219; }
+  #demo .ap-wrapper,#demo .ap-player { border:none!important; border-radius:0!important; margin:0!important; }
+  #demo .ap-player { background:#0f1219!important; }
+  #demo .ap-terminal { background:#0f1219!important; font-size:13px!important; padding:12px 16px!important; }
+  #demo .ap-control-bar { border-radius:0!important; }
+  #demo .ap-wrapper,#demo .ap-player,#demo .ap-terminal,#demo .ap-term { outline:none!important; box-shadow:none!important; border:none!important; }
+  #demo .ap-overlay { border:none!important; }
+  #demo ::-webkit-scrollbar { display:none; }
+  #demo { scrollbar-width:none; }
+
+  /* ── Sections ────────────────────── */
+  .section { max-width:1140px; margin:0 auto; padding:4.5rem 1.5rem; }
+  .section-border { border-top:1px solid var(--border); }
+  .section h2 { font-size:1.5rem; font-weight:700; margin-bottom:1.5rem; }
+  .section h3 { font-size:1.2rem; font-weight:700; margin-bottom:1.25rem; }
+
+  /* ── Install ─────────────────────── */
+  .install-card { background:var(--surface); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; }
+  .tab-bar { display:flex; border-bottom:1px solid var(--border); }
+  .install-tab {
+    flex:1; padding:.75rem 1rem; font-size:.875rem; font-weight:500;
+    text-align:center; background:none; border:none; cursor:pointer;
+    border-bottom:2px solid transparent; color:var(--text-mute);
+    transition:all .15s; font-family:var(--sans);
+    display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
+  }
+  .install-tab svg, .install-tab img { width:16px; height:16px; flex-shrink:0; }
+  .install-tab[aria-selected="true"] { border-bottom-color:var(--arnica); color:var(--text); }
+  .install-panel { padding:1.5rem; }
+  .code-wrap {
+    position:relative; border-radius:.5rem;
+    border:1px solid var(--border); background:var(--bg);
+  }
+  .code-wrap pre {
+    padding:1rem 3.5rem 1rem 1rem; overflow-x:auto;
+    font-family:var(--mono); font-size:.875rem; line-height:1.65; color:var(--text-dim);
+  }
+  .copy-btn {
+    position:absolute; top:.5rem; right:.5rem; z-index:10;
+    background:var(--surface); border:1px solid var(--border-hi);
+    color:var(--text-mute); font-size:.75rem; font-family:var(--sans);
+    padding:.2rem .5rem; border-radius:4px; cursor:pointer; transition:all .15s;
+  }
+  .copy-btn:hover { border-color:var(--text-mute); color:var(--text); }
+  .code-note { font-size:.75rem; color:var(--text-mute); margin-top:.75rem; }
+  .code-note a { color:var(--arnica); }
+  .code-note a:hover { text-decoration:underline; }
+  .install-also { font-size:.875rem; color:var(--text-mute); margin-top:1rem; }
+  .install-also code { color:var(--text-dim); font-size:.8125rem; }
+  .install-also a { color:var(--arnica); }
+  .install-also a:hover { text-decoration:underline; }
+
+  /* ── Checks table ────────────────── */
+  .checks-table {
+    width:100%; border-collapse:collapse; text-align:left;
+  }
+  .checks-table th {
+    font-size:.75rem; font-weight:600; color:var(--text-mute);
+    text-transform:uppercase; letter-spacing:.05em;
+    padding:.75rem 1rem; border-bottom:1px solid var(--border);
+  }
+  .checks-table td {
+    font-size:.875rem; color:var(--text-dim); padding:.65rem 1rem;
+    border-bottom:1px solid var(--border); vertical-align:middle;
+  }
+  .checks-table td[rowspan] { vertical-align:top; padding-top:.85rem; }
+  .checks-table tr:last-child td { border-bottom:none; }
+  .checks-table code { color:var(--text); font-size:.8125rem; }
+  .checks-table .mgr-icon { width:18px; height:18px; vertical-align:middle; margin-right:.4rem; }
+  .checks-table .mgr-icon-sm { width:14px; height:14px; vertical-align:middle; margin-right:.2rem; }
+  .checks-table .mgr-name { white-space:nowrap; }
+
+  /* ── Footer ──────────────────────── */
+  .footer { border-top:1px solid var(--border); margin-top:2rem; }
+  .footer-inner {
+    max-width:1140px; margin:0 auto; padding:1.75rem 1.5rem;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:.8125rem; color:var(--text-mute); flex-wrap:wrap; gap:1rem;
+  }
+  .footer-left { display:flex; align-items:center; gap:.4rem; }
+  .footer-left img { height:16px; display:inline-block; vertical-align:middle; }
+  .footer-right { display:flex; align-items:center; gap:1.25rem; }
+  .footer-right a { color:var(--text-mute); transition:color .15s; }
+  .footer-right a:hover { color:var(--text); }
+
+  @media (max-width:768px) {
+    .hero { grid-template-columns:1fr; gap:2.5rem; padding-top:3rem; }
+    .checks-grid { grid-template-columns:1fr; }
+    .hero h1 { font-size:2rem; }
+    .footer-inner { flex-direction:column; text-align:center; }
+  }
+  .scroll-mt { scroll-margin-top:5rem; }
+</style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
+<body>
 
-
-  <!-- Nav -->
-  <nav class="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
-    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="text-xl font-bold text-arnica">DepsGuard</span>
-        <span class="text-sm text-gray-500">by</span>
-        <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-5 opacity-70 hover:opacity-100 transition-opacity"></a>
-      </div>
-      <div class="flex items-center gap-6">
-        <a href="https://github.com/arnica/depsguard" class="text-gray-400 hover:text-white transition-colors" title="GitHub">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        </a>
-        <a href="https://crates.io/crates/depsguard" class="text-gray-400 hover:text-white transition-colors" title="Crates.io">
-          <img src="https://crates.io/assets/cargo.png" alt="Crates.io" class="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity">
-        </a>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Hero -->
-  <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
-    <div class="fade-in">
-      <pre class="text-gold font-mono text-xs md:text-sm mb-8 text-left overflow-x-auto" style="line-height: 1.15"><code>     _                                          _
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-ascii">     _                                          _
   __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
  / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
 | (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
  \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
-           |_|        |___/</code></pre>
+           |_|        |___/</a>
+    <div class="nav-right">
+      <a href="https://github.com/arnica/depsguard" title="GitHub">
+        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      </a>
+      <a href="https://crates.io/crates/depsguard" title="Crates.io">
+        <img src="https://crates.io/assets/cargo.png" alt="Crates.io">
+      </a>
     </div>
+  </div>
+</nav>
 
-    <h1 class="fade-in text-4xl md:text-4xl font-bold mb-6 leading-tight">
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-left">
+    <h1 class="fade-in">
       Harden your package managers
-      <span class="text-arnica">against supply chain attacks.</span>
+      against supply chain attacks.
     </h1>
-
-    <p class="fade-in-delay text-lg text-gray-400 max-w-4xl mb-10">
-      One command to scan npm, pnpm, bun, and uv configs for security best practices.
-      Interactive terminal UI to apply fixes. Zero dependencies. Cross-platform. Free, MIT licensed.
+    <p class="hero-desc fade-d1">
+      Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.
     </p>
+    <div class="plat-row fade-d2">
+      <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
+        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>
+        macOS
+      </a>
+      <a href="#install" data-activate-tab="linux" class="plat-btn install-btn">
+        <img src="img/tux.svg" alt="">
+        Linux
+      </a>
+      <a href="#install" data-activate-tab="windows" class="plat-btn install-btn">
+        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg>
+        Windows
+      </a>
+      <a href="#install" data-activate-tab="cargo" class="plat-btn install-btn">
+        <img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;">
+        Cargo
+      </a>
+      <a href="https://github.com/arnica/depsguard/releases/latest" class="plat-link">All binaries &rarr;</a>
+    </div>
+  </div>
 
-  </section>
+  <div class="hero-right fade-d2">
+    <div class="terminal-wrap">
+      <div class="terminal-chrome">
+        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+      </div>
+      <div id="demo"></div>
+    </div>
+  </div>
+</section>
 
-  <!-- Install -->
-  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
-    <h2 class="text-2xl font-bold mb-8">Install</h2>
-    <div class="grid grid-cols-1 gap-6">
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">Homebrew tap (macOS first, Linux supported)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy Homebrew tap install commands">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
+<!-- Install -->
+<section id="install" class="section section-border scroll-mt">
+  <h2>Install</h2>
+  <div class="install-card">
+    <div class="tab-bar" role="tablist">
+      <button role="tab" aria-selected="true"  data-tab="macos"   class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg> macOS</button>
+      <button role="tab" aria-selected="false" data-tab="linux"   class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
+      <button role="tab" aria-selected="false" data-tab="windows" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg> Windows</button>
+      <button role="tab" aria-selected="false" data-tab="cargo" class="install-tab"><img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;"> Cargo</button>
+    </div>
+    <div data-panel="macos" class="install-panel">
+      <div class="code-wrap install-code-wrap" data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
+        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+        <pre><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
 brew install depsguard</code></pre>
-        </div>
-        <p class="text-xs text-gray-500 mt-3">Recommended for macOS; works on Linux with Homebrew too.</p>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">APT (Linux Debian/Ubuntu)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy APT install commands">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>sudo install -d -m 0755 /etc/apt/keyrings
+      <p class="code-note">Homebrew tap. Works on Apple Silicon and Intel.</p>
+    </div>
+    <div data-panel="linux" class="install-panel" style="display:none">
+      <div class="code-wrap install-code-wrap" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
+        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+        <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
-echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
-sudo apt update
-sudo apt install depsguard</code></pre>
-        </div>
+echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
+sudo apt update && sudo apt install depsguard</code></pre>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">WinGet (Windows)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="winget install Arnica.DepsGuard">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy WinGet install command">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>winget install Arnica.DepsGuard</code></pre>
-        </div>
+      <p class="code-note">Debian/Ubuntu via APT. Also available via <a href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
+    </div>
+    <div data-panel="windows" class="install-panel" style="display:none">
+      <p class="code-note" style="margin-bottom:.5rem; margin-top:0;">WinGet</p>
+      <div class="code-wrap install-code-wrap" data-copy="winget install Arnica.DepsGuard">
+        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy WinGet command">Copy</button>
+        <pre><code>winget install Arnica.DepsGuard</code></pre>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">Scoop (Windows)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950" data-copy="scoop bucket add arnica https://github.com/arnica/scoop-depsguard&#10;scoop install depsguard">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy Scoop install commands">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>scoop bucket add arnica https://github.com/arnica/scoop-depsguard
+      <p class="code-note" style="margin-bottom:.5rem;">Scoop</p>
+      <div class="code-wrap install-code-wrap" data-copy="scoop bucket add arnica https://github.com/arnica/scoop-depsguard&#10;scoop install depsguard">
+        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy Scoop command">Copy</button>
+        <pre><code>scoop bucket add arnica https://github.com/arnica/scoop-depsguard
 scoop install depsguard</code></pre>
-        </div>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">crates.io (Rust/cargo)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy cargo install command">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>cargo install depsguard</code></pre>
-        </div>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 min-w-0">
-        <h3 class="font-bold text-lg mb-3">Direct binary (all platforms)</h3>
-        <div class="install-code-wrap relative rounded-lg border border-gray-800 bg-gray-950">
-          <button type="button" class="install-copy-btn absolute top-2 right-2 z-10 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-400 hover:border-gray-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-arnica" aria-label="Copy releases URL">Copy</button>
-          <pre class="p-4 pr-16 overflow-x-auto text-sm"><code>https://github.com/arnica/depsguard/releases/latest</code></pre>
-        </div>
       </div>
     </div>
-    <p class="text-sm text-gray-500 mt-6">
-      Package availability can depend on publication status and review timelines. For full setup commands, see the
-      <a class="text-arnica hover:underline" href="https://github.com/arnica/depsguard#install">README install guide</a>.
-    </p>
-  </section>
-
-  <!-- What it checks -->
-  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
-    <h2 class="text-2xl font-bold mb-8">What it protects</h2>
-    <div class="grid md:grid-cols-2 gap-6">
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <div class="flex items-center gap-3 mb-3">
-          <span class="text-2xl">&#x1f4e6;</span>
-          <h3 class="font-bold text-lg">npm / pnpm <span class="text-xs font-normal text-gray-500">(.npmrc)</span></h3>
-        </div>
-        <ul class="text-sm text-gray-400 space-y-2">
-          <li><code class="text-arnica">min-release-age=7</code> &mdash; delays new versions by 7 days</li>
-          <li><code class="text-arnica">ignore-scripts=true</code> &mdash; blocks malicious install scripts</li>
-        </ul>
+    <div data-panel="cargo" class="install-panel" style="display:none">
+      <div class="code-wrap install-code-wrap" data-copy="cargo install depsguard">
+        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+        <pre><code>cargo install depsguard</code></pre>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <div class="flex items-center gap-3 mb-3">
-          <span class="text-2xl">&#x26a1;</span>
-          <h3 class="font-bold text-lg">pnpm <span class="text-xs font-normal text-gray-500">(workspace)</span></h3>
-        </div>
-        <ul class="text-sm text-gray-400 space-y-2">
-          <li><code class="text-arnica">minimumReleaseAge</code> &mdash; workspace-level release delay</li>
-          <li><code class="text-arnica">trustPolicy: no-downgrade</code> &mdash; blocks provenance downgrades</li>
-          <li><code class="text-arnica">strictDepBuilds: true</code> &mdash; fails on unreviewed scripts</li>
-        </ul>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <div class="flex items-center gap-3 mb-3">
-          <span class="text-2xl">&#x1f95f;</span>
-          <h3 class="font-bold text-lg">bun</h3>
-        </div>
-        <ul class="text-sm text-gray-400 space-y-2">
-          <li><code class="text-arnica">install.minimumReleaseAge=604800</code> &mdash; 7-day delay (seconds)</li>
-        </ul>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <div class="flex items-center gap-3 mb-3">
-          <span class="text-2xl">&#x1f40d;</span>
-          <h3 class="font-bold text-lg">uv</h3>
-        </div>
-        <ul class="text-sm text-gray-400 space-y-2">
-          <li><code class="text-arnica">exclude-newer</code> &mdash; excludes recently published packages</li>
-        </ul>
-      </div>
+      <p class="code-note">Requires a <a href="https://rustup.rs/">Rust toolchain</a> (1.74+).</p>
     </div>
-  </section>
+  </div>
+  <p class="install-also">
+    <a href="https://github.com/arnica/depsguard/releases/latest">Direct binaries</a> &middot;
+    <a href="https://github.com/arnica/depsguard#install">Full install guide</a>
+  </p>
+</section>
 
-  <!-- How it works -->
-  <section class="max-w-5xl mx-auto px-6 py-16 border-t border-gray-800">
-    <h2 class="text-2xl font-bold mb-8">How it works</h2>
+<!-- Why this exists -->
+<section class="section section-border" style="text-align:center;">
+  <h2>Why this exists</h2>
+  <p style="color:var(--text-dim); max-width:720px; margin:0 auto 1.25rem; line-height:1.75; text-align:left;">
+    Software supply chain attacks are accelerating. On March&nbsp;31, 2026, the popular
+    <a href="https://github.com/axios/axios/issues/10636" style="color:var(--arnica)">axios package was compromised</a>
+    via a hijacked maintainer account. Malicious versions were live for ~3&nbsp;hours and pulled in
+    by countless projects before removal. The same pattern hit
+    <code style="color:var(--text-dim)">event-stream</code>,
+    <code style="color:var(--text-dim)">ua-parser-js</code>,
+    <code style="color:var(--text-dim)">colors</code>, and
+    <code style="color:var(--text-dim)">node-ipc</code>.
+    Attackers publish a poisoned version, and every <code style="color:var(--text-dim)">npm install</code> that runs in the next few hours pulls it in.
+  </p>
+  <p style="color:var(--text-dim); max-width:720px; margin:0 auto 2.5rem; line-height:1.75; text-align:left;">
+    Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
+    DepsGuard checks whether those settings are enabled and helps you turn them on.
+  </p>
 
-    <!-- Step 1: Scan -->
-    <div class="mb-12">
-      <div class="flex items-center gap-4 mb-4">
-        <div class="text-3xl font-bold text-arnica">1</div>
-        <div>
-          <h3 class="font-bold text-lg">Scan</h3>
-          <p class="text-sm text-gray-400">Detects installed package managers and shows what's configured, what's missing, and what needs fixing.</p>
-        </div>
-      </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
-        <img max-width="50%" src="img/scan.png" alt="DepsGuard scan showing detected package managers with ACTION NEEDED badges" class="w-full" loading="lazy">
-      </div>
+  <h2 style="text-align:center;">Supported settings</h2>
+  <div class="install-card" style="text-align:left;">
+    <table class="checks-table">
+      <thead>
+        <tr><th>Manager</th><th>Config file</th><th>Setting</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mgr-name" rowspan="2"><svg class="mgr-icon-sm" viewBox="0 0 128 128"><path fill="#cb3837" d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"/><path fill="#fff" d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"/></svg><svg class="mgr-icon-sm" viewBox="0 0 32 32"><path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z"/><path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z"/></svg> npm / pnpm</td><td rowspan="2"><code>.npmrc</code></td><td><code>min-release-age=7</code></td><td>Delay new versions by 7 days</td></tr>
+        <tr><td><code>ignore-scripts=true</code></td><td>Block malicious install scripts</td></tr>
+        <tr><td class="mgr-name" rowspan="4"><svg class="mgr-icon" viewBox="0 0 32 32"><path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z"/><path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z"/></svg> pnpm</td><td rowspan="4"><code>pnpm-workspace.yaml</code></td><td><code>minimumReleaseAge</code></td><td>Workspace-level release delay</td></tr>
+        <tr><td><code>strictDepBuilds=true</code></td><td>Stricter build scripts</td></tr>
+        <tr><td><code>trustPolicy: no-downgrade</code></td><td>Block provenance downgrades</td></tr>
+        <tr><td><code>blockExoticSubdeps: true</code></td><td>Block exotic sub-dependencies</td></tr>
+        <tr><td class="mgr-name"><img class="mgr-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 32 32'%3E%3Cpath fill='%230288d1' d='M27.575 23.967a9.9 9.9 0 0 0-3.751 1.726a22.6 22.6 0 0 1-5.537 2.504a1.55 1.55 0 0 1-.931.52a59 59 0 0 1-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49 1.49 0 0 1 .82-1.965a3.6 3.6 0 0 1-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324 1.794-.897 2.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69 0 0 1-.94-.324a4.6 4.6 0 0 1-.632-2.794a5.2 5.2 0 0 1 1.674-2.76a8.84 8.84 0 0 1 .624-4.17a9.9 9.9 0 0 1 3-3.469S7.136 11.015 7.82 9.177c.444-1.196.623-1.187.769-1.239a3.44 3.44 0 0 0 1.375-.811a4.99 4.99 0 0 1 4.178-1.607s1.094-3.357 2.12-2.7a17.4 17.4 0 0 1 1.452 2.735s1.213-.71 1.35-.445a10.74 10.74 0 0 1 .495 5.81a13.3 13.3 0 0 1-2.46 5.127c-.129.214 1.47.889 2.477 3.683c.932 2.554.103 4.699.248 4.938c.026.043.034.06.034.06s1.068.085 3.213-1.24a8.05 8.05 0 0 1 4.05-1.52a1.026 1.026 0 0 1 .453 2Z'/%3E%3C/svg%3E" alt=""> Yarn</td><td><code>.yarnrc.yml</code></td><td><code>npmMinimalAgeGate</code></td><td>Delay new versions by 7 days</td></tr>
+        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 256 225"><path d="M228.747 65.588a38 38 0 0 0-1.62-1.62c-.55-.519-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.103-1.62-1.621c-.552-.519-1.07-1.102-1.62-1.62c-.552-.519-1.07-1.102-1.621-1.62c-.551-.52-1.07-1.102-1.62-1.62a85.74 85.74 0 0 1 25.632 59.819c0 53.695-54.505 97.377-121.519 97.377c-37.525 0-71.097-13.707-93.424-35.192l1.62 1.62l1.62 1.62l1.62 1.62l1.621 1.621l1.62 1.62l1.62 1.62l1.621 1.62c22.295 22.393 56.612 36.813 95.044 36.813c67.014 0 121.519-43.682 121.519-97.215c0-22.878-9.851-44.557-27.253-61.602"/><path fill="#fbf0df" d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56"/><path fill="#f6dece" d="M234.937 114.066a70.2 70.2 0 0 0-2.593-18.73c-8.846 107.909-140.476 113.093-192.227 80.818a129.62 129.62 0 0 0 81.402 27.155c62.542 0 113.418-40.02 113.418-89.243"/><path fill="#fffefc" d="M77.87 34.576c14.484-8.684 33.733-24.984 52.658-25.017a30.1 30.1 0 0 0-9.009-1.458c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625v3.856C27.74 48.542 63.417 43.261 77.87 34.576"/><path fill="#ccbea7" d="M112.186 16.3a53.18 53.18 0 0 1-18.244 40.409c-.907.81-.194 2.365.972 1.912c10.92-4.245 25.665-16.948 19.443-42.58c-.259-1.459-2.17-1.07-2.17.259m7.356 0a52.63 52.63 0 0 1 5.217 43.65c-.388 1.134 1.005 2.106 1.783 1.166c7.096-9.073 13.286-27.09-5.25-46.534c-.94-.842-2.398.454-1.75 1.588zm8.944-.551a53.2 53.2 0 0 1 22.198 38.108a1.07 1.07 0 0 0 2.106.357c2.981-11.31 1.296-30.59-23.235-40.604c-1.296-.518-2.138 1.232-1.069 2.01zM68.666 49.45a54.9 54.9 0 0 0 33.928-29.164c.584-1.167 2.43-.713 2.14.583c-5.607 25.924-24.37 31.336-36.035 30.623c-1.232.032-1.2-1.685-.033-2.042"/><path d="M121.519 211.443C54.505 211.443 0 167.761 0 114.066c0-32.405 20.026-62.64 53.566-80.754c9.721-5.184 18.05-10.402 25.47-14.97c4.083-2.528 7.94-4.894 11.666-7.097C102.076 4.505 111.797 0 121.519 0s18.212 3.889 28.84 10.175c3.241 1.847 6.482 3.856 9.949 6.06c8.069 4.99 17.175 10.629 29.164 17.077c33.54 18.115 53.566 48.316 53.566 80.754c0 53.695-54.505 97.377-121.519 97.377m0-203.342c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625c0 49.223 50.876 89.276 113.418 89.276s113.418-40.053 113.418-89.276c0-29.424-18.439-56.936-49.32-73.56c-12.25-6.48-21.81-12.573-29.554-17.369c-3.532-2.17-6.773-4.18-9.722-5.962c-9.818-5.833-16.98-9.074-24.822-9.074"/><path fill="#b71422" d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625"/><path fill="#ff6164" d="M108.557 153.244a22.4 22.4 0 0 0 13.351 6.157a22.4 22.4 0 0 0 13.318-6.157a34.5 34.5 0 0 0 3.241-3.468a22.13 22.13 0 0 0-15.879-7.485a19.93 19.93 0 0 0-16.202 9.008c.745.681 1.393 1.33 2.171 1.945"/><path d="M109.076 150.684a17.37 17.37 0 0 1 13.577-6.74a19.44 19.44 0 0 1 12.962 5.476a51 51 0 0 0 2.139-2.495a22.68 22.68 0 0 0-15.263-6.254a20.61 20.61 0 0 0-15.846 7.647a31 31 0 0 0 2.43 2.366"/><path d="M121.81 161.021a24.05 24.05 0 0 1-14.42-6.481a30.85 30.85 0 0 1-10.077-16.365a3.89 3.89 0 0 1 .842-3.24a4.57 4.57 0 0 1 3.662-1.653h39.988a4.67 4.67 0 0 1 3.661 1.653a3.86 3.86 0 0 1 .81 3.24A30.85 30.85 0 0 1 136.2 154.54c-3.93 3.717-9 6-14.388 6.481m-19.993-23.98c-.519 0-.648.227-.68.292a26.86 26.86 0 0 0 8.846 14.16a20.2 20.2 0 0 0 11.828 5.672a20.35 20.35 0 0 0 11.828-5.606a26.9 26.9 0 0 0 8.814-14.161a.68.68 0 0 0-.648-.292z"/><g transform="translate(53.792 88.4)"><ellipse cx="117.047" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147"/><ellipse cx="18.957" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147"/><path d="M27.868 35.71a17.855 17.855 0 1 0-17.822-17.854c0 9.848 7.974 17.837 17.822 17.855m80.268 0A17.855 17.855 0 1 0 90.41 17.857c-.018 9.818 7.908 17.801 17.726 17.855"/><path fill="#fff" d="M22.36 18.99a6.708 6.708 0 1 0 .064-13.416a6.708 6.708 0 0 0-.065 13.416m80.267 0a6.708 6.708 0 1 0-.065 0z"/></g></svg> bun</td><td><code>.bunfig.toml</code></td><td><code>install.minimumReleaseAge</code></td><td>7-day delay (in seconds)</td></tr>
+        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 16 16"><path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z"/></svg> uv</td><td><code>uv.toml</code></td><td><code>exclude-newer</code></td><td>Exclude recently published packages</td></tr>
+        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#007fa0"/><path fill="#fff" d="m21.052 21.433l-2.889-2.889a1.293 1.293 0 0 1 0-1.829l4.28-4.28a.375.375 0 0 0 0-.53l-1.577-1.577a.374.374 0 0 0-.53 0l-.963.963l-.65-.649l.963-.963a1.293 1.293 0 0 1 1.829 0l1.577 1.577a1.3 1.3 0 0 1 0 1.829l-4.28 4.279a.377.377 0 0 0 0 .53l2.89 2.889z"/><path fill="#007fa0" d="m24.738 23.879l-.59.59a.833.833 0 0 1-1.179 0l-3.538-3.538a.833.833 0 0 1 0-1.179l.59-.59a.835.835 0 0 1 1.179 0l3.538 3.538a.835.835 0 0 1 0 1.179"/><path fill="#fff" d="m8.15 16.019l1.36-1.36l1.359 1.36l-1.36 1.359z"/><path fill="#3cb6b0" d="m18.679 9.566l1.769 1.769a.833.833 0 0 1 0 1.179l-7.665 7.666a.835.835 0 0 1-1.179 0l-1.769-1.769a.834.834 0 0 1 0-1.18L17.5 9.566a.835.835 0 0 1 1.179 0M9.51 14.66l1.359-1.36l1.359 1.36l-1.36 1.359z"/><path fill="#fff" d="m10.85 13.32l1.36-1.358l1.359 1.359l-1.36 1.359z"/><path fill="#3cb6b0" d="m12.21 11.96l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#fff" d="m14.928 9.242l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#3cb6b0" d="m6.791 14.66l1.36-1.359l1.358 1.36l-1.359 1.358zm2.7-2.7l1.36-1.36l1.358 1.36l-1.359 1.359zm2.719-2.719l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#3cb6b0" d="m13.568 7.882l1.36-1.36l1.358 1.36l-1.359 1.359zM8.132 10.6l1.36-1.358L10.85 10.6l-1.359 1.36z"/><path fill="#3cb6b0" d="m12.21 6.523l1.36-1.36l1.358 1.36l-1.359 1.359zm-8.137 5.419l1.359-1.36l1.359 1.36L5.43 13.3zm4.059-4.06L9.49 6.523l1.359 1.36L9.49 9.24z"/><path fill="#007fa0" d="M12.194 20.791a1.2 1.2 0 0 1-.85-.352L9.575 18.67a1.2 1.2 0 0 1 0-1.7l7.665-7.664a1.2 1.2 0 0 1 1.7 0l1.769 1.769a1.2 1.2 0 0 1 0 1.7l-7.665 7.665a1.2 1.2 0 0 1-.85.351m5.9-11.1a.46.46 0 0 0-.33.136L10.1 17.491a.466.466 0 0 0 0 .66l1.769 1.769a.467.467 0 0 0 .659 0l7.666-7.665a.47.47 0 0 0 0-.66L18.42 9.826a.46.46 0 0 0-.33-.136z"/><path fill="#fff" d="M23.559 25.081a1.2 1.2 0 0 1-.85-.352l-3.538-3.538a1.2 1.2 0 0 1 0-1.7l.59-.589a1.2 1.2 0 0 1 1.7 0L25 22.44a1.2 1.2 0 0 1 0 1.7l-.59.59a1.2 1.2 0 0 1-.851.351m-2.949-5.795a.46.46 0 0 0-.329.136l-.59.59a.467.467 0 0 0 0 .66l3.538 3.537a.465.465 0 0 0 .659 0l.59-.589a.467.467 0 0 0 0-.66l-3.538-3.538a.46.46 0 0 0-.33-.136"/></svg> Renovate</td><td><code>renovate.json</code></td><td><code>minimumReleaseAge: "7 days"</code></td><td>Delay dependency update PRs</td></tr>
+        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24" fill="currentColor" style="color:#0969da"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> Dependabot</td><td><code>dependabot.yml</code></td><td><code>cooldown.default-days: 7</code></td><td>Delay dependency update PRs</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-left">
+      Made with care by
+      <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica"></a>
+      in Atlanta
     </div>
-
-    <!-- Step 2: Select -->
-    <div class="mb-12">
-      <div class="flex items-center gap-4 mb-4">
-        <div class="text-3xl font-bold text-arnica">2</div>
-        <div>
-          <h3 class="font-bold text-lg">Select</h3>
-          <p class="text-sm text-gray-400">Pick which fixes to apply interactively. Arrow keys to navigate, space to toggle, enter to apply.</p>
-        </div>
-      </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
-        <img src="img/select.png" alt="DepsGuard fix selector showing npm and uv fixes ready to apply" class="w-full" loading="lazy">
-      </div>
+    <div class="footer-right">
+      <a href="https://github.com/arnica/depsguard">GitHub</a>
+      <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+      <a href="https://www.arnica.io/legal/privacy">Privacy</a>
+      <a href="https://www.arnica.io/legal/terms-of-use">Terms</a>
     </div>
+  </div>
+</footer>
 
-    <!-- Step 3: Fixed -->
-    <div class="mb-4">
-      <div class="flex items-center gap-4 mb-4">
-        <div class="text-3xl font-bold text-arnica">3</div>
-        <div>
-          <h3 class="font-bold text-lg">Done</h3>
-          <p class="text-sm text-gray-400">Fixes applied with automatic backups. Use <code class="text-arnica">--restore</code> to undo anytime.</p>
-        </div>
-      </div>
-      <div class="rounded-xl overflow-hidden border border-gray-800 shadow-2xl max-w-2xl">
-        <img src="img/secure.png" alt="DepsGuard showing all checks passed with SECURE badges" class="w-full" loading="lazy">
-      </div>
-    </div>
-  </section>
-
-
-  <!-- Footer -->
-  <footer class="border-t border-gray-800 mt-16">
-    <div class="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-gray-500">
-      <div class="flex items-center gap-2">Made with care by <a href="https://arnica.io"><img src="img/arnica-logo.svg" alt="arnica" class="h-4 inline-block"></a> in Atlanta</div>
-      <div class="flex gap-4">
-        <a href="https://github.com/arnica/depsguard" class="hover:text-gray-300 transition-colors">GitHub</a>
-        <a href="https://github.com/arnica/depsguard/blob/main/LICENSE" class="hover:text-gray-300 transition-colors">MIT License</a>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    (function () {
-      function copyText(text) {
-        if (navigator.clipboard && window.isSecureContext) {
-          return navigator.clipboard.writeText(text);
-        }
-        return new Promise(function (resolve, reject) {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.left = '-9999px';
-          document.body.appendChild(ta);
-          ta.select();
-          try {
-            document.execCommand('copy');
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-          document.body.removeChild(ta);
-        });
-      }
-
-      document.querySelectorAll('.install-code-wrap').forEach(function (wrap) {
-        var btn = wrap.querySelector('.install-copy-btn');
-        var code = wrap.querySelector('code');
-        if (!btn || !code) return;
-        var label = btn.textContent;
-        var aria = btn.getAttribute('aria-label') || 'Copy to clipboard';
-        btn.addEventListener('click', function () {
-          var text = (wrap.dataset.copy || code.textContent || '').trim();
-          if (!text) return;
-          copyText(text).then(
-            function () {
-              btn.textContent = 'Copied';
-              btn.setAttribute('aria-label', 'Copied to clipboard');
-              clearTimeout(btn._copyReset);
-              btn._copyReset = setTimeout(function () {
-                btn.textContent = label;
-                btn.setAttribute('aria-label', aria);
-              }, 2000);
-            },
-            function () {
-              btn.textContent = 'Failed';
-              clearTimeout(btn._copyReset);
-              btn._copyReset = setTimeout(function () {
-                btn.textContent = label;
-                btn.setAttribute('aria-label', aria);
-              }, 2000);
-            }
-          );
-        });
-      });
-    })();
-  </script>
+<script src="vendor/asciinema-player.min.js"></script>
+<script>
+(function(){
+  var player = AsciinemaPlayer.create('demo.cast', document.getElementById('demo'), {
+    cols:80, rows:16, fit:'width', autoPlay:false, loop:true,
+    speed:1, idleTimeLimit:2, theme:'dracula',
+    terminalFontFamily:"'SF Mono','Menlo','Monaco','Courier New',monospace",
+  });
+  var started = false;
+  var observer = new IntersectionObserver(function(entries){
+    if(entries[0].isIntersecting && !started){ started=true; player.play(); }
+  },{ threshold:0.3 });
+  observer.observe(document.getElementById('demo'));
+})();
+</script>
+<script>
+(function(){
+  function copyText(t){
+    if(navigator.clipboard&&window.isSecureContext) return navigator.clipboard.writeText(t);
+    return new Promise(function(res,rej){
+      var ta=document.createElement('textarea'); ta.value=t;
+      ta.style.position='fixed'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.select();
+      try{document.execCommand('copy');res();}catch(e){rej(e);}
+      document.body.removeChild(ta);
+    });
+  }
+  document.querySelectorAll('.install-code-wrap').forEach(function(wrap){
+    var btn=wrap.querySelector('.install-copy-btn'), code=wrap.querySelector('code');
+    if(!btn||!code) return;
+    var label=btn.textContent, aria=btn.getAttribute('aria-label')||'Copy to clipboard';
+    btn.addEventListener('click',function(){
+      var text=(wrap.dataset.copy||code.textContent||'').trim();
+      if(!text) return;
+      copyText(text).then(
+        function(){ btn.textContent='Copied'; btn.setAttribute('aria-label','Copied to clipboard');
+          clearTimeout(btn._t); btn._t=setTimeout(function(){ btn.textContent=label; btn.setAttribute('aria-label',aria); },2000);},
+        function(){ btn.textContent='Failed';
+          clearTimeout(btn._t); btn._t=setTimeout(function(){ btn.textContent=label; btn.setAttribute('aria-label',aria); },2000);}
+      );
+    });
+  });
+})();
+</script>
+<script>
+(function(){
+  var tabs=document.querySelectorAll('.install-tab');
+  var panels=document.querySelectorAll('.install-panel');
+  tabs.forEach(function(tab){
+    tab.addEventListener('click',function(){
+      var target=tab.dataset.tab;
+      tabs.forEach(function(t){ var a=t.dataset.tab===target; t.setAttribute('aria-selected',a); });
+      panels.forEach(function(p){ p.style.display=p.dataset.panel===target?'':'none'; });
+    });
+  });
+  document.querySelectorAll('.install-btn[data-activate-tab]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var target=btn.dataset.activateTab;
+      var tab=document.querySelector('.install-tab[data-tab="'+target+'"]');
+      if(tab) tab.click();
+    });
+  });
+  var hash=window.location.hash;
+  if(hash==='#install-linux') tabs[1].click();
+  else if(hash==='#install-windows') tabs[2].click();
+})();
+</script>
 
 </body>
 </html>
