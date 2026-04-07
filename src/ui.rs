@@ -535,56 +535,22 @@ pub fn print_selector(
     let view: Vec<&SelectItem> = visible.iter().map(|&i| &items[i]).collect();
     let max_lines = max_item_lines_for(!toggle_keys.is_empty());
 
-    let view_page_end = {
-        let mut end = vis_page_start;
-        while end < view.len() {
-            let next = end + 1;
-            if lines_for_view(&view, vis_page_start, next) > max_lines {
-                break;
-            }
-            end = next;
-        }
-        end.max(vis_page_start + 1).min(view.len())
-    };
+    let view_page_end = page_end(&view, vis_page_start, max_lines);
 
     let total_vis = view.len();
-    let total_pages = {
+    let (total_pages, current_page) = {
         let mut pages = 0;
+        let mut cur = 1;
         let mut s = 0;
         while s < total_vis {
-            let mut e = s;
-            while e < total_vis {
-                let next = e + 1;
-                if lines_for_view(&view, s, next) > max_lines {
-                    break;
-                }
-                e = next;
-            }
-            s = e.max(s + 1);
+            let e = page_end(&view, s, max_lines);
             pages += 1;
-        }
-        pages.max(1)
-    };
-    let current_page = {
-        let mut page = 0;
-        let mut s = 0;
-        while s < total_vis {
-            let mut e = s;
-            while e < total_vis {
-                let next = e + 1;
-                if lines_for_view(&view, s, next) > max_lines {
-                    break;
-                }
-                e = next;
-            }
-            let e = e.max(s + 1);
             if vis_page_start >= s && vis_page_start < e {
-                break;
+                cur = pages;
             }
             s = e;
-            page += 1;
         }
-        page + 1
+        (pages.max(1), cur)
     };
     let paginated = total_pages > 1;
 
@@ -680,21 +646,69 @@ pub fn print_selector(
     Ok(())
 }
 
-/// Count lines for a range within a view (slice of &SelectItem).
-fn lines_for_view(view: &[&SelectItem], start: usize, end: usize) -> usize {
+// ── Page navigation helpers ──────────────────────────────────────────
+//
+// These functions share a consistent definition of "page": a maximal
+// contiguous slice of items whose rendered line count fits within
+// `max_lines`.  They are used by both `print_selector` (rendering) and
+// the selection loop (keyboard navigation).
+
+/// Return the exclusive end index of the page starting at `start`.
+///
+/// A page is the longest prefix of `view[start..]` that fits in
+/// `max_lines` rendered terminal rows. Always returns at least
+/// `start + 1` (a page always contains at least one item).
+pub fn page_end(view: &[&SelectItem], start: usize, max_lines: usize) -> usize {
+    let mut end = start;
     let mut lines = 0;
     let mut last_group: Option<&str> = None;
-    for item in view.iter().take(end.min(view.len())).skip(start) {
+    while end < view.len() {
+        let item = view[end];
+        let mut add = 0;
         if last_group != Some(item.group_path.as_str()) {
             if last_group.is_some() {
-                lines += 1;
+                add += 1;
             }
-            lines += 2;
+            add += 2;
             last_group = Some(&item.group_path);
         }
-        lines += 1;
+        add += 1;
+        if lines + add > max_lines && end > start {
+            break;
+        }
+        lines += add;
+        end += 1;
     }
-    lines
+    end.max(start + 1).min(view.len())
+}
+
+/// Return the page-start index for the page that contains `target`.
+pub fn find_page_start(view: &[&SelectItem], target: usize, max_lines: usize) -> usize {
+    let mut s = 0;
+    while s < view.len() {
+        let e = page_end(view, s, max_lines);
+        if target < e {
+            return s;
+        }
+        s = e;
+    }
+    0
+}
+
+/// Return the page-start index for the previous page (before `current_start`).
+pub fn prev_page_start(view: &[&SelectItem], current_start: usize, max_lines: usize) -> usize {
+    if current_start == 0 {
+        return 0;
+    }
+    find_page_start(view, current_start - 1, max_lines)
+}
+
+/// Return the page-start index for the last page of the view.
+pub fn last_page_start(view: &[&SelectItem], max_lines: usize) -> usize {
+    if view.is_empty() {
+        return 0;
+    }
+    find_page_start(view, view.len() - 1, max_lines)
 }
 
 // ── Diff preview ─────────────────────────────────────────────────────

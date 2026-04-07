@@ -52,6 +52,7 @@ pub fn should_use_colors() -> bool {
     true
 }
 
+/// Returns `true` if ANSI color output is currently enabled.
 pub fn colors_enabled() -> bool {
     COLORS_ENABLED.load(Ordering::Relaxed)
 }
@@ -133,50 +134,72 @@ impl<W: Write> Write for ColorWriter<W> {
     }
 }
 
+// ── Screen control sequences ─────────────────────────────────────────
+//
+// Defined once as constants so the enter/leave/guard paths stay in sync.
+
+const SEQ_ENTER_ALT_SCREEN: &[u8] = b"\x1b[?1049h";
+const SEQ_LEAVE_ALT_SCREEN: &[u8] = b"\x1b[?1049l";
+const SEQ_ENABLE_MOUSE: &[u8] = b"\x1b[?1000h\x1b[?1006h";
+const SEQ_DISABLE_MOUSE: &[u8] = b"\x1b[?1006l\x1b[?1000l";
+const SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
+const SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
+
+/// Clear the entire screen and move the cursor to (1,1).
 pub fn clear_screen(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[2J\x1b[H")
 }
 
+/// Switch to the alternate screen buffer and enable mouse tracking.
+///
+/// Mouse tracking (`?1000h` + `?1006h` SGR mode) prevents the terminal from
+/// converting trackpad scroll into arrow-key sequences. Mouse events are
+/// parsed and discarded by [`read_key`].
 pub fn enter_alt_screen(w: &mut impl Write) -> io::Result<()> {
-    // ?1049h  = alternate screen buffer
-    // ?1000h  = enable basic mouse tracking (so scroll sends mouse events
-    //           instead of being converted to arrow keys by the terminal)
-    // ?1006h  = SGR extended mouse mode (printable, easier to parse)
-    write!(w, "\x1b[?1049h\x1b[?1000h\x1b[?1006h")
+    w.write_all(SEQ_ENTER_ALT_SCREEN)?;
+    w.write_all(SEQ_ENABLE_MOUSE)
 }
 
+/// Leave the alternate screen buffer and disable mouse tracking.
 #[allow(dead_code)]
 pub fn leave_alt_screen(w: &mut impl Write) -> io::Result<()> {
-    write!(w, "\x1b[?1006l\x1b[?1000l\x1b[?1049l")
+    w.write_all(SEQ_DISABLE_MOUSE)?;
+    w.write_all(SEQ_SHOW_CURSOR)?;
+    w.write_all(SEQ_LEAVE_ALT_SCREEN)
 }
 
+/// Hide the terminal cursor.
 pub fn hide_cursor(w: &mut impl Write) -> io::Result<()> {
-    write!(w, "\x1b[?25l")
+    w.write_all(SEQ_HIDE_CURSOR)
 }
 
+/// Show the terminal cursor.
 #[allow(dead_code)]
 pub fn show_cursor(w: &mut impl Write) -> io::Result<()> {
-    write!(w, "\x1b[?25h")
+    w.write_all(SEQ_SHOW_CURSOR)
 }
 
 /// RAII guard that restores mouse, cursor, and screen buffer state on drop.
+///
+/// On drop the guard disables mouse tracking, flushes any queued mouse events
+/// from stdin, restores cursor visibility, and leaves the alternate screen.
 pub struct ScreenGuard;
 
 impl Drop for ScreenGuard {
     fn drop(&mut self) {
         let mut out = io::stdout();
-        let _ = out.write_all(b"\x1b[?1006l\x1b[?1000l");
+        let _ = out.write_all(SEQ_DISABLE_MOUSE);
         let _ = out.flush();
         flush_stdin();
-        let _ = out.write_all(b"\x1b[?25h");
-        let _ = out.write_all(b"\x1b[?1049l");
+        let _ = out.write_all(SEQ_SHOW_CURSOR);
+        let _ = out.write_all(SEQ_LEAVE_ALT_SCREEN);
         let _ = out.flush();
     }
 }
 
 /// Discard any bytes already queued in the stdin buffer (e.g. trailing mouse events).
 #[cfg(unix)]
-fn flush_stdin() {
+pub fn flush_stdin() {
     #[cfg(target_os = "linux")]
     const TCIFLUSH: i32 = 0;
     #[cfg(target_os = "macos")]
@@ -185,20 +208,22 @@ fn flush_stdin() {
     extern "C" {
         fn tcflush(fd: i32, queue_selector: i32) -> i32;
     }
-    // SAFETY: tcflush(0, TCIFLUSH) is a standard POSIX call on fd 0 (stdin).
+    // SAFETY: tcflush is a standard POSIX call; fd 0 (stdin) is always valid
+    // in a process that has standard streams open.
     unsafe {
         tcflush(0, TCIFLUSH);
     }
 }
 
 #[cfg(windows)]
-fn flush_stdin() {
+pub fn flush_stdin() {
     const STD_INPUT_HANDLE: u32 = 0xFFFF_FFF6;
     extern "system" {
         fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
         fn FlushConsoleInputBuffer(hConsoleInput: *mut std::ffi::c_void) -> i32;
     }
-    // SAFETY: Standard Win32 console APIs on the input handle.
+    // SAFETY: GetStdHandle / FlushConsoleInputBuffer are standard Win32
+    // console APIs; the input handle is valid for the process lifetime.
     unsafe {
         let handle = GetStdHandle(STD_INPUT_HANDLE);
         FlushConsoleInputBuffer(handle);
@@ -206,19 +231,9 @@ fn flush_stdin() {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn flush_stdin() {}
+pub fn flush_stdin() {}
 
-/// RAII guard that restores cursor visibility on drop (prevents broken terminal on errors).
-pub struct CursorGuard;
-
-impl Drop for CursorGuard {
-    fn drop(&mut self) {
-        // Best-effort: write directly to stdout to restore cursor even if our writer is gone
-        let _ = io::stdout().write_all(b"\x1b[?25h");
-        let _ = io::stdout().flush();
-    }
-}
-
+/// Move the cursor to an absolute `(row, col)` position (1-based).
 #[allow(dead_code)]
 pub fn move_to(w: &mut impl Write, row: u16, col: u16) -> io::Result<()> {
     write!(w, "\x1b[{};{}H", row, col)
@@ -566,10 +581,11 @@ pub fn read_key() -> io::Result<Key> {
             return Ok(Key::Unknown);
         }
 
-        // Basic mouse event: ESC [ M followed by 3 bytes — consume and discard
+        // Basic mouse event: ESC [ M followed by 3 bytes — consume and discard.
+        // Must use read_exact; plain read() may return fewer than 3 bytes.
         if letter == b'M' {
             let mut buf = [0u8; 3];
-            let _ = stdin.read(&mut buf)?;
+            stdin.read_exact(&mut buf)?;
             return Ok(Key::Unknown);
         }
 
