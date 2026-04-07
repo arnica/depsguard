@@ -192,30 +192,31 @@ fn print_usage_short() {
     println!();
 }
 
+/// Run the non-interactive scan-only mode (`depsguard scan`).
 fn run_scan_only() {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
-    ui::print_banner(&mut out).ok();
+    let _ = ui::print_banner(&mut out);
     let managers = manager::scan_all_with_progress(progress_callback);
-    ui::clear_progress(&mut out).ok();
-    writeln!(out).ok();
-    ui::print_scan_results(&mut out, &managers).ok();
+    let _ = ui::clear_progress(&mut out);
+    let _ = writeln!(out);
+    let _ = ui::print_scan_results(&mut out, &managers);
 }
 
+/// Run the interactive TUI: scan → review → select fixes → apply.
 fn run_interactive() -> io::Result<()> {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
 
     loop {
-        // Phase 1: Scan
-        term::clear_screen(&mut out)?;
+        // Phase 1 — Scan results are printed to the normal screen so the
+        // user can scroll back through them with the trackpad.
         ui::print_banner(&mut out)?;
         let managers = manager::scan_all_with_progress(progress_callback);
         ui::clear_progress(&mut out)?;
         writeln!(out)?;
         ui::print_scan_results(&mut out, &managers)?;
 
-        // Build fixable items
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
             writeln!(
@@ -228,7 +229,6 @@ fn run_interactive() -> io::Result<()> {
             return Ok(());
         }
 
-        // Phase 2: Interactive selection
         writeln!(
             out,
             "  {}Press any key to enter selection mode (q to quit)...{}",
@@ -237,26 +237,41 @@ fn run_interactive() -> io::Result<()> {
         )?;
         out.flush()?;
 
-        {
+        let enter_selection = {
             let _raw = term::RawMode::enable()?;
-            let _cursor = term::CursorGuard; // restores cursor on drop (even on error unwind)
-            let key = term::read_key()?;
-            if matches!(key, Key::Char('q') | Key::Escape) {
-                return Ok(());
+            loop {
+                match term::read_key()? {
+                    Key::Char('q') | Key::Escape => break false,
+                    Key::Unknown => continue,
+                    _ => break true,
+                }
             }
+        };
 
-            let go_back = selection_loop(&mut out, &mut items, &managers)?;
-
-            if !go_back {
-                return Ok(());
-            }
-            // _raw and _cursor drop here, restoring terminal state
+        if !enter_selection {
+            return Ok(());
         }
-        // go_back == true: loop back to scan results
+
+        // Phase 2 — Selection runs in the alternate screen buffer.
+        // ScreenGuard restores mouse, cursor, and buffer state on drop.
+        let go_back = {
+            term::enter_alt_screen(&mut out)?;
+            let _screen = term::ScreenGuard;
+            out.flush()?;
+            let _raw = term::RawMode::enable()?;
+            selection_loop(&mut out, &mut items, &managers)?
+        };
+
+        if !go_back {
+            return Ok(());
+        }
     }
 }
 
-/// Returns Ok(true) if user pressed Escape (go back), Ok(false) otherwise.
+/// Drive the interactive fix-selection loop.
+///
+/// Returns `Ok(true)` when the user presses Escape (go back to scan),
+/// `Ok(false)` when the user quits.
 fn selection_loop(
     out: &mut impl Write,
     items: &mut [SelectItem],
@@ -271,38 +286,24 @@ fn selection_loop(
         let visible = ui::filtered_indices(items, filter);
         let vis_len = visible.len();
         let has_toggles = !toggle_keys.is_empty();
+        let max_lines = ui::max_item_lines_for(has_toggles);
+        let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
 
-        // Clamp cursor to visible range
+        // Clamp cursor and page to the visible range
         if vis_len == 0 {
             vis_cursor = 0;
-        } else if vis_cursor >= vis_len {
-            vis_cursor = vis_len - 1;
-        }
-        if vis_page_start >= vis_len {
             vis_page_start = 0;
-        }
-
-        // Ensure page_start and cursor are consistent (page-flip logic)
-        if vis_len > 0 {
-            let max_lines = ui::max_item_lines_for(has_toggles);
-            let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
-            let page_end = view_page_end(&view, vis_page_start, max_lines);
-
-            if vis_cursor >= page_end && page_end < vis_len {
-                vis_page_start = page_end;
+        } else {
+            vis_cursor = vis_cursor.min(vis_len - 1);
+            if vis_page_start >= vis_len {
+                vis_page_start = 0;
+            }
+            let pe = ui::page_end(&view, vis_page_start, max_lines);
+            if vis_cursor >= pe && pe < vis_len {
+                vis_page_start = pe;
             }
             if vis_cursor < vis_page_start {
-                let mut s = 0;
-                let mut prev = 0;
-                while s < vis_len {
-                    let e = view_page_end(&view, s, max_lines);
-                    if vis_cursor >= s && vis_cursor < e {
-                        prev = s;
-                        break;
-                    }
-                    s = e;
-                }
-                vis_page_start = prev;
+                vis_page_start = ui::find_page_start(&view, vis_cursor, max_lines);
             }
         }
 
@@ -320,47 +321,23 @@ fn selection_loop(
         out.flush()?;
 
         match term::read_key()? {
-            Key::Up => {
-                vis_cursor = vis_cursor.saturating_sub(1);
-            }
+            Key::Up => vis_cursor = vis_cursor.saturating_sub(1),
             Key::Down => {
                 if vis_len > 0 && vis_cursor + 1 < vis_len {
                     vis_cursor += 1;
                 }
             }
             Key::PageUp => {
-                if vis_len > 0 {
-                    let max_lines = ui::max_item_lines_for(has_toggles);
-                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
-                    if vis_page_start > 0 {
-                        let mut s = 0;
-                        let mut prev = 0;
-                        while s < vis_len {
-                            let e = view_page_end(&view, s, max_lines);
-                            if e >= vis_page_start {
-                                break;
-                            }
-                            prev = s;
-                            s = e;
-                        }
-                        vis_page_start = prev;
-                        vis_cursor = vis_page_start;
-                    } else {
-                        vis_cursor = 0;
-                    }
-                }
+                vis_page_start = ui::prev_page_start(&view, vis_page_start, max_lines);
+                vis_cursor = vis_page_start;
             }
             Key::PageDown => {
-                if vis_len > 0 {
-                    let max_lines = ui::max_item_lines_for(has_toggles);
-                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
-                    let pe = view_page_end(&view, vis_page_start, max_lines);
-                    if pe < vis_len {
-                        vis_page_start = pe;
-                        vis_cursor = vis_page_start;
-                    } else {
-                        vis_cursor = vis_len - 1;
-                    }
+                let pe = ui::page_end(&view, vis_page_start, max_lines);
+                if pe < vis_len {
+                    vis_page_start = pe;
+                    vis_cursor = vis_page_start;
+                } else if vis_len > 0 {
+                    vis_cursor = vis_len - 1;
                 }
             }
             Key::Home => {
@@ -370,17 +347,7 @@ fn selection_loop(
             Key::End => {
                 if vis_len > 0 {
                     vis_cursor = vis_len - 1;
-                    let max_lines = ui::max_item_lines_for(has_toggles);
-                    let view: Vec<&ui::SelectItem> = visible.iter().map(|&i| &items[i]).collect();
-                    let mut s = 0;
-                    while s < vis_len {
-                        let e = view_page_end(&view, s, max_lines);
-                        if e >= vis_len {
-                            break;
-                        }
-                        s = e;
-                    }
-                    vis_page_start = s;
+                    vis_page_start = ui::last_page_start(&view, max_lines);
                 }
             }
             Key::Space => {
@@ -391,22 +358,28 @@ fn selection_loop(
             }
             Key::Enter => {
                 let results = apply_selected(items, managers);
-                let errors: Vec<_> = results.iter().filter(|(_, r)| r.is_err()).collect();
+                let errors: Vec<_> = results
+                    .iter()
+                    .filter_map(|(label, r)| r.as_ref().err().map(|e| (label, e)))
+                    .collect();
                 if !errors.is_empty() {
-                    for (label, result) in &errors {
-                        if let Err(e) = result {
-                            writeln!(out, "  {}Error:{} {label}: {e}", term::RED, term::RESET)?;
-                        }
+                    term::clear_screen(out)?;
+                    for (label, e) in &errors {
+                        writeln!(out, "  {}Error:{} {label}: {e}", term::RED, term::RESET)?;
                     }
+                    writeln!(
+                        out,
+                        "\n  {}Press any key to continue...{}",
+                        term::DIM,
+                        term::RESET
+                    )?;
                     out.flush()?;
+                    while let Key::Unknown = term::read_key()? {}
                 }
                 return Ok(true);
             }
             Key::Char('d') => {
-                term::clear_screen(out)?;
-                ui::print_diff_preview(out, items, managers)?;
-                out.flush()?;
-                term::read_key()?;
+                show_diff_pager(out, items, managers)?;
             }
             Key::Char('f') => {
                 filter = filter.next();
@@ -419,12 +392,8 @@ fn selection_loop(
                     item.selected = !any;
                 }
             }
-            Key::Char('q') => {
-                return Ok(false);
-            }
-            Key::Escape => {
-                return Ok(true);
-            }
+            Key::Char('q') => return Ok(false),
+            Key::Escape => return Ok(true),
             Key::Char(c) => {
                 if let Some(tk) = toggle_keys.iter().find(|t| t.key == c) {
                     ui::toggle_manager(items, managers, tk.kind);
@@ -435,30 +404,73 @@ fn selection_loop(
     }
 }
 
-fn view_page_end(view: &[&ui::SelectItem], start: usize, max_lines: usize) -> usize {
-    let mut end = start;
-    let mut lines = 0;
-    let mut last_group: Option<&str> = None;
-    while end < view.len() {
-        let item = view[end];
-        let mut add = 0;
-        if last_group != Some(item.group_path.as_str()) {
-            if last_group.is_some() {
-                add += 1;
-            }
-            add += 2;
-            last_group = Some(&item.group_path);
+/// Display the diff preview in a scrollable pager (stays in the alt screen).
+fn show_diff_pager(
+    out: &mut impl Write,
+    items: &[SelectItem],
+    managers: &[ManagerInfo],
+) -> io::Result<()> {
+    let mut buf = Vec::new();
+    ui::print_diff_preview(&mut buf, items, managers)?;
+    let content = String::from_utf8_lossy(&buf);
+    let lines: Vec<&str> = content.lines().collect();
+
+    let term_rows = term::terminal_size().map(|(_, h)| h as usize).unwrap_or(24);
+    let page_rows = term_rows.saturating_sub(2).max(1);
+    let max_scroll = lines.len().saturating_sub(page_rows);
+    let mut offset: usize = 0;
+
+    loop {
+        term::clear_screen(out)?;
+        term::hide_cursor(out)?;
+        for line in lines.iter().skip(offset).take(page_rows) {
+            writeln!(out, "{line}")?;
         }
-        add += 1;
-        if lines + add > max_lines && end > start {
-            break;
+        let end = (offset + page_rows).min(lines.len());
+        if lines.is_empty() {
+            writeln!(
+                out,
+                "  {DIM}No changes to preview (0 fixes selected).{RESET}",
+                DIM = term::DIM,
+                RESET = term::RESET,
+            )?;
+        } else {
+            writeln!(
+                out,
+                "  {DIM}lines {}-{} of {total}{RESET}",
+                offset + 1,
+                end,
+                total = lines.len(),
+                DIM = term::DIM,
+                RESET = term::RESET,
+            )?;
         }
-        lines += add;
-        end += 1;
+        write!(
+            out,
+            "  {YELLOW}↑↓{RESET} {DIM}scroll{RESET}  \
+             {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
+             {DIM}any other key to go back{RESET}",
+            YELLOW = term::YELLOW,
+            DIM = term::DIM,
+            RESET = term::RESET,
+        )?;
+        out.flush()?;
+
+        match term::read_key()? {
+            Key::Up => offset = offset.saturating_sub(1),
+            Key::Down => offset = (offset + 1).min(max_scroll),
+            Key::PageUp => offset = offset.saturating_sub(page_rows),
+            Key::PageDown => offset = (offset + page_rows).min(max_scroll),
+            Key::Home => offset = 0,
+            Key::End => offset = max_scroll,
+            Key::Unknown => {}
+            _ => break,
+        }
     }
-    end.max(start + 1).min(view.len())
+    Ok(())
 }
 
+/// Apply all selected fixes, returning a label + result for each.
 fn apply_selected(
     items: &[SelectItem],
     managers: &[ManagerInfo],
@@ -480,6 +492,7 @@ fn apply_selected(
         .collect()
 }
 
+/// Run the backup-restore subcommand (`depsguard restore`).
 fn run_restore() {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
@@ -610,6 +623,7 @@ fn restore_latest(backups: &[(PathBuf, PathBuf)], out: &mut impl Write) {
     writeln!(out).ok();
 }
 
+/// Restore a single backup file and remove the backup on success.
 fn restore_one(backup: &Path, original: &Path, out: &mut impl Write) {
     let display = manager::display_path(original);
     match fix::restore_backup(backup, original) {

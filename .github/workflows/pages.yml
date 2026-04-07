@@ -31,8 +31,8 @@ jobs:
           node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-      - name: Build site CSS
-        run: pnpm install --frozen-lockfile && pnpm --filter depsguard-docs run build:css
+      - name: Build docs
+        run: pnpm install --frozen-lockfile && pnpm --filter depsguard-docs run build
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
