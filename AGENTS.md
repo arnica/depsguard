@@ -95,14 +95,14 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
 | `RELEASE_BOT_TOKEN` | PAT used by release workflow to push Homebrew formula updates directly to `main` |
-| `SCOOP_BUCKET_TOKEN` | Push updated `depsguard.json` to `<owner>/scoop-depsguard` |
 | `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Homebrew formula is now maintained in this repository at `Formula/depsguard.rb`.
 On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and pushes
 the updated formula commit directly to `main`.
 
-Templates live under `packaging/`; render script currently used by CI is `scripts/release/publish-scoop-bucket.sh`.
+Both Homebrew and Scoop manifests are maintained in this repository (`Formula/depsguard.rb` and `bucket/depsguard.json`).
+Templates live under `packaging/`; render script for Scoop is `scripts/release/publish-scoop-bucket.sh`.
 
 ### End-user install channels (optional)
 
@@ -114,11 +114,11 @@ Document these in your org’s internal runbooks or public docs once the repos e
 2. Release workflow updates formula `url`/`sha256` directly on `main` for each release tag.
 3. Users tap with explicit repo URL: `brew tap <owner>/depsguard https://github.com/<owner>/depsguard`.
 
-**Scoop (custom bucket)**
+**Scoop (bucket in this repo)**
 
-1. Create `<owner>/scoop-depsguard` with `depsguard.json` (see `packaging/scoop/depsguard.json.in`).
-2. Users: `scoop bucket add <label> https://github.com/<owner>/scoop-depsguard` then `scoop install depsguard`.
-3. Set `SCOOP_BUCKET_TOKEN` with push access to the bucket repo.
+1. Scoop manifest lives at `bucket/depsguard.json` (rendered from `packaging/scoop/depsguard.json.in`).
+2. Release workflow updates the manifest directly on `main` for each release tag.
+3. Users: `scoop bucket add depsguard https://github.com/<owner>/depsguard` then `scoop install depsguard`.
 
 **WinGet**
 

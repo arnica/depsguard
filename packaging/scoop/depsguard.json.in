@@ -11,7 +11,7 @@
   },
   "bin": "depsguard.exe",
   "checkver": {
-    "github": "$GITHUB_REPO_SLUG"
+    "github": "$REPO_URL"
   },
   "autoupdate": {
     "architecture": {

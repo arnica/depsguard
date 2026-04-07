@@ -110,10 +110,10 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after repo setup above) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
 | Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard https://github.com/arnica/depsguard ; brew install depsguard` |
-| Scoop (custom bucket) | no | no | yes | `scoop bucket add <label> https://github.com/arnica/scoop-depsguard ; scoop install depsguard` |
+| Scoop (custom bucket) | no | no | yes | `scoop bucket add depsguard https://github.com/arnica/depsguard ; scoop install depsguard` |
 <!-- | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` | uncomment once approved in microsoft/winget-pkgs -->
 
-> Note: Scoop availability depends on package publication status.
+> Note: Scoop and WinGet availability depends on package publication status.
 
 ### Build from source
 
