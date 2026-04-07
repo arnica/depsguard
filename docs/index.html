@@ -305,12 +305,12 @@
   <h2>Install</h2>
   <div class="install-card">
     <div class="tab-bar" role="tablist">
-      <button role="tab" aria-selected="true"  data-tab="macos"   class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg> macOS</button>
-      <button role="tab" aria-selected="false" data-tab="linux"   class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
-      <button role="tab" aria-selected="false" data-tab="windows" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg> Windows</button>
-      <button role="tab" aria-selected="false" data-tab="cargo" class="install-tab"><img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;"> Cargo</button>
+      <button role="tab" aria-selected="true"  data-tab="macos"   id="tab-macos"   aria-controls="panel-macos"   tabindex="0" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg> macOS</button>
+      <button role="tab" aria-selected="false" data-tab="linux"   id="tab-linux"   aria-controls="panel-linux"   tabindex="-1" class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
+      <button role="tab" aria-selected="false" data-tab="windows" id="tab-windows" aria-controls="panel-windows" tabindex="-1" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg> Windows</button>
+      <button role="tab" aria-selected="false" data-tab="cargo"   id="tab-cargo"   aria-controls="panel-cargo"   tabindex="-1" class="install-tab"><img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;"> Cargo</button>
     </div>
-    <div data-panel="macos" class="install-panel">
+    <div data-panel="macos" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" class="install-panel">
       <div class="code-wrap install-code-wrap" data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
         <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
         <pre><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
@@ -318,7 +318,7 @@ brew install depsguard</code></pre>
       </div>
       <p class="code-note">Homebrew tap. Works on Apple Silicon and Intel.</p>
     </div>
-    <div data-panel="linux" class="install-panel" style="display:none">
+    <div data-panel="linux" id="panel-linux" role="tabpanel" aria-labelledby="tab-linux" class="install-panel" style="display:none">
       <div class="code-wrap install-code-wrap" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
         <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
         <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
@@ -329,7 +329,7 @@ sudo apt update && sudo apt install depsguard</code></pre>
       </div>
       <p class="code-note">Debian/Ubuntu via APT. Also available via <a href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
     </div>
-    <div data-panel="windows" class="install-panel" style="display:none">
+    <div data-panel="windows" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" class="install-panel" style="display:none">
       <p class="code-note" style="margin-bottom:.5rem; margin-top:0;">WinGet</p>
       <div class="code-wrap install-code-wrap" data-copy="winget install Arnica.DepsGuard">
         <button type="button" class="copy-btn install-copy-btn" aria-label="Copy WinGet command">Copy</button>
@@ -342,7 +342,7 @@ sudo apt update && sudo apt install depsguard</code></pre>
 scoop install depsguard</code></pre>
       </div>
     </div>
-    <div data-panel="cargo" class="install-panel" style="display:none">
+    <div data-panel="cargo" id="panel-cargo" role="tabpanel" aria-labelledby="tab-cargo" class="install-panel" style="display:none">
       <div class="code-wrap install-code-wrap" data-copy="cargo install depsguard">
         <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
         <pre><code>cargo install depsguard</code></pre>
@@ -466,8 +466,20 @@ scoop install depsguard</code></pre>
   tabs.forEach(function(tab){
     tab.addEventListener('click',function(){
       var target=tab.dataset.tab;
-      tabs.forEach(function(t){ var a=t.dataset.tab===target; t.setAttribute('aria-selected',a); });
+      tabs.forEach(function(t){
+        var a=t.dataset.tab===target;
+        t.setAttribute('aria-selected',a);
+        t.setAttribute('tabindex',a?'0':'-1');
+      });
       panels.forEach(function(p){ p.style.display=p.dataset.panel===target?'':'none'; });
+    });
+    tab.addEventListener('keydown',function(e){
+      var idx=Array.from(tabs).indexOf(tab), next=-1;
+      if(e.key==='ArrowRight'||e.key==='ArrowDown') next=(idx+1)%tabs.length;
+      else if(e.key==='ArrowLeft'||e.key==='ArrowUp') next=(idx-1+tabs.length)%tabs.length;
+      else if(e.key==='Home') next=0;
+      else if(e.key==='End') next=tabs.length-1;
+      if(next>=0){ e.preventDefault(); tabs[next].click(); tabs[next].focus(); }
     });
   });
   document.querySelectorAll('.install-btn[data-activate-tab]').forEach(function(btn){
