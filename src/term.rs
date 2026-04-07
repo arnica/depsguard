@@ -647,6 +647,32 @@ mod tests {
     }
 
     #[test]
+    fn ansi_enter_alt_screen() {
+        let mut buf = Vec::new();
+        enter_alt_screen(&mut buf).unwrap();
+        assert!(buf.starts_with(b"\x1b[?1049h"));
+        assert!(buf
+            .windows(b"\x1b[?1000h".len())
+            .any(|w| w == b"\x1b[?1000h"));
+        assert!(buf
+            .windows(b"\x1b[?1006h".len())
+            .any(|w| w == b"\x1b[?1006h"));
+    }
+
+    #[test]
+    fn ansi_leave_alt_screen() {
+        let mut buf = Vec::new();
+        leave_alt_screen(&mut buf).unwrap();
+        assert!(buf
+            .windows(b"\x1b[?1006l".len())
+            .any(|w| w == b"\x1b[?1006l"));
+        assert!(buf
+            .windows(b"\x1b[?1000l".len())
+            .any(|w| w == b"\x1b[?1000l"));
+        assert!(buf.ends_with(b"\x1b[?1049l"));
+    }
+
+    #[test]
     fn terminal_size_returns_something() {
         // May be None in CI, just ensure no panic
         let _ = terminal_size();

@@ -256,8 +256,8 @@ fn run_interactive() -> io::Result<()> {
         // ScreenGuard restores mouse, cursor, and buffer state on drop.
         let go_back = {
             term::enter_alt_screen(&mut out)?;
-            out.flush()?;
             let _screen = term::ScreenGuard;
+            out.flush()?;
             let _raw = term::RawMode::enable()?;
             selection_loop(&mut out, &mut items, &managers)?
         };
@@ -358,10 +358,23 @@ fn selection_loop(
             }
             Key::Enter => {
                 let results = apply_selected(items, managers);
-                for (label, result) in &results {
-                    if let Err(e) = result {
+                let errors: Vec<_> = results
+                    .iter()
+                    .filter_map(|(label, r)| r.as_ref().err().map(|e| (label, e)))
+                    .collect();
+                if !errors.is_empty() {
+                    term::clear_screen(out)?;
+                    for (label, e) in &errors {
                         writeln!(out, "  {}Error:{} {label}: {e}", term::RED, term::RESET)?;
                     }
+                    writeln!(
+                        out,
+                        "\n  {}Press any key to continue...{}",
+                        term::DIM,
+                        term::RESET
+                    )?;
+                    out.flush()?;
+                    while let Key::Unknown = term::read_key()? {}
                 }
                 return Ok(true);
             }
@@ -414,15 +427,24 @@ fn show_diff_pager(
             writeln!(out, "{line}")?;
         }
         let end = (offset + page_rows).min(lines.len());
-        writeln!(
-            out,
-            "  {DIM}lines {}-{} of {total}{RESET}",
-            offset + 1,
-            end,
-            total = lines.len(),
-            DIM = term::DIM,
-            RESET = term::RESET,
-        )?;
+        if lines.is_empty() {
+            writeln!(
+                out,
+                "  {DIM}No changes to preview (0 fixes selected).{RESET}",
+                DIM = term::DIM,
+                RESET = term::RESET,
+            )?;
+        } else {
+            writeln!(
+                out,
+                "  {DIM}lines {}-{} of {total}{RESET}",
+                offset + 1,
+                end,
+                total = lines.len(),
+                DIM = term::DIM,
+                RESET = term::RESET,
+            )?;
+        }
         write!(
             out,
             "  {YELLOW}↑↓{RESET} {DIM}scroll{RESET}  \

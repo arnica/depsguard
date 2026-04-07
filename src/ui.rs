@@ -916,10 +916,7 @@ pub fn print_diff_preview(
     items: &[SelectItem],
     managers: &[crate::manager::ManagerInfo],
 ) -> io::Result<()> {
-    writeln!(
-        w,
-        "  {BOLD}{WHITE}Preview of changes:{RESET}  {DIM}(press any key to go back){RESET}\n"
-    )?;
+    writeln!(w, "  {BOLD}{WHITE}Preview of changes:{RESET}\n")?;
 
     // Group selected items by config path
     let mut by_path: std::collections::BTreeMap<
@@ -1339,5 +1336,96 @@ mod tests {
             .filter(|op| !matches!(op, super::DiffOp::Equal(_, _)))
             .collect();
         assert!(!changes.is_empty());
+    }
+
+    // ── Page navigation helper tests ─────────────────────────────────
+
+    fn make_item(group: &str, label: &str) -> SelectItem {
+        SelectItem {
+            manager_idx: 0,
+            rec_idx: 0,
+            label: label.into(),
+            group_path: group.into(),
+            group_header: group.into(),
+            selected: false,
+        }
+    }
+
+    #[test]
+    fn page_end_empty_view() {
+        let view: Vec<&SelectItem> = vec![];
+        assert_eq!(page_end(&view, 0, 10), 0);
+    }
+
+    #[test]
+    fn page_end_single_group_fits() {
+        let items = vec![make_item("g", "a"), make_item("g", "b")];
+        let view: Vec<&SelectItem> = items.iter().collect();
+        // group header (2 lines) + 2 items = 4 lines; fits in 10
+        assert_eq!(page_end(&view, 0, 10), 2);
+    }
+
+    #[test]
+    fn page_end_respects_max_lines() {
+        let items = vec![
+            make_item("g", "a"),
+            make_item("g", "b"),
+            make_item("g", "c"),
+        ];
+        let view: Vec<&SelectItem> = items.iter().collect();
+        // group header = 2, each item = 1; total for 3 items = 5
+        // with max_lines=4, only 2 items fit (2 + 2 = 4)
+        assert_eq!(page_end(&view, 0, 4), 2);
+    }
+
+    #[test]
+    fn page_end_always_includes_at_least_one() {
+        let items = vec![make_item("g", "a")];
+        let view: Vec<&SelectItem> = items.iter().collect();
+        // Even with max_lines=1 (too small for header+item), includes 1 item
+        assert_eq!(page_end(&view, 0, 1), 1);
+    }
+
+    #[test]
+    fn find_page_start_empty_view() {
+        let view: Vec<&SelectItem> = vec![];
+        assert_eq!(find_page_start(&view, 0, 10), 0);
+        assert_eq!(find_page_start(&view, 5, 10), 0);
+    }
+
+    #[test]
+    fn find_page_start_finds_correct_page() {
+        let items = vec![
+            make_item("g1", "a"),
+            make_item("g1", "b"),
+            make_item("g2", "c"),
+            make_item("g2", "d"),
+        ];
+        let view: Vec<&SelectItem> = items.iter().collect();
+        // With max_lines=4: page 0 = g1 header(2) + a(1) + b(1) = 4 lines → items 0..2
+        // page 1 starts at 2
+        assert_eq!(find_page_start(&view, 0, 4), 0);
+        assert_eq!(find_page_start(&view, 1, 4), 0);
+        assert_eq!(find_page_start(&view, 2, 4), 2);
+        assert_eq!(find_page_start(&view, 3, 4), 2);
+    }
+
+    #[test]
+    fn prev_page_start_at_zero() {
+        let view: Vec<&SelectItem> = vec![];
+        assert_eq!(prev_page_start(&view, 0, 10), 0);
+    }
+
+    #[test]
+    fn last_page_start_empty_view() {
+        let view: Vec<&SelectItem> = vec![];
+        assert_eq!(last_page_start(&view, 10), 0);
+    }
+
+    #[test]
+    fn last_page_start_single_page() {
+        let items = vec![make_item("g", "a")];
+        let view: Vec<&SelectItem> = items.iter().collect();
+        assert_eq!(last_page_start(&view, 10), 0);
     }
 }
