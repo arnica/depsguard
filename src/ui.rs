@@ -189,34 +189,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         s.len()
     };
 
-    if total_issues == 0 {
-        writeln!(
-            w,
-            "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
-            plural(unique_configs, "config", "configs")
-        )?;
-    } else {
-        write!(w, "  ")?;
-        if missing_count > 0 {
-            write!(w, "{RED}{BOLD}{missing_count} not set{RESET}  ")?;
-        }
-        if wrong_count > 0 {
-            write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
-        }
-        if unsupported_count > 0 {
-            write!(w, "{BLUE}{unsupported_count} unsupported{RESET}  ")?;
-        }
-        write!(w, "{GREEN}{ok_count} ok{RESET}")?;
-        let total = ok_count + missing_count + wrong_count + unsupported_count;
-        writeln!(
-            w,
-            "  {DIM}({} total across {}){RESET}\n",
-            plural(total, "check", "checks"),
-            plural(unique_configs, "config", "configs"),
-        )?;
-    }
-
-    writeln!(w, "  {BOLD}{WHITE}Detected Package Managers:{RESET}\n")?;
+    writeln!(w, "  {BOLD}{WHITE}Detected locations:{RESET}\n")?;
 
     // Group managers that share the same config path
     let mut groups: Vec<Vec<usize>> = Vec::new();
@@ -290,6 +263,34 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         }
         writeln!(w)?;
     }
+
+    if total_issues == 0 {
+        writeln!(
+            w,
+            "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
+            plural(unique_configs, "config", "configs")
+        )?;
+    } else {
+        write!(w, "  ")?;
+        if missing_count > 0 {
+            write!(w, "{RED}{BOLD}{missing_count} not set{RESET}  ")?;
+        }
+        if wrong_count > 0 {
+            write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
+        }
+        if unsupported_count > 0 {
+            write!(w, "{BLUE}{unsupported_count} unsupported{RESET}  ")?;
+        }
+        write!(w, "{GREEN}{ok_count} ok{RESET}")?;
+        let total = ok_count + missing_count + wrong_count + unsupported_count;
+        writeln!(
+            w,
+            "  {DIM}({} total across {}){RESET}\n",
+            plural(total, "check", "checks"),
+            plural(unique_configs, "config", "configs"),
+        )?;
+    }
+
     Ok(())
 }
 
