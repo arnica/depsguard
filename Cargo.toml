@@ -1,0 +1,42 @@
+[package]
+name = "depsguard"
+version = "0.1.24"
+edition = "2021"
+description = "Harden package manager configs against supply chain attacks. Built by Arnica."
+license = "MIT"
+repository = "https://github.com/arnica/depsguard"
+homepage = "https://depsguard.com"
+documentation = "https://github.com/arnica/depsguard#readme"
+readme = "README.md"
+keywords = ["security", "supply-chain", "npm", "pnpm", "uv"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["Arnica <engineering@arnica.io>"]
+rust-version = "1.74"
+exclude = [
+  ".cursor/",
+  "dist/",
+  "docs/",
+  ".github/",
+  "node_modules/",
+  "packaging/",
+  "scripts/",
+  "tests/",
+  "target/",
+]
+
+[[bin]]
+name = "depsguard"
+path = "src/main.rs"
+
+[dependencies]
+
+# Config for `cargo release` CLI tool (does not affect `cargo publish` in GitHub Actions).
+# crates.io publishing is handled by .github/workflows/release.yml when CARGO_REGISTRY_TOKEN is set.
+[package.metadata.release]
+publish = false
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

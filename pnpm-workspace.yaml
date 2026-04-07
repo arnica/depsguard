@@ -1,0 +1,8 @@
+# Aligns with DepsGuard's pnpm-workspace checks (see README + scan_pnpm_workspace).
+packages:
+  - docs
+
+minimumReleaseAge: 10080 # minutes; 7 days (same default as depsguard get_delay_days)
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+strictDepBuilds: true

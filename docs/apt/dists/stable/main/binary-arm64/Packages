@@ -1,0 +1,13 @@
+Package: depsguard
+Version: 0.1.24
+Architecture: arm64
+Maintainer: Arnica <engineering@arnica.io>
+Filename: pool/main/d/depsguard/depsguard_0.1.24_arm64.deb
+Size: 229764
+MD5sum: 08d9d38d62e6f3439d36a5b6e621e3b4
+SHA1: 099768db6db381194696f43fd014b057cedcf327
+SHA256: 12bc533921e5bc2b3b486efd28c5c436ef06c049e5643aabfd11ed37edd6d0b8
+Section: utils
+Priority: optional
+Description: Harden package manager configs against supply chain attacks
+

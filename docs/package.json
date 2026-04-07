@@ -1,0 +1,16 @@
+{
+  "name": "depsguard-docs",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./tailwind.input.css -o ./styles.css --minify",
+    "build:vendor": "cp node_modules/asciinema-player/dist/bundle/asciinema-player.min.js node_modules/asciinema-player/dist/bundle/asciinema-player.css vendor/",
+    "build": "mkdir -p vendor && npm run build:css && npm run build:vendor",
+    "dev": "mkdir -p vendor && npm run build:vendor && npx serve ."
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  },
+  "dependencies": {
+    "asciinema-player": "^3.15.1"
+  }
+}

@@ -19,3 +19,33 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+
+# Added by cargo
+
+/target
+.DS_Store
+
+# JS (pnpm workspace root + docs package)
+node_modules/
+dist/
+
+# Docs: generated Tailwind CSS (built in CI or via pnpm run build:css)
+docs/styles.css
+docs/vendor/
+
+# Release/tag automation outputs (local artifacts)
+depsguard-*.tar.gz
+depsguard-*.tar.gz.sha256
+depsguard-*.zip
+depsguard-*.zip.sha256
+depsguard_*.deb
+depsguard_*.deb.sha256
+!docs/apt/pool/**/*.deb
+pkg/
+artifacts/
+
+# Homebrew formula is tracked in-repo (updated via release automation PRs)
+
+# Serena (editor tooling)
+.serena/
