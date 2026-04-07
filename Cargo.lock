@@ -4,4 +4,4 @@ version = 3
 
 [[package]]
 name = "depsguard"
-version = "0.1.21"
+version = "0.1.22"
