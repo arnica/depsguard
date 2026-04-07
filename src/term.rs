@@ -137,6 +137,19 @@ pub fn clear_screen(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[2J\x1b[H")
 }
 
+pub fn enter_alt_screen(w: &mut impl Write) -> io::Result<()> {
+    // ?1049h  = alternate screen buffer
+    // ?1000h  = enable basic mouse tracking (so scroll sends mouse events
+    //           instead of being converted to arrow keys by the terminal)
+    // ?1006h  = SGR extended mouse mode (printable, easier to parse)
+    write!(w, "\x1b[?1049h\x1b[?1000h\x1b[?1006h")
+}
+
+#[allow(dead_code)]
+pub fn leave_alt_screen(w: &mut impl Write) -> io::Result<()> {
+    write!(w, "\x1b[?1006l\x1b[?1000l\x1b[?1049l")
+}
+
 pub fn hide_cursor(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[?25l")
 }
@@ -145,6 +158,55 @@ pub fn hide_cursor(w: &mut impl Write) -> io::Result<()> {
 pub fn show_cursor(w: &mut impl Write) -> io::Result<()> {
     write!(w, "\x1b[?25h")
 }
+
+/// RAII guard that restores mouse, cursor, and screen buffer state on drop.
+pub struct ScreenGuard;
+
+impl Drop for ScreenGuard {
+    fn drop(&mut self) {
+        let mut out = io::stdout();
+        let _ = out.write_all(b"\x1b[?1006l\x1b[?1000l");
+        let _ = out.flush();
+        flush_stdin();
+        let _ = out.write_all(b"\x1b[?25h");
+        let _ = out.write_all(b"\x1b[?1049l");
+        let _ = out.flush();
+    }
+}
+
+/// Discard any bytes already queued in the stdin buffer (e.g. trailing mouse events).
+#[cfg(unix)]
+fn flush_stdin() {
+    #[cfg(target_os = "linux")]
+    const TCIFLUSH: i32 = 0;
+    #[cfg(target_os = "macos")]
+    const TCIFLUSH: i32 = 1;
+
+    extern "C" {
+        fn tcflush(fd: i32, queue_selector: i32) -> i32;
+    }
+    // SAFETY: tcflush(0, TCIFLUSH) is a standard POSIX call on fd 0 (stdin).
+    unsafe {
+        tcflush(0, TCIFLUSH);
+    }
+}
+
+#[cfg(windows)]
+fn flush_stdin() {
+    const STD_INPUT_HANDLE: u32 = 0xFFFF_FFF6;
+    extern "system" {
+        fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
+        fn FlushConsoleInputBuffer(hConsoleInput: *mut std::ffi::c_void) -> i32;
+    }
+    // SAFETY: Standard Win32 console APIs on the input handle.
+    unsafe {
+        let handle = GetStdHandle(STD_INPUT_HANDLE);
+        FlushConsoleInputBuffer(handle);
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn flush_stdin() {}
 
 /// RAII guard that restores cursor visibility on drop (prevents broken terminal on errors).
 pub struct CursorGuard;
@@ -489,6 +551,28 @@ pub fn read_key() -> io::Result<Key> {
             }
             last[0]
         };
+
+        // SGR mouse event: ESC [ < Cb ; Cx ; Cy M/m — consume and discard
+        if letter == b'<' {
+            let mut b = [0u8; 1];
+            loop {
+                if stdin.read(&mut b)? == 0 {
+                    break;
+                }
+                if b[0] == b'M' || b[0] == b'm' {
+                    break;
+                }
+            }
+            return Ok(Key::Unknown);
+        }
+
+        // Basic mouse event: ESC [ M followed by 3 bytes — consume and discard
+        if letter == b'M' {
+            let mut buf = [0u8; 3];
+            let _ = stdin.read(&mut buf)?;
+            return Ok(Key::Unknown);
+        }
+
         // Extended sequences like ESC [5~ (PageUp), ESC [6~ (PageDown)
         if letter.is_ascii_digit() {
             let mut tilde = [0u8; 1];

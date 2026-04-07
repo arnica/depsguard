@@ -207,15 +207,13 @@ fn run_interactive() -> io::Result<()> {
     let mut out = term::ColorWriter::new(stdout.lock());
 
     loop {
-        // Phase 1: Scan
-        term::clear_screen(&mut out)?;
+        // Phase 1: Scan results (normal screen — user can scroll)
         ui::print_banner(&mut out)?;
         let managers = manager::scan_all_with_progress(progress_callback);
         ui::clear_progress(&mut out)?;
         writeln!(out)?;
         ui::print_scan_results(&mut out, &managers)?;
 
-        // Build fixable items
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
             writeln!(
@@ -228,7 +226,6 @@ fn run_interactive() -> io::Result<()> {
             return Ok(());
         }
 
-        // Phase 2: Interactive selection
         writeln!(
             out,
             "  {}Press any key to enter selection mode (q to quit)...{}",
@@ -237,20 +234,37 @@ fn run_interactive() -> io::Result<()> {
         )?;
         out.flush()?;
 
-        {
+        // Wait for an intentional keypress (no alt screen yet, so scroll
+        // just scrolls the terminal normally).
+        let enter_selection = {
             let _raw = term::RawMode::enable()?;
-            let _cursor = term::CursorGuard; // restores cursor on drop (even on error unwind)
-            let key = term::read_key()?;
-            if matches!(key, Key::Char('q') | Key::Escape) {
-                return Ok(());
+            loop {
+                let key = term::read_key()?;
+                match key {
+                    Key::Char('q') | Key::Escape => break false,
+                    Key::Unknown => continue,
+                    _ => break true,
+                }
             }
+        };
 
-            let go_back = selection_loop(&mut out, &mut items, &managers)?;
+        if !enter_selection {
+            return Ok(());
+        }
 
-            if !go_back {
-                return Ok(());
-            }
-            // _raw and _cursor drop here, restoring terminal state
+        // Phase 2: Selection (alternate screen — no scrollback pollution,
+        // mouse reporting eats trackpad scroll).
+        let go_back = {
+            term::enter_alt_screen(&mut out)?;
+            out.flush()?;
+            let _screen = term::ScreenGuard;
+            let _raw = term::RawMode::enable()?;
+            let _cursor = term::CursorGuard;
+            selection_loop(&mut out, &mut items, &managers)?
+        };
+
+        if !go_back {
+            return Ok(());
         }
         // go_back == true: loop back to scan results
     }
