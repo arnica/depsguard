@@ -514,53 +514,51 @@ fn apply_dependabot_fix(path: &Path, _key: &str, value: &str) -> io::Result<Stri
         }
     }
 
-    {
-        // Second pass: find update entries that lack cooldown and insert it
-        let mut i = 0;
-        while i < lines.len() {
-            let trimmed = lines[i].trim().to_string();
-            if trimmed.starts_with("- package-ecosystem:") {
-                let entry_indent = lines[i].len() - lines[i].trim_start().len();
-                let prop_indent = entry_indent + 2;
-                let indent_str: String = " ".repeat(prop_indent);
-                let cooldown_indent: String = " ".repeat(prop_indent + 2);
+    // Second pass: find update entries that lack cooldown and insert it
+    let mut i = 0;
+    while i < lines.len() {
+        let trimmed = lines[i].trim().to_string();
+        if trimmed.starts_with("- package-ecosystem:") {
+            let entry_indent = lines[i].len() - lines[i].trim_start().len();
+            let prop_indent = entry_indent + 2;
+            let indent_str: String = " ".repeat(prop_indent);
+            let cooldown_indent: String = " ".repeat(prop_indent + 2);
 
-                // Check if this entry already has a cooldown block
-                let mut has_cooldown = false;
-                let mut insert_before = i + 1;
-                let mut j = i + 1;
-                while j < lines.len() {
-                    let lt = lines[j].trim();
-                    if lt.is_empty() || lt.starts_with('#') {
-                        j += 1;
-                        continue;
-                    }
-                    let li = lines[j].len() - lines[j].trim_start().len();
-                    if li <= entry_indent && lt.starts_with('-') {
-                        break;
-                    }
-                    if li == 0 && !lt.starts_with('-') && !lt.starts_with('#') {
-                        break;
-                    }
-                    if lt == "cooldown:" {
-                        has_cooldown = true;
-                    }
-                    insert_before = j + 1;
+            // Check if this entry already has a cooldown block
+            let mut has_cooldown = false;
+            let mut insert_before = i + 1;
+            let mut j = i + 1;
+            while j < lines.len() {
+                let lt = lines[j].trim();
+                if lt.is_empty() || lt.starts_with('#') {
                     j += 1;
-                }
-
-                if !has_cooldown {
-                    lines.insert(
-                        insert_before,
-                        format!("{cooldown_indent}default-days: {value}"),
-                    );
-                    lines.insert(insert_before, format!("{indent_str}cooldown:"));
-                    i = insert_before + 2;
                     continue;
                 }
+                let li = lines[j].len() - lines[j].trim_start().len();
+                if li <= entry_indent && lt.starts_with('-') {
+                    break;
+                }
+                if li == 0 && !lt.starts_with('-') && !lt.starts_with('#') {
+                    break;
+                }
+                if lt == "cooldown:" {
+                    has_cooldown = true;
+                }
+                insert_before = j + 1;
+                j += 1;
             }
-            i += 1;
+
+            if !has_cooldown {
+                lines.insert(
+                    insert_before,
+                    format!("{cooldown_indent}default-days: {value}"),
+                );
+                lines.insert(insert_before, format!("{indent_str}cooldown:"));
+                i = insert_before + 2;
+                continue;
+            }
         }
+        i += 1;
     }
 
     let output = lines.join("\n") + "\n";

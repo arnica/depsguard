@@ -278,9 +278,14 @@ fn appdata_dir() -> PathBuf {
 /// Always uses forward slashes for consistency across platforms.
 pub fn display_path(path: &Path) -> String {
     let home = home_dir();
-    match path.strip_prefix(&home) {
-        Ok(rel) => format!("~/{}", rel.display()).replace('\\', "/"),
+    let raw = match path.strip_prefix(&home) {
+        Ok(rel) => format!("~/{}", rel.display()),
         Err(_) => path.display().to_string(),
+    };
+    if std::path::MAIN_SEPARATOR == '\\' {
+        raw.replace('\\', "/")
+    } else {
+        raw
     }
 }
 
@@ -554,6 +559,7 @@ pub fn read_json_string_value(path: &Path, key: &str) -> Option<String> {
 #[derive(Debug, Clone)]
 pub struct DependabotEntry {
     pub ecosystem: String,
+    pub directory: String,
     pub cooldown_default_days: Option<u64>,
 }
 
@@ -583,6 +589,7 @@ pub fn read_dependabot_entries(path: &Path) -> Vec<DependabotEntry> {
             let entry_indent = lines[i].len() - lines[i].trim_start().len();
             let prop_indent = entry_indent + 2; // properties are indented 2 more than the `-`
 
+            let mut directory = String::from("/");
             let mut cooldown_days: Option<u64> = None;
             let mut j = i + 1;
             while j < lines.len() {
@@ -603,6 +610,11 @@ pub fn read_dependabot_entries(path: &Path) -> Vec<DependabotEntry> {
                     && !line_trimmed.starts_with('#')
                 {
                     break;
+                }
+                if line_trimmed.starts_with("directory:") && line_indent == prop_indent {
+                    if let Some((_, v)) = line_trimmed.split_once(':') {
+                        directory = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                    }
                 }
                 if line_trimmed == "cooldown:" && line_indent >= prop_indent {
                     // Read children of cooldown
@@ -631,6 +643,7 @@ pub fn read_dependabot_entries(path: &Path) -> Vec<DependabotEntry> {
             }
             entries.push(DependabotEntry {
                 ecosystem,
+                directory,
                 cooldown_default_days: cooldown_days,
             });
             i = j;
@@ -1058,7 +1071,10 @@ fn scan_dependabot(path: &Path) -> Vec<Recommendation> {
         let key = if single {
             "cooldown.default-days".into()
         } else {
-            format!("cooldown.default-days ({})", entry.ecosystem)
+            format!(
+                "cooldown.default-days ({}: {})",
+                entry.ecosystem, entry.directory
+            )
         };
         recs.push(Recommendation {
             key,
@@ -1839,6 +1855,7 @@ mod tests {
         let entries = read_dependabot_entries(f.path());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].ecosystem, "npm");
+        assert_eq!(entries[0].directory, "/");
         assert_eq!(entries[0].cooldown_default_days, Some(7));
     }
 
@@ -1850,16 +1867,19 @@ mod tests {
         let entries = read_dependabot_entries(f.path());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].ecosystem, "pip");
+        assert_eq!(entries[0].directory, "/");
         assert_eq!(entries[0].cooldown_default_days, None);
     }
 
     #[test]
     fn read_dependabot_multiple_entries() {
         let f = tmp_file(
-            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 5\n  - package-ecosystem: \"pip\"\n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n",
+            "version: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    cooldown:\n      default-days: 5\n  - package-ecosystem: \"pip\"\n    directory: \"/backend\"\n    schedule:\n      interval: \"daily\"\n",
         );
         let entries = read_dependabot_entries(f.path());
         assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].directory, "/");
+        assert_eq!(entries[1].directory, "/backend");
         assert_eq!(entries[0].cooldown_default_days, Some(5));
         assert_eq!(entries[1].cooldown_default_days, None);
     }
@@ -1980,6 +2000,25 @@ mod tests {
         assert_ne!(recs[0].key, recs[1].key);
         assert!(recs[0].key.contains("npm"));
         assert!(recs[1].key.contains("github-actions"));
+    }
+
+    #[test]
+    fn scan_dependabot_same_ecosystem_different_dirs() {
+        let f = tmp_file(concat!(
+            "version: 2\nupdates:\n",
+            "  - package-ecosystem: \"npm\"\n    directory: \"/\"\n",
+            "    cooldown:\n      default-days: 7\n",
+            "  - package-ecosystem: \"npm\"\n    directory: \"/docs\"\n",
+            "    schedule:\n      interval: \"weekly\"\n",
+        ));
+        let recs = scan_dependabot(f.path());
+        assert_eq!(recs.len(), 2);
+        assert_ne!(recs[0].key, recs[1].key);
+        assert!(recs[0].key.contains("/"), "key should include directory");
+        assert!(
+            recs[1].key.contains("/docs"),
+            "key should include directory"
+        );
     }
 
     #[test]
