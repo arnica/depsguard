@@ -858,33 +858,53 @@ fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
     )]
 }
 
-fn scan_pnpm_workspace(path: &Path) -> Vec<Recommendation> {
+fn scan_pnpm_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
+
+    let check = |min_major, min_minor, key: &str, expected: &str, desc: &str, mode| {
+        if version_at_least(version, min_major, min_minor) {
+            check_yaml(path, key, expected, desc, mode)
+        } else {
+            Recommendation {
+                key: key.into(),
+                description: desc.into(),
+                expected: expected.into(),
+                status: CheckStatus::Unsupported(format!(
+                    "requires pnpm \u{2265} {min_major}.{min_minor} (have {version})"
+                )),
+            }
+        }
+    };
+
     vec![
-        check_yaml(
-            path,
+        check(
+            10,
+            16,
             "minimumReleaseAge",
             &minutes.to_string(),
             &format!("Delay new versions by {days} days"),
             YamlCheck::MinInt(minutes),
         ),
-        check_yaml(
-            path,
+        check(
+            10,
+            26,
             "blockExoticSubdeps",
             "true",
             "Block untrusted transitive deps",
             YamlCheck::Exact,
         ),
-        check_yaml(
-            path,
+        check(
+            10,
+            21,
             "trustPolicy",
             "no-downgrade",
             "Block provenance downgrades",
             YamlCheck::Exact,
         ),
-        check_yaml(
-            path,
+        check(
+            10,
+            3,
             "strictDepBuilds",
             "true",
             "Fail on unreviewed build scripts",
@@ -1149,7 +1169,7 @@ fn scan_repo_configs_with_progress(
             RepoConfigKind::PnpmWorkspace => {
                 if !is_excluded(ManagerKind::PnpmWorkspace) {
                     if let Some(ver) = detected_versions.get("pnpm") {
-                        let recs = scan_pnpm_workspace(&path);
+                        let recs = scan_pnpm_workspace(&path, ver);
                         results.push(ManagerInfo {
                             kind: ManagerKind::PnpmWorkspace,
                             version: ver.clone(),
@@ -1737,7 +1757,7 @@ mod tests {
         let f = tmp_file(
             "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
         );
-        let recs = scan_pnpm_workspace(f.path());
+        let recs = scan_pnpm_workspace(f.path(), "10.26.0");
         assert_eq!(recs.len(), 4);
         assert!(recs.iter().all(|r| r.status.is_ok()));
     }
@@ -1745,25 +1765,66 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_missing() {
         let f = tmp_file("");
-        let recs = scan_pnpm_workspace(f.path());
+        let recs = scan_pnpm_workspace(f.path(), "10.26.0");
         assert_eq!(recs.len(), 4);
-        assert!(recs
-            .iter()
-            .all(|r| matches!(r.status, CheckStatus::Missing)));
+        assert!(
+            recs.iter()
+                .filter(|r| matches!(r.status, CheckStatus::Missing))
+                .count()
+                == 4
+        );
     }
 
     #[test]
     fn scan_pnpm_workspace_higher_release_age_ok() {
         let f = tmp_file("minimumReleaseAge: 10080\n");
-        let recs = scan_pnpm_workspace(f.path());
+        let recs = scan_pnpm_workspace(f.path(), "10.26.0");
         assert!(recs[0].status.is_ok()); // 10080 >= 4320
     }
 
     #[test]
     fn scan_pnpm_workspace_low_release_age() {
         let f = tmp_file("minimumReleaseAge: 100\n");
-        let recs = scan_pnpm_workspace(f.path());
+        let recs = scan_pnpm_workspace(f.path(), "10.26.0");
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_old_version_block_exotic_unsupported() {
+        let f = tmp_file(
+            "minimumReleaseAge: 10080\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+        );
+        let recs = scan_pnpm_workspace(f.path(), "10.25.0");
+        let exotic = recs.iter().find(|r| r.key == "blockExoticSubdeps").unwrap();
+        assert!(matches!(exotic.status, CheckStatus::Unsupported(_)));
+        let trust = recs.iter().find(|r| r.key == "trustPolicy").unwrap();
+        assert!(trust.status.is_ok());
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_very_old_version_all_unsupported() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_workspace(f.path(), "10.2.0");
+        assert!(
+            recs.iter()
+                .all(|r| matches!(r.status, CheckStatus::Unsupported(_))),
+            "all settings should be unsupported on pnpm 10.2: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_version_10_16_partial_support() {
+        let f = tmp_file("minimumReleaseAge: 10080\nstrictDepBuilds: true\n");
+        let recs = scan_pnpm_workspace(f.path(), "10.16.0");
+        let age = recs.iter().find(|r| r.key == "minimumReleaseAge").unwrap();
+        assert!(age.status.is_ok());
+        let strict = recs.iter().find(|r| r.key == "strictDepBuilds").unwrap();
+        assert!(strict.status.is_ok());
+        let trust = recs.iter().find(|r| r.key == "trustPolicy").unwrap();
+        assert!(matches!(trust.status, CheckStatus::Unsupported(_)));
+        let exotic = recs.iter().find(|r| r.key == "blockExoticSubdeps").unwrap();
+        assert!(matches!(exotic.status, CheckStatus::Unsupported(_)));
     }
 
     // ── parse_semver tests ───────────────────────────────────────────

@@ -6,6 +6,11 @@ Guidelines for AI agents working on this codebase.
 
 DepsGuard is a zero-dependency Rust CLI that scans package manager configs (npm, pnpm, bun, uv) for supply chain security best practices and offers interactive fixes. It targets Linux, macOS, and Windows.
 
+## Git workflow
+
+- **Never push directly to `main`** without explicit permission from the user. Always use a feature branch and open a pull request.
+- Do not force-push or run destructive git operations unless explicitly asked.
+
 ## Commit messages
 
 Use **Conventional Commits** (<https://www.conventionalcommits.org/>).
@@ -95,7 +100,7 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
 | `RELEASE_BOT_TOKEN` | PAT used by release workflow to push Homebrew formula updates directly to `main` |
-| `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
+| `WINGATE_RELEASE_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Homebrew formula is now maintained in this repository at `Formula/depsguard.rb`.
 On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and pushes
@@ -122,7 +127,7 @@ Document these in your org’s internal runbooks or public docs once the repos e
 
 **WinGet**
 
-- Optional job uses [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) when `WINGET_PKGS_TOKEN` is set.
+- Optional job uses [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) when `WINGATE_RELEASE_TOKEN` is set.
 - At least one version of `Arnica.DepsGuard` must exist in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) (first manifest is usually manual); the token owner needs a fork of `winget-pkgs`.
 
 **Other templates in-repo**

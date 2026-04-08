@@ -1,646 +1,1797 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>DepsGuard - Supply Chain Defense</title>
-<meta name="description" content="Guard your dependencies against supply chain attacks. Zero dependencies. One command.">
-<link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
-<link rel="apple-touch-icon" href="img/favicon/favicon.svg">
-<meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="color-scheme" content="dark light">
-<link rel="stylesheet" href="vendor/asciinema-player.css">
-<style>
-  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior:smooth; } }
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-  :root {
-    --bg:        #0a0e17;
-    --surface:   #111827;
-    --surface-2: #1a2233;
-    --border:    #1f2937;
-    --border-hi: #374151;
-    --text:      #f3f4f6;
-    --text-dim:  #9ca3b8;
-    --text-mute: #6b7280;
-    --text-strong: #ffffff;
-    --arnica:    #44bea4;
-    --gold:      #fbbf24;
-    --nav-bg:    rgba(10,14,23,.85);
-    --hero-glow: rgba(68,190,164,.04);
-    --terminal-chrome: #1e293b;
-    --terminal-bg: #0f1219;
-    --grid-major:  rgba(255,255,255,.025);
-    --grid-minor:  rgba(255,255,255,.012);
-    --mono:      'SF Mono','Menlo','Monaco','Cascadia Code','Fira Code','Courier New',monospace;
-    --sans:      -apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;
-  }
-  @media (prefers-color-scheme: light) {
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DepsGuard - Supply Chain Defense</title>
+  <meta name="description"
+    content="Guard your dependencies against supply chain attacks. Zero dependencies. One command.">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://depsguard.com/">
+  <meta property="og:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
+  <meta property="og:description"
+    content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
+  <meta name="twitter:description"
+    content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="img/favicon/favicon.svg">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="vendor/asciinema-player.css">
+  <style>
+    @media (prefers-reduced-motion: no-preference) {
+      html {
+        scroll-behavior: smooth;
+      }
+    }
+
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     :root {
-      --bg:        #ffffff;
-      --surface:   #f8fafc;
-      --surface-2: #f1f5f9;
-      --border:    #e2e8f0;
-      --border-hi: #cbd5e1;
-      --text:      #1e293b;
-      --text-dim:  #475569;
-      --text-mute: #94a3b8;
-      --text-strong: #0f172a;
-      --arnica:    #0d9488;
-      --gold:      #451a03;
-      --nav-bg:    rgba(255,255,255,.85);
-      --hero-glow: rgba(68,190,164,.06);
-      --terminal-chrome: #e2e8f0;
-      --terminal-bg: #1e293b;
-      --grid-major:  rgba(0,0,0,.035);
-      --grid-minor:  rgba(0,0,0,.018);
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface-2: #1a2233;
+      --border: #1f2937;
+      --border-hi: #374151;
+      --text: #f3f4f6;
+      --text-dim: #9ca3b8;
+      --text-mute: #6b7280;
+      --text-strong: #ffffff;
+      --arnica: #44bea4;
+      --gold: #fbbf24;
+      --nav-bg: rgba(10, 14, 23, .85);
+      --hero-glow: rgba(68, 190, 164, .04);
+      --terminal-chrome: #1e293b;
+      --terminal-bg: #0f1219;
+      --grid-major: rgba(255, 255, 255, .025);
+      --grid-minor: rgba(255, 255, 255, .012);
+      --mono: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
     }
-  }
-  body {
-    font-family: var(--sans); background: var(--bg); color: var(--text);
-    line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
-  }
-  .grid-bg {
-    position:relative;
-    background-image:
-      linear-gradient(var(--grid-major) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
-      linear-gradient(var(--grid-minor) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
-    background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px;
-  }
-  .grid-bg::before, .grid-bg::after {
-    content:''; position:absolute; left:0; right:0; height:8rem; z-index:1; pointer-events:none;
-  }
-  .grid-bg::before { top:0; background:linear-gradient(to bottom, var(--bg), transparent); }
-  .grid-bg::after { bottom:0; background:linear-gradient(to top, var(--bg), transparent); }
-  a { color: inherit; text-decoration: none; }
-  code {
-    font-family: var(--mono); font-size:.875em;
-    background:rgba(139,92,246,.08); color:#a78bfa;
-    padding:.15em .35em; border-radius:4px;
-    border:1px solid rgba(139,92,246,.15);
-  }
-  pre code {
-    background:none; padding:0; border:none; border-radius:0; font-size:inherit;
-  }
-  kbd {
-    font-family: var(--mono); font-size:.8125em; font-weight:700;
-    color:var(--gold); background:var(--terminal-bg);
-    padding:.15em .4em; border-radius:4px;
-    border:1px solid var(--border-hi);
-    white-space:nowrap;
-    margin:0 .1em;
-  }
-  @media (prefers-color-scheme: light) {
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --surface: #f8fafc;
+        --surface-2: #f1f5f9;
+        --border: #e2e8f0;
+        --border-hi: #cbd5e1;
+        --text: #1e293b;
+        --text-dim: #475569;
+        --text-mute: #94a3b8;
+        --text-strong: #0f172a;
+        --arnica: #0d9488;
+        --gold: #451a03;
+        --nav-bg: rgba(255, 255, 255, .85);
+        --hero-glow: rgba(68, 190, 164, .06);
+        --terminal-chrome: #e2e8f0;
+        --terminal-bg: #1e293b;
+        --grid-major: rgba(0, 0, 0, .035);
+        --grid-minor: rgba(0, 0, 0, .018);
+      }
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    .grid-bg {
+      position: relative;
+      background-image:
+        linear-gradient(var(--grid-major) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+        linear-gradient(var(--grid-minor) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+      background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px;
+    }
+
+    .grid-bg::before,
+    .grid-bg::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 8rem;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .grid-bg::before {
+      top: 0;
+      background: linear-gradient(to bottom, var(--bg), transparent);
+    }
+
+    .grid-bg::after {
+      bottom: 0;
+      background: linear-gradient(to top, var(--bg), transparent);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
     code {
-      background:rgba(109,40,217,.07); color:#6d28d9;
-      border-color:rgba(109,40,217,.18);
+      font-family: var(--mono);
+      font-size: .875em;
+      background: rgba(139, 92, 246, .08);
+      color: #a78bfa;
+      padding: .15em .35em;
+      border-radius: 4px;
+      border: 1px solid rgba(139, 92, 246, .15);
     }
+
+    pre code {
+      background: none;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      font-size: inherit;
+    }
+
     kbd {
-      color:#fbbf24; background:#1e293b;
-      border-color:#374151;
+      font-family: var(--mono);
+      font-size: .8125em;
+      font-weight: 700;
+      color: var(--gold);
+      background: var(--terminal-bg);
+      padding: .15em .4em;
+      border-radius: 4px;
+      border: 1px solid var(--border-hi);
+      white-space: nowrap;
+      margin: 0 .1em;
     }
-  }
-  pre { margin: 0; }
 
-  @keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-  .fade-in   { animation: fadeIn .6s ease-out forwards; }
-  .fade-d1   { animation: fadeIn .6s ease-out .15s forwards; opacity:0; }
-  .fade-d2   { animation: fadeIn .6s ease-out .3s forwards; opacity:0; }
-  .fade-d3   { animation: fadeIn .6s ease-out .45s forwards; opacity:0; }
-  @media (prefers-reduced-motion: reduce) {
-    .fade-in, .fade-d1, .fade-d2, .fade-d3 { animation:none; opacity:1; }
-  }
+    @media (prefers-color-scheme: light) {
+      code {
+        background: rgba(109, 40, 217, .07);
+        color: #6d28d9;
+        border-color: rgba(109, 40, 217, .18);
+      }
 
-  /* ── Nav ──────────────────────────── */
-  .nav {
-    position:relative; z-index:2;
-  }
-  .nav-inner {
-    max-width:1140px; margin:0 auto; padding:0 1.5rem;
-    height:56px; display:flex; align-items:center; justify-content:space-between;
-  }
-  .nav-ascii {
-    font-family:var(--mono); font-size:5.5px; line-height:1;
-    white-space:pre; letter-spacing:-0.3px;
-    color:var(--gold); font-weight:bold;
-    -webkit-text-stroke:0.3px var(--gold);
-    transition:opacity .15s;
-  }
-  .nav-ascii:hover { opacity:.75; }
-  .nav-right { display:flex; align-items:center; gap:1.25rem; }
-  .nav-right a { color:var(--text-mute); transition:color .15s; display:flex; align-items:center; }
-  .nav-right a:hover { color:var(--text); }
-  .nav-right svg,.nav-right img { width:20px; height:20px; }
-  .nav-right img { opacity:.6; transition:opacity .15s; }
-  .nav-right a:hover img { opacity:1; }
+      kbd {
+        color: #fbbf24;
+        background: #1e293b;
+        border-color: #374151;
+      }
+    }
 
-  /* ── Hero ─────────────────────────── */
-  .hero {
-    position:relative; max-width:1140px; margin:0 auto;
-    padding:3.5rem 1.5rem 2rem;
-    display:grid; grid-template-columns:1fr 1fr; gap:3rem; align-items:start;
-  }
-  .hero::before {
-    content:''; position:absolute; top:-80px; right:0;
-    width:600px; height:500px;
-    background:radial-gradient(ellipse at center,var(--hero-glow) 0%,transparent 70%);
-    pointer-events:none;
-  }
-  .hero-left { position:relative; z-index:1; }
-  .hero h1 { font-size:2.5rem; font-weight:700; line-height:1.2; letter-spacing:-.02em; margin-bottom:1rem; }
-  .hero h1 .accent { color:var(--arnica); }
-  .hero-desc { font-size:1rem; color:var(--text-dim); line-height:1.7; max-width:480px; margin-bottom:2rem; }
+    pre {
+      margin: 0;
+    }
 
-  .plat-row { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
-  .plat-btn {
-    display:inline-flex; align-items:center; gap:.5rem;
-    background:var(--surface); border:1px solid var(--border-hi);
-    color:var(--text); font-size:.8125rem; font-weight:500;
-    padding:.55rem 1.1rem; border-radius:.5rem;
-    cursor:pointer; transition:all .15s; text-decoration:none;
-  }
-  .plat-btn:hover { border-color:var(--arnica); }
-  .plat-btn-primary {
-    border-color:var(--arnica); color:var(--text); font-weight:600;
-    box-shadow:0 0 0 1px var(--arnica);
-  }
-  .plat-btn-primary:hover { border-color:var(--arnica); }
-  .plat-btn svg,.plat-btn img { width:16px; height:16px; flex-shrink:0; }
-  .plat-link {
-    display:inline-flex; align-items:center; gap:.3rem;
-    border:1px solid var(--border-hi); color:var(--text-mute);
-    font-size:.8125rem; padding:.55rem 1.1rem; border-radius:.5rem;
-    transition:all .15s;
-  }
-  .plat-link:hover { border-color:var(--text-mute); color:var(--text); }
-  .hero-note { font-size:.75rem; color:var(--text-mute); }
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
 
-  .hero-right { position:relative; z-index:1; }
-  .terminal-wrap {
-    border-radius:12px; overflow:hidden;
-    box-shadow:0 25px 60px -12px rgba(0,0,0,.6);
-    border:1px solid var(--border);
-  }
-  .terminal-chrome {
-    display:flex; align-items:center; gap:8px;
-    padding:12px 16px; background:var(--terminal-chrome);
-  }
-  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
-  .dot-r { background:#ef4444cc; } .dot-y { background:#eab308cc; } .dot-g { background:#22c55ecc; }
-  #demo { background:var(--terminal-bg); }
-  #demo .ap-wrapper,#demo .ap-player { border:none!important; border-radius:0!important; margin:0!important; }
-  #demo .ap-player { background:var(--terminal-bg)!important; }
-  #demo .ap-terminal { background:var(--terminal-bg)!important; font-size:13px!important; padding:12px 16px!important; }
-  #demo .ap-control-bar { border-radius:0!important; }
-  #demo .ap-wrapper,#demo .ap-player,#demo .ap-terminal,#demo .ap-term { outline:none!important; box-shadow:none!important; border:none!important; }
-  #demo .ap-overlay { border:none!important; }
-  #demo ::-webkit-scrollbar { display:none; }
-  #demo { scrollbar-width:none; }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
-  /* ── Sections ────────────────────── */
-  .section { max-width:1140px; margin:0 auto; padding:2.5rem 1.5rem; }
-  .section-border { }
-  .section h2 { font-size:1.5rem; font-weight:700; margin-bottom:1.5rem; }
-  .section h3 { font-size:1.2rem; font-weight:700; margin-bottom:1.25rem; }
+    .fade-in {
+      animation: fadeIn .6s ease-out forwards;
+    }
 
-  /* ── Install ─────────────────────── */
-  .install-card { background:var(--surface); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; overflow-x:auto; }
-  .tab-bar { display:flex; border-bottom:1px solid var(--border); }
-  .install-tab {
-    flex:1; padding:.75rem 1rem; font-size:.875rem; font-weight:500;
-    text-align:center; background:none; border:none; cursor:pointer;
-    border-bottom:2px solid transparent; color:var(--text-mute);
-    transition:all .15s; font-family:var(--sans);
-    display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
-  }
-  .install-tab svg, .install-tab img { width:16px; height:16px; flex-shrink:0; }
-  .install-tab[aria-selected="true"] { border-bottom-color:var(--arnica); color:var(--text); }
-  .install-panel { padding:1.5rem; }
-  .code-wrap {
-    position:relative; border-radius:.5rem;
-    border:1px solid var(--border); background:var(--bg);
-  }
-  .code-wrap pre {
-    padding:1rem 3.5rem 1rem 1rem; overflow-x:auto;
-    font-family:var(--mono); font-size:.875rem; line-height:1.65; color:var(--text-dim);
-  }
-  .copy-btn {
-    position:absolute; top:.5rem; right:.5rem; z-index:10;
-    background:var(--surface); border:1px solid var(--border-hi);
-    color:var(--text-mute); font-size:.75rem; font-family:var(--sans);
-    padding:.2rem .5rem; border-radius:4px; cursor:pointer; transition:all .15s;
-  }
-  .copy-btn:hover { border-color:var(--text-mute); color:var(--text); }
-  .code-note { font-size:.75rem; color:var(--text-mute); margin-top:.75rem; }
-  .code-note a { color:var(--arnica); }
-  .code-note a:hover { text-decoration:underline; }
-  .install-also { font-size:.875rem; color:var(--text-mute); margin-top:1rem; }
-  .install-also code { color:var(--text-dim); font-size:.8125rem; }
-  .install-also a { color:var(--arnica); }
-  .install-also a:hover { text-decoration:underline; }
+    .fade-d1 {
+      animation: fadeIn .6s ease-out .15s forwards;
+      opacity: 0;
+    }
 
-  /* ── Checks table ────────────────── */
-  .checks-table {
-    width:100%; min-width:640px; border-collapse:collapse; text-align:left;
-  }
-  .checks-table th {
-    font-size:.75rem; font-weight:600; color:var(--text-mute);
-    text-transform:uppercase; letter-spacing:.05em;
-    padding:.75rem 1rem; border-bottom:1px solid var(--border);
-  }
-  .checks-table td {
-    font-size:.875rem; color:var(--text-dim); padding:.65rem 1rem;
-    border-bottom:1px solid var(--border); vertical-align:middle;
-  }
-  .checks-table td[rowspan] { vertical-align:middle; }
-  .checks-table tr:last-child td { border-bottom:none; }
-  .checks-table code { color:var(--text); font-size:.8125rem; }
-  .checks-table .mgr-icon { width:18px; height:18px; vertical-align:middle; margin-right:.4rem; }
-  .checks-table .mgr-icon-sm { width:14px; height:14px; vertical-align:middle; margin-right:.2rem; }
-  .checks-table .mgr-name { white-space:nowrap; }
-  .checks-table .doc-link { color:var(--text-mute); transition:color .15s; }
-  .checks-table .doc-link:hover { color:var(--arnica); }
-  .checks-table .doc-link svg { width:14px; height:14px; vertical-align:middle; }
+    .fade-d2 {
+      animation: fadeIn .6s ease-out .3s forwards;
+      opacity: 0;
+    }
 
-  /* ── Footer ──────────────────────── */
-  .footer { margin-top:2rem; position:relative; z-index:2; }
-  .footer-inner {
-    max-width:1140px; margin:0 auto; padding:1.75rem 1.5rem;
-    display:flex; align-items:center; justify-content:space-between;
-    font-size:.8125rem; color:var(--text-mute); flex-wrap:wrap; gap:1rem;
-  }
-  .footer-left { display:flex; align-items:center; gap:.4rem; }
-  .footer-left img { height:16px; display:inline-block; vertical-align:middle; }
-  .footer-right { display:flex; align-items:center; gap:1.25rem; }
-  .footer-right a { color:var(--text-mute); transition:color .15s; }
-  .footer-right a:hover { color:var(--text); }
+    .fade-d3 {
+      animation: fadeIn .6s ease-out .45s forwards;
+      opacity: 0;
+    }
 
-  @media (max-width:768px) {
-    .hero { grid-template-columns:1fr; gap:1.5rem; padding:2rem 1rem 1.5rem; }
-    .hero h1 { font-size:1.5rem; }
-    .hero-desc { font-size:.875rem; }
-    .plat-row { gap:.4rem; }
-    .plat-btn, .plat-link { font-size:.75rem; padding:.45rem .75rem; }
-    .nav-ascii { font-size:4px; }
-    .nav-inner { padding:0 1rem; height:48px; }
-    .nav-right svg, .nav-right img { width:16px; height:16px; }
-    .section { padding:1.5rem 1rem; }
-    .section h2 { font-size:1.25rem; }
-    .terminal-wrap { border-radius:8px; }
-    .checks-table { font-size:.75rem; }
-    .checks-table th, .checks-table td { padding:.5rem .5rem; }
-    .checks-table .mgr-icon, .checks-table .mgr-icon-sm { width:14px; height:14px; }
-    .install-tab { font-size:.75rem; padding:.5rem .5rem; }
-    .code-wrap pre { font-size:.75rem; padding:.75rem 2.5rem .75rem .75rem; }
-    .footer-inner { flex-direction:column; text-align:center; gap:.5rem; font-size:.75rem; }
-    .footer-right { gap:.75rem; }
-  }
-  .scroll-mt { scroll-margin-top:5rem; }
+    @media (prefers-reduced-motion: reduce) {
 
-  /* ── Keyboard ref ──────────────────── */
-  .kb-bar {
-    font-family:var(--mono); font-size:.8125rem; line-height:1.8;
-    background:var(--terminal-bg); color:var(--text-dim);
-    border:1px solid var(--border); border-radius:.5rem;
-    padding:.75rem 1rem; margin-bottom:.75rem; overflow-x:auto; white-space:nowrap;
-  }
-  .kb-bar kbd {
-    display:inline-block; font-family:var(--mono);
-    color:var(--gold); font-weight:700; min-width:1.2em; text-align:center;
-  }
-  .kb-bar .kb-desc { color:var(--text-mute); }
-  .kb-bar .kb-sep { margin:0 .6rem; color:var(--border-hi); }
-  .kb-group-label {
-    font-family:var(--mono); font-size:.75rem; color:var(--text-mute);
-    margin-bottom:.25rem;
-  }
-</style>
+      .fade-in,
+      .fade-d1,
+      .fade-d2,
+      .fade-d3 {
+        animation: none;
+        opacity: 1;
+      }
+    }
+
+    /* ── Nav ──────────────────────────── */
+    .nav {
+      position: relative;
+      z-index: 2;
+    }
+
+    .nav-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-ascii {
+      font-family: var(--mono);
+      font-size: 5.5px;
+      line-height: 1;
+      white-space: pre;
+      letter-spacing: -0.3px;
+      color: var(--gold);
+      font-weight: bold;
+      -webkit-text-stroke: 0.3px var(--gold);
+      transition: opacity .15s;
+    }
+
+    .nav-ascii:hover {
+      opacity: .75;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .nav-right a {
+      color: var(--text-dim);
+      transition: color .15s;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-right a:hover {
+      color: var(--text);
+    }
+
+    .nav-right svg,
+    .nav-right img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .nav-right img {
+      transition: opacity .15s;
+    }
+
+    .gh-star-widget svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .gh-star-widget {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      font-family: var(--sans);
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+      line-height: 20px;
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 3px 10px;
+      transition: all .12s;
+    }
+
+    .gh-star-widget,
+    .gh-star-widget:link,
+    .gh-star-widget:visited {
+      color: var(--text);
+      opacity: 1;
+    }
+
+    .gh-star-widget:hover {
+      background: var(--surface-2);
+      border-color: var(--text-mute);
+      color: var(--text-strong);
+    }
+
+    .gh-star-widget svg {
+      flex-shrink: 0;
+    }
+
+    .gh-star-widget .gh-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--text-dim);
+    }
+
+    .gh-star-widget .gh-star-icon {
+      width: 16px;
+      height: 16px;
+      color: #9198a1 !important;
+    }
+
+    .gh-star-count {
+      display: none;
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      background: rgba(110, 118, 129, .4);
+      padding: 0 6px;
+      border-radius: 10px;
+      line-height: 18px;
+    }
+
+    .gh-star-count.visible {
+      display: inline-block;
+    }
+
+    @media (prefers-color-scheme: light) {
+      .gh-star-count {
+        background: rgba(175, 184, 193, .2);
+      }
+
+      .gh-star-widget .gh-star-icon {
+        color: #636c76;
+      }
+    }
+
+    /* ── Hero ─────────────────────────── */
+    .hero {
+      position: relative;
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem 2rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      right: 0;
+      width: 600px;
+      height: 500px;
+      background: radial-gradient(ellipse at center, var(--hero-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-left {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+      margin-bottom: 1rem;
+    }
+
+    .hero h1 .accent {
+      color: var(--arnica);
+    }
+
+    .hero-desc {
+      font-size: 1rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+      max-width: 480px;
+      margin-bottom: 2rem;
+    }
+
+    .plat-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .plat-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      background: var(--surface);
+      border: 1px solid var(--border-hi);
+      color: var(--text);
+      font-size: .8125rem;
+      font-weight: 500;
+      padding: .55rem 1.1rem;
+      border-radius: .5rem;
+      cursor: pointer;
+      transition: all .15s;
+      text-decoration: none;
+    }
+
+    .plat-btn:hover {
+      border-color: var(--arnica);
+    }
+
+    .plat-btn-primary {
+      border-color: var(--arnica);
+      color: var(--text);
+      font-weight: 600;
+      box-shadow: 0 0 0 1px var(--arnica);
+    }
+
+    .plat-btn-primary:hover {
+      border-color: var(--arnica);
+    }
+
+    .plat-btn svg,
+    .plat-btn img {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .plat-link {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      border: 1px solid var(--border-hi);
+      color: var(--text-mute);
+      font-size: .8125rem;
+      padding: .55rem 1.1rem;
+      border-radius: .5rem;
+      transition: all .15s;
+    }
+
+    .plat-link:hover {
+      border-color: var(--text-mute);
+      color: var(--text);
+    }
+
+    .hero-note {
+      font-size: .75rem;
+      color: var(--text-mute);
+    }
+
+    .hero-right {
+      position: relative;
+      z-index: 1;
+    }
+
+    .terminal-wrap {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, .6);
+      border: 1px solid var(--border);
+    }
+
+    .terminal-chrome {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--terminal-chrome);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-r {
+      background: #ef4444cc;
+    }
+
+    .dot-y {
+      background: #eab308cc;
+    }
+
+    .dot-g {
+      background: #22c55ecc;
+    }
+
+    #demo {
+      background: var(--terminal-bg);
+    }
+
+    #demo .ap-wrapper,
+    #demo .ap-player {
+      border: none !important;
+      border-radius: 0 !important;
+      margin: 0 !important;
+    }
+
+    #demo .ap-player {
+      background: var(--terminal-bg) !important;
+    }
+
+    #demo .ap-terminal {
+      background: var(--terminal-bg) !important;
+      font-size: 13px !important;
+      padding: 12px 16px !important;
+    }
+
+    #demo .ap-control-bar {
+      border-radius: 0 !important;
+    }
+
+    #demo .ap-wrapper,
+    #demo .ap-player,
+    #demo .ap-terminal,
+    #demo .ap-term {
+      outline: none !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+
+    #demo .ap-overlay {
+      border: none !important;
+    }
+
+    #demo ::-webkit-scrollbar {
+      display: none;
+    }
+
+    #demo {
+      scrollbar-width: none;
+    }
+
+    /* ── Sections ────────────────────── */
+    .section {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .section-border {}
+
+    .section h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+    }
+
+    .section h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Install ─────────────────────── */
+    .install-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      overflow: hidden;
+      overflow-x: auto;
+    }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .install-tab {
+      flex: 1;
+      padding: .75rem 1rem;
+      font-size: .875rem;
+      font-weight: 500;
+      text-align: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--text-mute);
+      transition: all .15s;
+      font-family: var(--sans);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+    }
+
+    .install-tab svg,
+    .install-tab img {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .install-tab[aria-selected="true"] {
+      border-bottom-color: var(--arnica);
+      color: var(--text);
+    }
+
+    .install-panel {
+      padding: 1.5rem;
+    }
+
+    .code-wrap {
+      position: relative;
+      border-radius: .5rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .code-wrap pre {
+      padding: 1rem 3.5rem 1rem 1rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: .875rem;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: .5rem;
+      right: .5rem;
+      z-index: 10;
+      background: var(--surface);
+      border: 1px solid var(--border-hi);
+      color: var(--text-mute);
+      font-size: .75rem;
+      font-family: var(--sans);
+      padding: .2rem .5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--text-mute);
+      color: var(--text);
+    }
+
+    .code-note {
+      font-size: .75rem;
+      color: var(--text-mute);
+      margin-top: .75rem;
+    }
+
+    .code-note a {
+      color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
+    }
+
+    .code-note a:hover {
+      text-decoration-color: var(--arnica);
+    }
+
+    .install-also {
+      font-size: .875rem;
+      color: var(--text-mute);
+      margin-top: 1rem;
+    }
+
+    .install-also code {
+      color: var(--text-dim);
+      font-size: .8125rem;
+    }
+
+    .install-also a {
+      color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
+    }
+
+    .install-also a:hover {
+      text-decoration-color: var(--arnica);
+    }
+
+    /* ── Checks table ────────────────── */
+    .checks-table {
+      width: 100%;
+      min-width: 640px;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .checks-table th {
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text-mute);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: .75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .checks-table td {
+      font-size: .875rem;
+      color: var(--text-dim);
+      padding: .65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .checks-table td[rowspan] {
+      vertical-align: middle;
+    }
+
+    .checks-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .checks-table code {
+      color: var(--text);
+      font-size: .8125rem;
+    }
+
+    .checks-table .mgr-icon {
+      width: 18px;
+      height: 18px;
+      vertical-align: middle;
+      margin-right: .4rem;
+    }
+
+    .checks-table .mgr-icon-sm {
+      width: 14px;
+      height: 14px;
+      vertical-align: middle;
+      margin-right: .2rem;
+    }
+
+    .checks-table .mgr-name {
+      white-space: nowrap;
+    }
+
+    .checks-table .doc-link {
+      color: var(--text-mute);
+      transition: color .15s;
+    }
+
+    .checks-table .doc-link:hover {
+      color: var(--arnica);
+    }
+
+    .checks-table .doc-link svg {
+      width: 14px;
+      height: 14px;
+      vertical-align: middle;
+    }
+
+    /* ── Footer ──────────────────────── */
+    .footer {
+      margin-top: 2rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .footer-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: .8125rem;
+      color: var(--text-mute);
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    .footer-left img {
+      height: 16px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .footer-right a {
+      color: var(--text-mute);
+      transition: color .15s;
+    }
+
+    .footer-right a:hover {
+      color: var(--text);
+    }
+
+    @media (max-width:768px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 2rem 1rem 1.5rem;
+      }
+
+      .hero h1 {
+        font-size: 1.5rem;
+      }
+
+      .hero-desc {
+        font-size: .875rem;
+      }
+
+      .plat-row {
+        gap: .4rem;
+      }
+
+      .plat-btn,
+      .plat-link {
+        font-size: .75rem;
+        padding: .45rem .75rem;
+      }
+
+      .nav-ascii {
+        font-size: 4px;
+      }
+
+      .nav-inner {
+        padding: 0 1rem;
+        height: 48px;
+      }
+
+      .nav-right svg,
+      .nav-right img {
+        width: 16px;
+        height: 16px;
+      }
+
+      .gh-star-widget {
+        font-size: .6875rem;
+        padding: 2px 8px;
+      }
+
+      .gh-star-widget .gh-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .section {
+        padding: 1.5rem 1rem;
+      }
+
+      .section h2 {
+        font-size: 1.25rem;
+      }
+
+      .terminal-wrap {
+        border-radius: 8px;
+      }
+
+      .checks-table {
+        font-size: .75rem;
+      }
+
+      .checks-table th,
+      .checks-table td {
+        padding: .5rem .5rem;
+      }
+
+      .checks-table .mgr-icon,
+      .checks-table .mgr-icon-sm {
+        width: 14px;
+        height: 14px;
+      }
+
+      .install-tab {
+        font-size: .75rem;
+        padding: .5rem .5rem;
+      }
+
+      .code-wrap pre {
+        font-size: .75rem;
+        padding: .75rem 2.5rem .75rem .75rem;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+        gap: .5rem;
+        font-size: .75rem;
+      }
+
+      .footer-right {
+        gap: .75rem;
+      }
+    }
+
+    .scroll-mt {
+      scroll-margin-top: 5rem;
+    }
+
+    .body-link {
+      color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
+    }
+
+    .body-link:hover {
+      text-decoration-color: var(--arnica);
+    }
+
+    .sr-only {
+      position:absolute; width:1px; height:1px;
+      padding:0; margin:-1px; overflow:hidden;
+      clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
+
+    /* ── Keyboard ref ──────────────────── */
+    .kb-bar {
+      font-family: var(--mono);
+      font-size: .8125rem;
+      line-height: 1.8;
+      background: var(--terminal-bg);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      padding: .75rem 1rem;
+      margin-bottom: .75rem;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .kb-bar kbd {
+      display: inline-block;
+      font-family: var(--mono);
+      color: var(--gold);
+      font-weight: 700;
+      min-width: 1.2em;
+      text-align: center;
+    }
+
+    .kb-bar .kb-desc {
+      color: var(--text-mute);
+    }
+
+    .kb-bar .kb-sep {
+      margin: 0 .6rem;
+      color: var(--border-hi);
+    }
+
+    .kb-group-label {
+      font-family: var(--mono);
+      font-size: .75rem;
+      color: var(--text-mute);
+      margin-bottom: .25rem;
+    }
+
+    /* ── FAQ ────────────────────────── */
+    .faq-list {
+      padding: 0;
+    }
+
+    .faq-item {
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      margin-bottom: .75rem;
+      background: var(--surface);
+    }
+
+    .faq-q {
+      padding: .85rem 1rem;
+      font-weight: 600;
+      color: var(--text);
+      font-size: .9375rem;
+      margin: 0;
+    }
+
+    .faq-list .faq-body {
+      padding: 0 1rem 1rem 2.8rem;
+      color: var(--text-dim);
+      line-height: 1.75;
+      font-size: .875rem;
+    }
+
+    .faq-list .faq-body code {
+      font-family: var(--mono);
+      font-size: .8125em;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: .1em .3em;
+      border-radius: 3px;
+    }
+
+    .faq-list .faq-body a {
+      color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
+    }
+
+    .faq-list .faq-body a:hover {
+      text-decoration-color: var(--arnica);
+    }
+
+    .faq-list .faq-body ul {
+      padding-left: 1.25rem;
+      margin: .5rem 0;
+    }
+
+    .faq-list .faq-body li {
+      margin-bottom: .35rem;
+    }
+  </style>
 </head>
+
 <body>
 
-<div class="grid-bg">
+  <div class="grid-bg">
 
-<!-- Nav -->
-<nav class="nav">
-  <div class="nav-inner">
-    <a href="./" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+    <!-- Nav -->
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="./" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
   __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
  / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
 | (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
  \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
            |_|        |___/</span></a>
-    <div class="nav-right">
-      <a href="https://github.com/arnica/depsguard" title="GitHub">
-        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-      </a>
-      <a href="https://crates.io/crates/depsguard" title="Crates.io">
-        <img src="https://crates.io/assets/cargo.png" alt="Crates.io">
-      </a>
-    </div>
-  </div>
-</nav>
-
-<!-- Hero -->
-<section class="hero">
-  <div class="hero-left">
-    <h1 class="fade-in">
-      Guard your dependencies
-      against supply chain attacks.
-    </h1>
-    <p class="hero-desc fade-d1">
-      Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.
-    </p>
-    <div class="plat-row fade-d2">
-      <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
-        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>
-        macOS
-      </a>
-      <a href="#install" data-activate-tab="linux" class="plat-btn install-btn">
-        <img src="img/tux.svg" alt="">
-        Linux
-      </a>
-      <a href="#install" data-activate-tab="windows" class="plat-btn install-btn">
-        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg>
-        Windows
-      </a>
-      <a href="#install" data-activate-tab="cargo" class="plat-btn install-btn">
-        <img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;">
-        Cargo
-      </a>
-    </div>
-  </div>
-
-  <div class="hero-right fade-d2">
-    <div class="terminal-wrap">
-      <div class="terminal-chrome">
-        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://crates.io/crates/depsguard" title="Crates.io">
+            <img src="https://crates.io/assets/cargo.png" alt="Crates.io">
+          </a>
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
       </div>
-      <div id="demo"></div>
-    </div>
-  </div>
-</section>
+    </nav>
 
-<!-- Install -->
-<section id="install" class="section section-border scroll-mt">
-  <h2>Install</h2>
-  <div class="install-card">
-    <div class="tab-bar" role="tablist">
-      <button role="tab" aria-selected="true"  data-tab="macos"   id="tab-macos"   aria-controls="panel-macos"   tabindex="0" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg> macOS</button>
-      <button role="tab" aria-selected="false" data-tab="linux"   id="tab-linux"   aria-controls="panel-linux"   tabindex="-1" class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
-      <button role="tab" aria-selected="false" data-tab="windows" id="tab-windows" aria-controls="panel-windows" tabindex="-1" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z"/></svg> Windows</button>
-      <button role="tab" aria-selected="false" data-tab="cargo"   id="tab-cargo"   aria-controls="panel-cargo"   tabindex="-1" class="install-tab"><img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;"> Cargo</button>
-    </div>
-    <div data-panel="macos" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" class="install-panel">
-      <div class="code-wrap install-code-wrap" data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
-        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
-        <pre><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-left">
+        <h1 class="fade-in">
+          Guard your dependencies
+          against supply chain attacks.
+        </h1>
+        <p class="hero-desc fade-d1">
+          Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn,
+          bun, and uv configs for security best practices. Zero dependencies. MIT.
+        </p>
+        <div class="plat-row fade-d2">
+          <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
+            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11" />
+            </svg>
+            macOS
+          </a>
+          <a href="#install" data-activate-tab="linux" class="plat-btn install-btn">
+            <img src="img/tux.svg" alt="">
+            Linux
+          </a>
+          <a href="#install" data-activate-tab="windows" class="plat-btn install-btn">
+            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z" />
+            </svg>
+            Windows
+          </a>
+          <a href="#install" data-activate-tab="cargo" class="plat-btn install-btn">
+            <img src="https://crates.io/assets/cargo.png" alt="" style="width:16px;height:16px;">
+            Cargo
+          </a>
+        </div>
+      </div>
+
+      <div class="hero-right fade-d2">
+        <div class="terminal-wrap">
+          <div class="terminal-chrome">
+            <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          </div>
+          <div id="demo"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="section section-border scroll-mt">
+      <h2>Install</h2>
+      <div class="install-card">
+        <div class="tab-bar" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="macos" id="tab-macos" aria-controls="panel-macos"
+            tabindex="0" class="install-tab"><svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11" />
+            </svg> macOS</button>
+          <button role="tab" aria-selected="false" data-tab="linux" id="tab-linux" aria-controls="panel-linux"
+            tabindex="-1" class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
+          <button role="tab" aria-selected="false" data-tab="windows" id="tab-windows" aria-controls="panel-windows"
+            tabindex="-1" class="install-tab"><svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z" />
+            </svg> Windows</button>
+          <button role="tab" aria-selected="false" data-tab="cargo" id="tab-cargo" aria-controls="panel-cargo"
+            tabindex="-1" class="install-tab"><img src="https://crates.io/assets/cargo.png" alt=""
+              style="width:16px;height:16px;"> Cargo</button>
+        </div>
+        <div data-panel="macos" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" class="install-panel">
+          <div class="code-wrap install-code-wrap"
+            data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
+            <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+            <pre><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
 brew install depsguard</code></pre>
-      </div>
-      <p class="code-note">Homebrew tap. Works on Apple Silicon and Intel.</p>
-    </div>
-    <div data-panel="linux" id="panel-linux" role="tabpanel" aria-labelledby="tab-linux" class="install-panel" style="display:none">
-      <div class="code-wrap install-code-wrap" data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
-        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
-        <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
+          </div>
+          <p class="code-note">Homebrew tap. Works on Apple Silicon and Intel.</p>
+        </div>
+        <div data-panel="linux" id="panel-linux" role="tabpanel" aria-labelledby="tab-linux" class="install-panel"
+          style="display:none">
+          <div class="code-wrap install-code-wrap"
+            data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
+            <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+            <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
 echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
   | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
 sudo apt update && sudo apt install depsguard</code></pre>
-      </div>
-      <p class="code-note">Debian/Ubuntu via APT. Also available via <a href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
-    </div>
-    <div data-panel="windows" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" class="install-panel" style="display:none">
-      <!-- WinGet: uncomment once Arnica.DepsGuard is approved in microsoft/winget-pkgs
-      <p class="code-note" style="margin-bottom:.5rem; margin-top:0;">WinGet</p>
-      <div class="code-wrap install-code-wrap" data-copy="winget install Arnica.DepsGuard">
-        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy WinGet command">Copy</button>
-        <pre><code>winget install Arnica.DepsGuard</code></pre>
-      </div>
-      -->
-      <p class="code-note" style="margin-bottom:.5rem; margin-top:0;">Scoop</p>
-      <div class="code-wrap install-code-wrap" data-copy="scoop bucket add depsguard https://github.com/arnica/depsguard&#10;scoop install depsguard">
-        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy Scoop command">Copy</button>
-        <pre><code>scoop bucket add depsguard https://github.com/arnica/depsguard
+          </div>
+          <p class="code-note">Debian/Ubuntu via APT. Also available via <a
+              href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
+        </div>
+        <div data-panel="windows" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" class="install-panel"
+          style="display:none">
+          <p class="code-note" style="margin-bottom:.5rem; margin-top:0;">WinGet</p>
+          <div class="code-wrap install-code-wrap" data-copy="winget install Arnica.DepsGuard">
+            <button type="button" class="copy-btn install-copy-btn" aria-label="Copy WinGet command">Copy</button>
+            <pre><code>winget install Arnica.DepsGuard</code></pre>
+          </div>
+          <p class="code-note" style="margin-bottom:.5rem; margin-top:.75rem;">Scoop</p>
+          <div class="code-wrap install-code-wrap"
+            data-copy="scoop bucket add depsguard https://github.com/arnica/depsguard&#10;scoop install depsguard">
+            <button type="button" class="copy-btn install-copy-btn" aria-label="Copy Scoop command">Copy</button>
+            <pre><code>scoop bucket add depsguard https://github.com/arnica/depsguard
 scoop install depsguard</code></pre>
+          </div>
+        </div>
+        <div data-panel="cargo" id="panel-cargo" role="tabpanel" aria-labelledby="tab-cargo" class="install-panel"
+          style="display:none">
+          <div class="code-wrap install-code-wrap" data-copy="cargo install depsguard">
+            <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
+            <pre><code>cargo install depsguard</code></pre>
+          </div>
+          <p class="code-note">Requires a <a href="https://rustup.rs/">Rust toolchain</a> (1.74+).</p>
+        </div>
       </div>
-    </div>
-    <div data-panel="cargo" id="panel-cargo" role="tabpanel" aria-labelledby="tab-cargo" class="install-panel" style="display:none">
-      <div class="code-wrap install-code-wrap" data-copy="cargo install depsguard">
-        <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
-        <pre><code>cargo install depsguard</code></pre>
+      <p class="install-also">
+        <a href="https://github.com/arnica/depsguard/releases/latest">Direct binaries</a> &middot;
+        <a href="https://github.com/arnica/depsguard#install">Full install guide</a>
+      </p>
+    </section>
+
+    <!-- How to use -->
+    <section class="section section-border scroll-mt" id="usage">
+      <h2>How to use</h2>
+      <ol style="color:var(--text-dim); line-height:1.85; padding-left:1.25rem; margin-bottom:1.75rem;">
+        <li><strong style="color:var(--text);">Install</strong> &ndash; pick your platform <a href="#install"
+            class="body-link">above</a>.</li>
+        <li><strong style="color:var(--text);">Run</strong> <code>depsguard</code> in your terminal to launch the
+          interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix
+          selector. Use <code>depsguard scan</code> for a read-only report, or <code>depsguard --no-search</code> to
+          skip the recursive file search and only check local configs.
+          <div
+            style="margin-top:.6rem; padding:.6rem .8rem; background:var(--surface); border:1px solid var(--border); border-radius:.5rem; font-size:.8125rem; line-height:1.65;">
+            <strong style="color:var(--text);">Note:</strong> some settings require a minimum version. If your version
+            is too old you'll see:<br>
+            <span style="font-family:var(--mono); color:#60a5fa;">ℹ min-release-age &ndash; requires npm &ge; 11.10
+              (have 10.2.0)</span><br>
+            Upgrade with <code>npm install -g npm@latest</code> and re-run.
+          </div>
+        </li>
+        <li><strong style="color:var(--text);">Navigate &amp; select</strong> &ndash; use <kbd>↑</kbd><kbd>↓</kbd> to
+          move through the list (<kbd>^u</kbd><kbd>^d</kbd> to page). Press <kbd>Space</kbd> to toggle a fix on or off.
+          Use quick-filter keys to bulk-select by file: <kbd>a</kbd> all, <kbd>n</kbd> .npmrc, <kbd>u</kbd> uv.toml,
+          etc. &ndash; press once to select, again to deselect, a third time to clear the filter. Press <kbd>f</kbd> to
+          show only currently selected fixes.</li>
+        <li><strong style="color:var(--text);">Preview</strong> &ndash; press <kbd>d</kbd> to see a diff of what will
+          change before you commit to anything.</li>
+        <li><strong style="color:var(--text);">Apply</strong> &ndash; press <kbd>Enter</kbd> to apply the selected
+          fixes. A timestamped backup is created before any file is written.</li>
+        <li><strong style="color:var(--text);">Rescan</strong> &ndash; DepsGuard automatically reruns the scan after
+          applying, so you can verify everything is green.</li>
+        <li><strong style="color:var(--text);">Restore</strong> &ndash; run <code>depsguard restore</code> at any time
+          to roll back from the backup list. Press <kbd>q</kbd> or <kbd>Esc</kbd> to quit.</li>
+      </ol>
+
+      <p style="color:var(--text-mute); font-size:.875rem; margin-top:1.25rem;">
+        Full documentation, config file locations, and troubleshooting tips are in the
+        <a href="https://github.com/arnica/depsguard#readme" class="body-link">README</a>.
+      </p>
+    </section>
+
+    <!-- Why this exists -->
+    <section class="section section-border">
+      <h2>Why this exists</h2>
+      <p style="color:var(--text-dim); margin-bottom:1.25rem; line-height:1.75;">
+        Software supply chain attacks are increasing. On March&nbsp;31, 2026, a compromised maintainer account was used
+        to
+        <a href="https://github.com/axios/axios/issues/10636" class="body-link">publish malicious versions of
+          axios</a>.
+        The bad versions were live for ~3&nbsp;hours before removal. Similar short-lived attacks hit
+        <code style="color:var(--text-dim)">ua-parser-js</code>,
+        <code style="color:var(--text-dim)">colors</code>, and
+        <code style="color:var(--text-dim)">node-ipc</code>.
+        The pattern is the same: an attacker publishes a poisoned version, and every <code
+          style="color:var(--text-dim)">npm install</code> that runs before it's caught pulls it in.
+      </p>
+      <p style="color:var(--text-dim); margin-bottom:2.5rem; line-height:1.75;">
+        Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
+        DepsGuard checks whether those settings are enabled and helps you turn them on.
+      </p>
+
+      <h2>Supported settings</h2>
+      <div class="install-card" style="text-align:left;">
+        <table class="checks-table">
+          <thead>
+            <tr>
+              <th>Manager</th>
+              <th>Config file</th>
+              <th>Setting</th>
+              <th>What it does</th>
+              <th><span class="sr-only">Docs</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mgr-name" rowspan="2"><svg class="mgr-icon-sm" viewBox="0 0 128 128">
+                  <path fill="#cb3837"
+                    d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z" />
+                  <path fill="#fff"
+                    d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z" />
+                </svg><svg class="mgr-icon-sm" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> npm / pnpm</td>
+              <td rowspan="2"><code>.npmrc</code></td>
+              <td><code>min-release-age=7</code></td>
+              <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(npm &ge;
+                  11.10)</span></td>
+              <td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#min-release-age"
+                  target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td><code>ignore-scripts=true</code></td>
+              <td>Block malicious install scripts</td>
+              <td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts"
+                  target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name" rowspan="4"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td rowspan="4"><code>pnpm-workspace.yaml</code></td>
+              <td><code>minimumReleaseAge: 10080</code></td>
+              <td>Delay new versions by 7 days (in minutes) <span
+                  style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge; 10.16)</span></td>
+              <td><a class="doc-link" href="https://pnpm.io/settings#minimumreleaseage" target="_blank" rel="noopener"
+                  title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td><code>strictDepBuilds: true</code></td>
+              <td>Stricter build scripts <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge; 10.3)</span>
+              </td>
+              <td><a class="doc-link" href="https://pnpm.io/settings#strictdepbuilds" target="_blank" rel="noopener"
+                  title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td><code>trustPolicy: "no-downgrade"</code></td>
+              <td>Block provenance downgrades <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge;
+                  10.21)</span></td>
+              <td><a class="doc-link" href="https://pnpm.io/settings#trustpolicy" target="_blank" rel="noopener"
+                  title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td><code>blockExoticSubdeps: true</code></td>
+              <td>Block exotic sub-dependencies <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge;
+                  10.26)</span></td>
+              <td><a class="doc-link" href="https://pnpm.io/settings#blockexoticsubdeps" target="_blank" rel="noopener"
+                  title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><img class="mgr-icon"
+                  src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='%230288d1'%20d='M27.575%2023.967a9.9%209.9%200%200%200-3.751%201.726a22.6%2022.6%200%200%201-5.537%202.504a1.55%201.55%200%200%201-.931.52a59%2059%200%200%201-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49%201.49%200%200%201%20.82-1.965a3.6%203.6%200%200%201-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324%201.794-.897%202.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69%200%200%201-.94-.324a4.6%204.6%200%200%201-.632-2.794a5.2%205.2%200%200%201%201.674-2.76a8.84%208.84%200%200%201%20.624-4.17a9.9%209.9%200%200%201%203-3.469S7.136%2011.015%207.82%209.177c.444-1.196.623-1.187.769-1.239a3.44%203.44%200%200%200%201.375-.811a4.99%204.99%200%200%201%204.178-1.607s1.094-3.357%202.12-2.7a17.4%2017.4%200%200%201%201.452%202.735s1.213-.71%201.35-.445a10.74%2010.74%200%200%201%20.495%205.81a13.3%2013.3%200%200%201-2.46%205.127c-.129.214%201.47.889%202.477%203.683c.932%202.554.103%204.699.248%204.938c.026.043.034.06.034.06s1.068.085%203.213-1.24a8.05%208.05%200%200%201%204.05-1.52a1.026%201.026%200%200%201%20.453%202Z'/%3E%3C/svg%3E"
+                  alt=""> Yarn</td>
+              <td><code>.yarnrc.yml</code></td>
+              <td><code>npmMinimalAgeGate: "7d"</code></td>
+              <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(yarn &ge;
+                  4.10)</span></td>
+              <td><a class="doc-link" href="https://yarnpkg.com/configuration/yarnrc" target="_blank" rel="noopener"
+                  title="Yarn docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 256 225">
+                  <path
+                    d="M228.747 65.588a38 38 0 0 0-1.62-1.62c-.55-.519-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.103-1.62-1.621c-.552-.519-1.07-1.102-1.62-1.62c-.552-.519-1.07-1.102-1.621-1.62c-.551-.52-1.07-1.102-1.62-1.62a85.74 85.74 0 0 1 25.632 59.819c0 53.695-54.505 97.377-121.519 97.377c-37.525 0-71.097-13.707-93.424-35.192l1.62 1.62l1.62 1.62l1.62 1.62l1.621 1.621l1.62 1.62l1.62 1.62l1.621 1.62c22.295 22.393 56.612 36.813 95.044 36.813c67.014 0 121.519-43.682 121.519-97.215c0-22.878-9.851-44.557-27.253-61.602" />
+                  <path fill="#fbf0df"
+                    d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56" />
+                  <path fill="#f6dece"
+                    d="M234.937 114.066a70.2 70.2 0 0 0-2.593-18.73c-8.846 107.909-140.476 113.093-192.227 80.818a129.62 129.62 0 0 0 81.402 27.155c62.542 0 113.418-40.02 113.418-89.243" />
+                  <path fill="#fffefc"
+                    d="M77.87 34.576c14.484-8.684 33.733-24.984 52.658-25.017a30.1 30.1 0 0 0-9.009-1.458c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625v3.856C27.74 48.542 63.417 43.261 77.87 34.576" />
+                  <path fill="#ccbea7"
+                    d="M112.186 16.3a53.18 53.18 0 0 1-18.244 40.409c-.907.81-.194 2.365.972 1.912c10.92-4.245 25.665-16.948 19.443-42.58c-.259-1.459-2.17-1.07-2.17.259m7.356 0a52.63 52.63 0 0 1 5.217 43.65c-.388 1.134 1.005 2.106 1.783 1.166c7.096-9.073 13.286-27.09-5.25-46.534c-.94-.842-2.398.454-1.75 1.588zm8.944-.551a53.2 53.2 0 0 1 22.198 38.108a1.07 1.07 0 0 0 2.106.357c2.981-11.31 1.296-30.59-23.235-40.604c-1.296-.518-2.138 1.232-1.069 2.01zM68.666 49.45a54.9 54.9 0 0 0 33.928-29.164c.584-1.167 2.43-.713 2.14.583c-5.607 25.924-24.37 31.336-36.035 30.623c-1.232.032-1.2-1.685-.033-2.042" />
+                  <path
+                    d="M121.519 211.443C54.505 211.443 0 167.761 0 114.066c0-32.405 20.026-62.64 53.566-80.754c9.721-5.184 18.05-10.402 25.47-14.97c4.083-2.528 7.94-4.894 11.666-7.097C102.076 4.505 111.797 0 121.519 0s18.212 3.889 28.84 10.175c3.241 1.847 6.482 3.856 9.949 6.06c8.069 4.99 17.175 10.629 29.164 17.077c33.54 18.115 53.566 48.316 53.566 80.754c0 53.695-54.505 97.377-121.519 97.377m0-203.342c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625c0 49.223 50.876 89.276 113.418 89.276s113.418-40.053 113.418-89.276c0-29.424-18.439-56.936-49.32-73.56c-12.25-6.48-21.81-12.573-29.554-17.369c-3.532-2.17-6.773-4.18-9.722-5.962c-9.818-5.833-16.98-9.074-24.822-9.074" />
+                  <path fill="#b71422"
+                    d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625" />
+                  <path fill="#ff6164"
+                    d="M108.557 153.244a22.4 22.4 0 0 0 13.351 6.157a22.4 22.4 0 0 0 13.318-6.157a34.5 34.5 0 0 0 3.241-3.468a22.13 22.13 0 0 0-15.879-7.485a19.93 19.93 0 0 0-16.202 9.008c.745.681 1.393 1.33 2.171 1.945" />
+                  <path
+                    d="M109.076 150.684a17.37 17.37 0 0 1 13.577-6.74a19.44 19.44 0 0 1 12.962 5.476a51 51 0 0 0 2.139-2.495a22.68 22.68 0 0 0-15.263-6.254a20.61 20.61 0 0 0-15.846 7.647a31 31 0 0 0 2.43 2.366" />
+                  <path
+                    d="M121.81 161.021a24.05 24.05 0 0 1-14.42-6.481a30.85 30.85 0 0 1-10.077-16.365a3.89 3.89 0 0 1 .842-3.24a4.57 4.57 0 0 1 3.662-1.653h39.988a4.67 4.67 0 0 1 3.661 1.653a3.86 3.86 0 0 1 .81 3.24A30.85 30.85 0 0 1 136.2 154.54c-3.93 3.717-9 6-14.388 6.481m-19.993-23.98c-.519 0-.648.227-.68.292a26.86 26.86 0 0 0 8.846 14.16a20.2 20.2 0 0 0 11.828 5.672a20.35 20.35 0 0 0 11.828-5.606a26.9 26.9 0 0 0 8.814-14.161a.68.68 0 0 0-.648-.292z" />
+                  <g transform="translate(53.792 88.4)">
+                    <ellipse cx="117.047" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147" />
+                    <ellipse cx="18.957" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147" />
+                    <path
+                      d="M27.868 35.71a17.855 17.855 0 1 0-17.822-17.854c0 9.848 7.974 17.837 17.822 17.855m80.268 0A17.855 17.855 0 1 0 90.41 17.857c-.018 9.818 7.908 17.801 17.726 17.855" />
+                    <path fill="#fff"
+                      d="M22.36 18.99a6.708 6.708 0 1 0 .064-13.416a6.708 6.708 0 0 0-.065 13.416m80.267 0a6.708 6.708 0 1 0-.065 0z" />
+                  </g>
+                </svg> bun</td>
+              <td><code>.bunfig.toml</code></td>
+              <td><code>install.minimumReleaseAge = 604800</code></td>
+              <td>Delay new versions by 7 days (in seconds)</td>
+              <td><a class="doc-link" href="https://bun.com/docs/runtime/bunfig#install-minimumreleaseage"
+                  target="_blank" rel="noopener" title="Bun docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 16 16">
+                  <path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z" />
+                </svg> uv</td>
+              <td><code>uv.toml</code></td>
+              <td><code>exclude-newer = "7 days"</code></td>
+              <td>Delay new versions by 7 days</td>
+              <td><a class="doc-link" href="https://docs.astral.sh/uv/reference/settings/" target="_blank"
+                  rel="noopener" title="uv docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <circle cx="16" cy="16" r="14" fill="#007fa0" />
+                  <path fill="#fff"
+                    d="m21.052 21.433l-2.889-2.889a1.293 1.293 0 0 1 0-1.829l4.28-4.28a.375.375 0 0 0 0-.53l-1.577-1.577a.374.374 0 0 0-.53 0l-.963.963l-.65-.649l.963-.963a1.293 1.293 0 0 1 1.829 0l1.577 1.577a1.3 1.3 0 0 1 0 1.829l-4.28 4.279a.377.377 0 0 0 0 .53l2.89 2.889z" />
+                  <path fill="#007fa0"
+                    d="m24.738 23.879l-.59.59a.833.833 0 0 1-1.179 0l-3.538-3.538a.833.833 0 0 1 0-1.179l.59-.59a.835.835 0 0 1 1.179 0l3.538 3.538a.835.835 0 0 1 0 1.179" />
+                  <path fill="#fff" d="m8.15 16.019l1.36-1.36l1.359 1.36l-1.36 1.359z" />
+                  <path fill="#3cb6b0"
+                    d="m18.679 9.566l1.769 1.769a.833.833 0 0 1 0 1.179l-7.665 7.666a.835.835 0 0 1-1.179 0l-1.769-1.769a.834.834 0 0 1 0-1.18L17.5 9.566a.835.835 0 0 1 1.179 0M9.51 14.66l1.359-1.36l1.359 1.36l-1.36 1.359z" />
+                  <path fill="#fff" d="m10.85 13.32l1.36-1.358l1.359 1.359l-1.36 1.359z" />
+                  <path fill="#3cb6b0" d="m12.21 11.96l1.359-1.359l1.359 1.36l-1.36 1.358z" />
+                  <path fill="#fff" d="m14.928 9.242l1.359-1.359l1.359 1.36l-1.36 1.358z" />
+                  <path fill="#3cb6b0"
+                    d="m6.791 14.66l1.36-1.359l1.358 1.36l-1.359 1.358zm2.7-2.7l1.36-1.36l1.358 1.36l-1.359 1.359zm2.719-2.719l1.359-1.359l1.359 1.36l-1.36 1.358z" />
+                  <path fill="#3cb6b0"
+                    d="m13.568 7.882l1.36-1.36l1.358 1.36l-1.359 1.359zM8.132 10.6l1.36-1.358L10.85 10.6l-1.359 1.36z" />
+                  <path fill="#3cb6b0"
+                    d="m12.21 6.523l1.36-1.36l1.358 1.36l-1.359 1.359zm-8.137 5.419l1.359-1.36l1.359 1.36L5.43 13.3zm4.059-4.06L9.49 6.523l1.359 1.36L9.49 9.24z" />
+                  <path fill="#007fa0"
+                    d="M12.194 20.791a1.2 1.2 0 0 1-.85-.352L9.575 18.67a1.2 1.2 0 0 1 0-1.7l7.665-7.664a1.2 1.2 0 0 1 1.7 0l1.769 1.769a1.2 1.2 0 0 1 0 1.7l-7.665 7.665a1.2 1.2 0 0 1-.85.351m5.9-11.1a.46.46 0 0 0-.33.136L10.1 17.491a.466.466 0 0 0 0 .66l1.769 1.769a.467.467 0 0 0 .659 0l7.666-7.665a.47.47 0 0 0 0-.66L18.42 9.826a.46.46 0 0 0-.33-.136z" />
+                  <path fill="#fff"
+                    d="M23.559 25.081a1.2 1.2 0 0 1-.85-.352l-3.538-3.538a1.2 1.2 0 0 1 0-1.7l.59-.589a1.2 1.2 0 0 1 1.7 0L25 22.44a1.2 1.2 0 0 1 0 1.7l-.59.59a1.2 1.2 0 0 1-.851.351m-2.949-5.795a.46.46 0 0 0-.329.136l-.59.59a.467.467 0 0 0 0 .66l3.538 3.537a.465.465 0 0 0 .659 0l.59-.589a.467.467 0 0 0 0-.66l-3.538-3.538a.46.46 0 0 0-.33-.136" />
+                </svg> Renovate</td>
+              <td><code>renovate.json</code></td>
+              <td><code>"minimumReleaseAge": "7 days"</code></td>
+              <td>Delay dependency update PRs</td>
+              <td><a class="doc-link" href="https://docs.renovatebot.com/key-concepts/minimum-release-age/"
+                  target="_blank" rel="noopener" title="Renovate docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24" fill="currentColor" style="color:#0969da">
+                  <path
+                    d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg> Dependabot</td>
+              <td><code>dependabot.yml</code></td>
+              <td><code>cooldown.default-days: 7</code></td>
+              <td>Delay dependency update PRs</td>
+              <td><a class="doc-link"
+                  href="https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference"
+                  target="_blank" rel="noopener" title="Dependabot docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <p class="code-note">Requires a <a href="https://rustup.rs/">Rust toolchain</a> (1.74+).</p>
-    </div>
-  </div>
-  <p class="install-also">
-    <a href="https://github.com/arnica/depsguard/releases/latest">Direct binaries</a> &middot;
-    <a href="https://github.com/arnica/depsguard#install">Full install guide</a>
-  </p>
-</section>
+    </section>
 
-<!-- How to use -->
-<section class="section section-border scroll-mt" id="usage">
-  <h2>How to use</h2>
-  <ol style="color:var(--text-dim); line-height:1.85; padding-left:1.25rem; margin-bottom:1.75rem;">
-    <li><strong style="color:var(--text);">Install</strong> &ndash; pick your platform <a href="#install" style="color:var(--arnica);">above</a>.</li>
-    <li><strong style="color:var(--text);">Run</strong> <code>depsguard</code> in your terminal to launch the interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix selector. Use <code>depsguard scan</code> for a read-only report, or <code>depsguard --no-search</code> to skip the recursive file search and only check local configs.
-      <div style="margin-top:.6rem; padding:.6rem .8rem; background:var(--surface); border:1px solid var(--border); border-radius:.5rem; font-size:.8125rem; line-height:1.65;">
-        <strong style="color:var(--text);">Note:</strong> some settings require a minimum version. If your version is too old you'll see:<br>
-        <span style="font-family:var(--mono); color:#60a5fa;">ℹ min-release-age &ndash; requires npm &ge; 11.10 (have 10.2.0)</span><br>
-        Upgrade with <code>npm install -g npm@latest</code> and re-run.
+    <!-- FAQ -->
+    <section class="section section-border scroll-mt" id="faq">
+      <h2>FAQ</h2>
+      <div class="faq-list">
+
+        <div class="faq-item">
+          <h3 class="faq-q">Will this protect against all supply chain attacks?</h3>
+          <div class="faq-body">
+            <p>No. DepsGuard focuses on one specific layer: <strong>delaying the adoption of brand-new package
+                versions</strong> and disabling risky install scripts. This buys you time when an attacker publishes a
+              poisoned release, because your package manager won't pull it in immediately. It does not protect against
+              compromised packages that go undetected for weeks, typosquatting, or attacks that don't involve publishing
+              a new version.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">How would this have helped during the axios compromise?</h3>
+          <div class="faq-body">
+            <p>On March 31, 2026, a compromised maintainer account published malicious versions of <a
+                href="https://github.com/axios/axios/issues/10636">axios</a>. The bad versions were live for roughly 3
+              hours before being removed from the registry. If your package manager was configured with a 7-day minimum
+              release age (like <code>min-release-age=7</code> in <code>.npmrc</code>), it would have refused to
+              download the new version during that window. The same logic applies to incidents like
+              <code>ua-parser-js</code> (compromised for ~4 hours in Oct 2021) and <code>node-ipc</code> (caught within
+              days in Mar 2022) &ndash; in each case, the poisoned version was removed well within a 7-day quarantine
+              period. Note: this would <em>not</em> have helped with attacks like <code>event-stream</code>, where the
+              malicious code went undetected for months.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">Why can this protect me against future attacks?</h3>
+          <div class="faq-body">
+            <p>Many supply chain attacks follow the same pattern: an attacker publishes a poisoned package version and
+              relies on automated installs pulling it in before anyone notices. Registry security teams, community
+              reports, and automated scanners often catch and remove these within hours or days. A minimum release age
+              means your package manager won't pull in a version that hasn't been publicly available for at least 7
+              days, giving that detection window time to work. This is effective against fast-response attacks (like
+              axios, ua-parser-js, node-ipc) but does not help if malicious code goes undetected for longer than the
+              quarantine period.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">What's the difference between this and Software Composition Analysis (SCA)?</h3>
+          <div class="faq-body">
+            <p>SCA tools (like npm audit, <a href="https://github.com/owasp-dep-scan/dep-scan">OWASP dep-scan</a>, <a
+                href="https://github.com/anchore/grype">Grype</a>, <a href="https://arnica.io/use-cases/sca">Arnica</a>,
+              or Snyk) scan your <em>existing</em> dependencies for known vulnerabilities after you've already installed
+              them. DepsGuard works <em>before</em> installation &ndash; it configures your package manager to avoid
+              pulling in newly published versions until they've had time to be vetted. They're complementary: SCA finds
+              known CVEs in your current lockfile, DepsGuard reduces the chance that a freshly poisoned version gets
+              installed in the first place.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">What else can I do to protect myself?</h3>
+          <div class="faq-body">
+            <p>DepsGuard covers package manager config, but there's more you can do:</p>
+            <ul>
+              <li>Pin GitHub Actions by commit SHA (<code>uses: actions/checkout@a81bbb...</code>) instead of a tag like
+                <code>@v4</code>. Tags can be moved to point at different commits; SHAs can't.</li>
+              <li>Use <code>npm ci</code>, <code>pnpm install --frozen-lockfile</code>, or
+                <code>yarn install --immutable</code> in CI. These commands fail if the lockfile is out of date, so CI
+                never resolves new versions on its own.</li>
+              <li>Don't auto-merge Dependabot or Renovate PRs without reviewing changelogs, diffs, and provenance.</li>
+              <li>Audit your dependency tree periodically with <code>npm ls</code> or <code>pnpm why</code>. Fewer
+                dependencies means fewer places an attacker can hide.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">Is this free?</h3>
+          <div class="faq-body">
+            <p>Yes. DepsGuard is free and open source under the <a
+                href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT license</a>.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">Can I use this commercially?</h3>
+          <div class="faq-body">
+            <p>Yes. The MIT license permits commercial use, modification, and distribution with no restrictions.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">Who made this?</h3>
+          <div class="faq-body">
+            <p><a href="https://arnica.io">Arnica</a>, an application security company based in Atlanta. DepsGuard is a
+              free, open-source tool we built to help anyone harden their package manager config.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">I found a bug. What should I do?</h3>
+          <div class="faq-body">
+            <p><a href="https://github.com/arnica/depsguard/issues">Open an issue on GitHub</a>. For security
+              vulnerabilities, please use <a href="https://github.com/arnica/depsguard/security/advisories/new">GitHub
+                Security Advisories</a> to report privately.</p>
+          </div>
+        </div>
+
       </div>
-    </li>
-    <li><strong style="color:var(--text);">Navigate &amp; select</strong> &ndash; use <kbd>↑</kbd><kbd>↓</kbd> to move through the list (<kbd>^u</kbd><kbd>^d</kbd> to page). Press <kbd>Space</kbd> to toggle a fix on or off. Use quick-filter keys to bulk-select by file: <kbd>a</kbd> all, <kbd>n</kbd> .npmrc, <kbd>u</kbd> uv.toml, etc. &ndash; press once to select, again to deselect, a third time to clear the filter. Press <kbd>f</kbd> to show only currently selected fixes.</li>
-    <li><strong style="color:var(--text);">Preview</strong> &ndash; press <kbd>d</kbd> to see a diff of what will change before you commit to anything.</li>
-    <li><strong style="color:var(--text);">Apply</strong> &ndash; press <kbd>Enter</kbd> to apply the selected fixes. A timestamped backup is created before any file is written.</li>
-    <li><strong style="color:var(--text);">Rescan</strong> &ndash; DepsGuard automatically reruns the scan after applying, so you can verify everything is green.</li>
-    <li><strong style="color:var(--text);">Restore</strong> &ndash; run <code>depsguard restore</code> at any time to roll back from the backup list. Press <kbd>q</kbd> or <kbd>Esc</kbd> to quit.</li>
-  </ol>
+    </section>
 
-  <p style="color:var(--text-mute); font-size:.875rem; margin-top:1.25rem;">
-    Full documentation, config file locations, and troubleshooting tips are in the
-    <a href="https://github.com/arnica/depsguard#readme" style="color:var(--arnica);">README</a>.
-  </p>
-</section>
+    <!-- Help & feedback -->
+    <section class="section section-border scroll-mt" id="help">
+      <h2>Help &amp; feedback</h2>
+      <div style="display:flex; flex-wrap:wrap; gap:1rem;">
+        <a href="https://github.com/arnica/depsguard/issues" class="plat-btn" style="text-decoration:none;">
+          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
+          </svg>
+          Report a bug or request a feature
+        </a>
+        <a href="https://github.com/arnica/depsguard/security/advisories/new" class="plat-btn"
+          style="text-decoration:none;">
+          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+            <path
+              d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11V11.99z" />
+          </svg>
+          Report a security vulnerability
+        </a>
+      </div>
+    </section>
 
-<!-- Why this exists -->
-<section class="section section-border">
-  <h2>Why this exists</h2>
-  <p style="color:var(--text-dim); margin-bottom:1.25rem; line-height:1.75;">
-    Software supply chain attacks are accelerating. On March&nbsp;31, 2026, the popular
-    <a href="https://github.com/axios/axios/issues/10636" style="color:var(--arnica)">axios package was compromised</a>
-    via a hijacked maintainer account. Malicious versions were live for ~3&nbsp;hours and pulled in
-    by countless projects before removal. The same pattern hit
-    <code style="color:var(--text-dim)">event-stream</code>,
-    <code style="color:var(--text-dim)">ua-parser-js</code>,
-    <code style="color:var(--text-dim)">colors</code>, and
-    <code style="color:var(--text-dim)">node-ipc</code>.
-    Attackers publish a poisoned version, and every <code style="color:var(--text-dim)">npm install</code> that runs in the next few hours pulls it in.
-  </p>
-  <p style="color:var(--text-dim); margin-bottom:2.5rem; line-height:1.75;">
-    Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
-    DepsGuard checks whether those settings are enabled and helps you turn them on.
-  </p>
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io">
+            <picture>
+              <source srcset="img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+          <a href="https://www.arnica.io/legal/privacy">Privacy</a>
+          <a href="https://www.arnica.io/legal/terms-of-use">Terms</a>
+        </div>
+      </div>
+    </footer>
 
-  <h2>Supported settings</h2>
-  <div class="install-card" style="text-align:left;">
-    <table class="checks-table">
-      <thead>
-        <tr><th>Manager</th><th>Config file</th><th>Setting</th><th>What it does</th><th></th></tr>
-      </thead>
-      <tbody>
-        <tr><td class="mgr-name" rowspan="2"><svg class="mgr-icon-sm" viewBox="0 0 128 128"><path fill="#cb3837" d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"/><path fill="#fff" d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"/></svg><svg class="mgr-icon-sm" viewBox="0 0 32 32"><path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z"/><path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z"/></svg> npm / pnpm</td><td rowspan="2"><code>.npmrc</code></td><td><code>min-release-age=7</code></td><td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(npm &ge; 11.10)</span></td><td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#min-release-age" target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td><code>ignore-scripts=true</code></td><td>Block malicious install scripts</td><td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts" target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name" rowspan="4"><svg class="mgr-icon" viewBox="0 0 32 32"><path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z"/><path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z"/></svg> pnpm</td><td rowspan="4"><code>pnpm-workspace.yaml</code></td><td><code>minimumReleaseAge</code></td><td>Workspace-level release delay</td><td><a class="doc-link" href="https://pnpm.io/settings#minimumreleaseage" target="_blank" rel="noopener" title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td><code>strictDepBuilds=true</code></td><td>Stricter build scripts</td><td><a class="doc-link" href="https://pnpm.io/settings#strictdepbuilds" target="_blank" rel="noopener" title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td><code>trustPolicy: no-downgrade</code></td><td>Block provenance downgrades</td><td><a class="doc-link" href="https://pnpm.io/settings#trustpolicy" target="_blank" rel="noopener" title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td><code>blockExoticSubdeps: true</code></td><td>Block exotic sub-dependencies</td><td><a class="doc-link" href="https://pnpm.io/settings#blockexoticsubdeps" target="_blank" rel="noopener" title="pnpm docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name"><img class="mgr-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 32 32'%3E%3Cpath fill='%230288d1' d='M27.575 23.967a9.9 9.9 0 0 0-3.751 1.726a22.6 22.6 0 0 1-5.537 2.504a1.55 1.55 0 0 1-.931.52a59 59 0 0 1-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49 1.49 0 0 1 .82-1.965a3.6 3.6 0 0 1-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324 1.794-.897 2.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69 0 0 1-.94-.324a4.6 4.6 0 0 1-.632-2.794a5.2 5.2 0 0 1 1.674-2.76a8.84 8.84 0 0 1 .624-4.17a9.9 9.9 0 0 1 3-3.469S7.136 11.015 7.82 9.177c.444-1.196.623-1.187.769-1.239a3.44 3.44 0 0 0 1.375-.811a4.99 4.99 0 0 1 4.178-1.607s1.094-3.357 2.12-2.7a17.4 17.4 0 0 1 1.452 2.735s1.213-.71 1.35-.445a10.74 10.74 0 0 1 .495 5.81a13.3 13.3 0 0 1-2.46 5.127c-.129.214 1.47.889 2.477 3.683c.932 2.554.103 4.699.248 4.938c.026.043.034.06.034.06s1.068.085 3.213-1.24a8.05 8.05 0 0 1 4.05-1.52a1.026 1.026 0 0 1 .453 2Z'/%3E%3C/svg%3E" alt=""> Yarn</td><td><code>.yarnrc.yml</code></td><td><code>npmMinimalAgeGate</code></td><td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(yarn &ge; 4.10)</span></td><td><a class="doc-link" href="https://yarnpkg.com/configuration/yarnrc" target="_blank" rel="noopener" title="Yarn docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 256 225"><path d="M228.747 65.588a38 38 0 0 0-1.62-1.62c-.55-.519-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.103-1.62-1.621c-.552-.519-1.07-1.102-1.62-1.62c-.552-.519-1.07-1.102-1.621-1.62c-.551-.52-1.07-1.102-1.62-1.62a85.74 85.74 0 0 1 25.632 59.819c0 53.695-54.505 97.377-121.519 97.377c-37.525 0-71.097-13.707-93.424-35.192l1.62 1.62l1.62 1.62l1.62 1.62l1.621 1.621l1.62 1.62l1.62 1.62l1.621 1.62c22.295 22.393 56.612 36.813 95.044 36.813c67.014 0 121.519-43.682 121.519-97.215c0-22.878-9.851-44.557-27.253-61.602"/><path fill="#fbf0df" d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56"/><path fill="#f6dece" d="M234.937 114.066a70.2 70.2 0 0 0-2.593-18.73c-8.846 107.909-140.476 113.093-192.227 80.818a129.62 129.62 0 0 0 81.402 27.155c62.542 0 113.418-40.02 113.418-89.243"/><path fill="#fffefc" d="M77.87 34.576c14.484-8.684 33.733-24.984 52.658-25.017a30.1 30.1 0 0 0-9.009-1.458c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625v3.856C27.74 48.542 63.417 43.261 77.87 34.576"/><path fill="#ccbea7" d="M112.186 16.3a53.18 53.18 0 0 1-18.244 40.409c-.907.81-.194 2.365.972 1.912c10.92-4.245 25.665-16.948 19.443-42.58c-.259-1.459-2.17-1.07-2.17.259m7.356 0a52.63 52.63 0 0 1 5.217 43.65c-.388 1.134 1.005 2.106 1.783 1.166c7.096-9.073 13.286-27.09-5.25-46.534c-.94-.842-2.398.454-1.75 1.588zm8.944-.551a53.2 53.2 0 0 1 22.198 38.108a1.07 1.07 0 0 0 2.106.357c2.981-11.31 1.296-30.59-23.235-40.604c-1.296-.518-2.138 1.232-1.069 2.01zM68.666 49.45a54.9 54.9 0 0 0 33.928-29.164c.584-1.167 2.43-.713 2.14.583c-5.607 25.924-24.37 31.336-36.035 30.623c-1.232.032-1.2-1.685-.033-2.042"/><path d="M121.519 211.443C54.505 211.443 0 167.761 0 114.066c0-32.405 20.026-62.64 53.566-80.754c9.721-5.184 18.05-10.402 25.47-14.97c4.083-2.528 7.94-4.894 11.666-7.097C102.076 4.505 111.797 0 121.519 0s18.212 3.889 28.84 10.175c3.241 1.847 6.482 3.856 9.949 6.06c8.069 4.99 17.175 10.629 29.164 17.077c33.54 18.115 53.566 48.316 53.566 80.754c0 53.695-54.505 97.377-121.519 97.377m0-203.342c-7.842 0-16.203 4.05-26.734 10.143c-3.662 2.139-7.453 4.504-11.472 6.967c-7.55 4.666-16.202 9.948-25.924 15.23c-30.85 16.69-49.288 44.201-49.288 73.625c0 49.223 50.876 89.276 113.418 89.276s113.418-40.053 113.418-89.276c0-29.424-18.439-56.936-49.32-73.56c-12.25-6.48-21.81-12.573-29.554-17.369c-3.532-2.17-6.773-4.18-9.722-5.962c-9.818-5.833-16.98-9.074-24.822-9.074"/><path fill="#b71422" d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625"/><path fill="#ff6164" d="M108.557 153.244a22.4 22.4 0 0 0 13.351 6.157a22.4 22.4 0 0 0 13.318-6.157a34.5 34.5 0 0 0 3.241-3.468a22.13 22.13 0 0 0-15.879-7.485a19.93 19.93 0 0 0-16.202 9.008c.745.681 1.393 1.33 2.171 1.945"/><path d="M109.076 150.684a17.37 17.37 0 0 1 13.577-6.74a19.44 19.44 0 0 1 12.962 5.476a51 51 0 0 0 2.139-2.495a22.68 22.68 0 0 0-15.263-6.254a20.61 20.61 0 0 0-15.846 7.647a31 31 0 0 0 2.43 2.366"/><path d="M121.81 161.021a24.05 24.05 0 0 1-14.42-6.481a30.85 30.85 0 0 1-10.077-16.365a3.89 3.89 0 0 1 .842-3.24a4.57 4.57 0 0 1 3.662-1.653h39.988a4.67 4.67 0 0 1 3.661 1.653a3.86 3.86 0 0 1 .81 3.24A30.85 30.85 0 0 1 136.2 154.54c-3.93 3.717-9 6-14.388 6.481m-19.993-23.98c-.519 0-.648.227-.68.292a26.86 26.86 0 0 0 8.846 14.16a20.2 20.2 0 0 0 11.828 5.672a20.35 20.35 0 0 0 11.828-5.606a26.9 26.9 0 0 0 8.814-14.161a.68.68 0 0 0-.648-.292z"/><g transform="translate(53.792 88.4)"><ellipse cx="117.047" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147"/><ellipse cx="18.957" cy="40.183" fill="#febbd0" rx="18.957" ry="11.147"/><path d="M27.868 35.71a17.855 17.855 0 1 0-17.822-17.854c0 9.848 7.974 17.837 17.822 17.855m80.268 0A17.855 17.855 0 1 0 90.41 17.857c-.018 9.818 7.908 17.801 17.726 17.855"/><path fill="#fff" d="M22.36 18.99a6.708 6.708 0 1 0 .064-13.416a6.708 6.708 0 0 0-.065 13.416m80.267 0a6.708 6.708 0 1 0-.065 0z"/></g></svg> bun</td><td><code>.bunfig.toml</code></td><td><code>install.minimumReleaseAge</code></td><td>7-day delay (in seconds)</td><td><a class="doc-link" href="https://bun.com/docs/runtime/bunfig#install-minimumreleaseage" target="_blank" rel="noopener" title="Bun docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 16 16"><path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z"/></svg> uv</td><td><code>uv.toml</code></td><td><code>exclude-newer</code></td><td>Exclude recently published packages</td><td><a class="doc-link" href="https://docs.astral.sh/uv/reference/settings/" target="_blank" rel="noopener" title="uv docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#007fa0"/><path fill="#fff" d="m21.052 21.433l-2.889-2.889a1.293 1.293 0 0 1 0-1.829l4.28-4.28a.375.375 0 0 0 0-.53l-1.577-1.577a.374.374 0 0 0-.53 0l-.963.963l-.65-.649l.963-.963a1.293 1.293 0 0 1 1.829 0l1.577 1.577a1.3 1.3 0 0 1 0 1.829l-4.28 4.279a.377.377 0 0 0 0 .53l2.89 2.889z"/><path fill="#007fa0" d="m24.738 23.879l-.59.59a.833.833 0 0 1-1.179 0l-3.538-3.538a.833.833 0 0 1 0-1.179l.59-.59a.835.835 0 0 1 1.179 0l3.538 3.538a.835.835 0 0 1 0 1.179"/><path fill="#fff" d="m8.15 16.019l1.36-1.36l1.359 1.36l-1.36 1.359z"/><path fill="#3cb6b0" d="m18.679 9.566l1.769 1.769a.833.833 0 0 1 0 1.179l-7.665 7.666a.835.835 0 0 1-1.179 0l-1.769-1.769a.834.834 0 0 1 0-1.18L17.5 9.566a.835.835 0 0 1 1.179 0M9.51 14.66l1.359-1.36l1.359 1.36l-1.36 1.359z"/><path fill="#fff" d="m10.85 13.32l1.36-1.358l1.359 1.359l-1.36 1.359z"/><path fill="#3cb6b0" d="m12.21 11.96l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#fff" d="m14.928 9.242l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#3cb6b0" d="m6.791 14.66l1.36-1.359l1.358 1.36l-1.359 1.358zm2.7-2.7l1.36-1.36l1.358 1.36l-1.359 1.359zm2.719-2.719l1.359-1.359l1.359 1.36l-1.36 1.358z"/><path fill="#3cb6b0" d="m13.568 7.882l1.36-1.36l1.358 1.36l-1.359 1.359zM8.132 10.6l1.36-1.358L10.85 10.6l-1.359 1.36z"/><path fill="#3cb6b0" d="m12.21 6.523l1.36-1.36l1.358 1.36l-1.359 1.359zm-8.137 5.419l1.359-1.36l1.359 1.36L5.43 13.3zm4.059-4.06L9.49 6.523l1.359 1.36L9.49 9.24z"/><path fill="#007fa0" d="M12.194 20.791a1.2 1.2 0 0 1-.85-.352L9.575 18.67a1.2 1.2 0 0 1 0-1.7l7.665-7.664a1.2 1.2 0 0 1 1.7 0l1.769 1.769a1.2 1.2 0 0 1 0 1.7l-7.665 7.665a1.2 1.2 0 0 1-.85.351m5.9-11.1a.46.46 0 0 0-.33.136L10.1 17.491a.466.466 0 0 0 0 .66l1.769 1.769a.467.467 0 0 0 .659 0l7.666-7.665a.47.47 0 0 0 0-.66L18.42 9.826a.46.46 0 0 0-.33-.136z"/><path fill="#fff" d="M23.559 25.081a1.2 1.2 0 0 1-.85-.352l-3.538-3.538a1.2 1.2 0 0 1 0-1.7l.59-.589a1.2 1.2 0 0 1 1.7 0L25 22.44a1.2 1.2 0 0 1 0 1.7l-.59.59a1.2 1.2 0 0 1-.851.351m-2.949-5.795a.46.46 0 0 0-.329.136l-.59.59a.467.467 0 0 0 0 .66l3.538 3.537a.465.465 0 0 0 .659 0l.59-.589a.467.467 0 0 0 0-.66l-3.538-3.538a.46.46 0 0 0-.33-.136"/></svg> Renovate</td><td><code>renovate.json</code></td><td><code>minimumReleaseAge: "7 days"</code></td><td>Delay dependency update PRs</td><td><a class="doc-link" href="https://docs.renovatebot.com/key-concepts/minimum-release-age/" target="_blank" rel="noopener" title="Renovate docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-        <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24" fill="currentColor" style="color:#0969da"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> Dependabot</td><td><code>dependabot.yml</code></td><td><code>cooldown.default-days: 7</code></td><td>Delay dependency update PRs</td><td><a class="doc-link" href="https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference" target="_blank" rel="noopener" title="Dependabot docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+  </div><!-- /grid-bg -->
 
-<!-- Help & feedback -->
-<section class="section section-border scroll-mt" id="help">
-  <h2>Help &amp; feedback</h2>
-  <div style="display:flex; flex-wrap:wrap; gap:1rem;">
-    <a href="https://github.com/arnica/depsguard/issues" class="plat-btn" style="text-decoration:none;">
-      <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
-      Report a bug or request a feature
-    </a>
-    <a href="https://github.com/arnica/depsguard/security/advisories/new" class="plat-btn" style="text-decoration:none;">
-      <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11V11.99z"/></svg>
-      Report a security vulnerability
-    </a>
-  </div>
-</section>
-
-<!-- Footer -->
-<footer class="footer">
-  <div class="footer-inner">
-    <div class="footer-left">
-      Made with care by
-      <a href="https://arnica.io"><picture><source srcset="img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img src="img/arnica-logo-dark.svg" alt="arnica"></picture></a>
-      in Atlanta
-    </div>
-    <div class="footer-right">
-      <a href="https://github.com/arnica/depsguard">GitHub</a>
-      <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
-      <a href="https://www.arnica.io/legal/privacy">Privacy</a>
-      <a href="https://www.arnica.io/legal/terms-of-use">Terms</a>
-    </div>
-  </div>
-</footer>
-
-</div><!-- /grid-bg -->
-
-<script src="vendor/asciinema-player.min.js"></script>
-<script>
-(function(){
-  var player = AsciinemaPlayer.create('demo.cast', document.getElementById('demo'), {
-    cols:80, rows:16, fit:'width', autoPlay:false, loop:true,
-    speed:1, idleTimeLimit:2, theme:'dracula',
-    terminalFontFamily:"'SF Mono','Menlo','Monaco','Courier New',monospace",
-  });
-  var started = false;
-  var observer = new IntersectionObserver(function(entries){
-    if(entries[0].isIntersecting && !started){ started=true; player.play(); }
-  },{ threshold:0.3 });
-  observer.observe(document.getElementById('demo'));
-})();
-</script>
-<script>
-(function(){
-  function copyText(t){
-    if(navigator.clipboard&&window.isSecureContext) return navigator.clipboard.writeText(t);
-    return new Promise(function(res,rej){
-      var ta=document.createElement('textarea'); ta.value=t;
-      ta.style.position='fixed'; ta.style.left='-9999px';
-      document.body.appendChild(ta); ta.select();
-      try{document.execCommand('copy');res();}catch(e){rej(e);}
-      document.body.removeChild(ta);
-    });
-  }
-  document.querySelectorAll('.install-code-wrap').forEach(function(wrap){
-    var btn=wrap.querySelector('.install-copy-btn'), code=wrap.querySelector('code');
-    if(!btn||!code) return;
-    var label=btn.textContent, aria=btn.getAttribute('aria-label')||'Copy to clipboard';
-    btn.addEventListener('click',function(){
-      var text=(wrap.dataset.copy||code.textContent||'').trim();
-      if(!text) return;
-      copyText(text).then(
-        function(){ btn.textContent='Copied'; btn.setAttribute('aria-label','Copied to clipboard');
-          clearTimeout(btn._t); btn._t=setTimeout(function(){ btn.textContent=label; btn.setAttribute('aria-label',aria); },2000);},
-        function(){ btn.textContent='Failed';
-          clearTimeout(btn._t); btn._t=setTimeout(function(){ btn.textContent=label; btn.setAttribute('aria-label',aria); },2000);}
-      );
-    });
-  });
-})();
-</script>
-<script>
-(function(){
-  var tabs=document.querySelectorAll('.install-tab');
-  var panels=document.querySelectorAll('.install-panel');
-  tabs.forEach(function(tab){
-    tab.addEventListener('click',function(){
-      var target=tab.dataset.tab;
-      tabs.forEach(function(t){
-        var a=t.dataset.tab===target;
-        t.setAttribute('aria-selected',a);
-        t.setAttribute('tabindex',a?'0':'-1');
+  <script src="vendor/asciinema-player.min.js"></script>
+  <script>
+    (function () {
+      var player = AsciinemaPlayer.create('demo.cast', document.getElementById('demo'), {
+        cols: 80, rows: 16, fit: 'width', autoPlay: false, loop: true,
+        speed: 1, idleTimeLimit: 2, theme: 'dracula',
+        terminalFontFamily: "'SF Mono','Menlo','Monaco','Courier New',monospace",
       });
-      panels.forEach(function(p){ p.style.display=p.dataset.panel===target?'':'none'; });
-    });
-    tab.addEventListener('keydown',function(e){
-      var idx=Array.from(tabs).indexOf(tab), next=-1;
-      if(e.key==='ArrowRight'||e.key==='ArrowDown') next=(idx+1)%tabs.length;
-      else if(e.key==='ArrowLeft'||e.key==='ArrowUp') next=(idx-1+tabs.length)%tabs.length;
-      else if(e.key==='Home') next=0;
-      else if(e.key==='End') next=tabs.length-1;
-      if(next>=0){ e.preventDefault(); tabs[next].click(); tabs[next].focus(); }
-    });
-  });
-  document.querySelectorAll('.install-btn[data-activate-tab]').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var target=btn.dataset.activateTab;
-      var tab=document.querySelector('.install-tab[data-tab="'+target+'"]');
-      if(tab) tab.click();
-    });
-  });
-  var hash=window.location.hash;
-  if(hash==='#install-linux') tabs[1].click();
-  else if(hash==='#install-windows') tabs[2].click();
-})();
-</script>
-<script>
-(function(){
-  var ua=navigator.userAgent||'', p=navigator.platform||'';
-  var os='macos';
-  if(/Win/.test(p)||/Windows/.test(ua)) os='windows';
-  else if(/Linux/.test(p)||/Linux/.test(ua)) os='linux';
-  else if(/Mac|iPhone|iPad/.test(p)||/Macintosh/.test(ua)) os='macos';
+      var started = false;
+      var observer = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting && !started) { started = true; player.play(); }
+      }, { threshold: 0.3 });
+      observer.observe(document.getElementById('demo'));
+    })();
+  </script>
+  <script>
+    (function () {
+      function copyText(t) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+        return new Promise(function (res, rej) {
+          var ta = document.createElement('textarea'); ta.value = t;
+          ta.style.position = 'fixed'; ta.style.left = '-9999px';
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); res(); } catch (e) { rej(e); }
+          document.body.removeChild(ta);
+        });
+      }
+      document.querySelectorAll('.install-code-wrap').forEach(function (wrap) {
+        var btn = wrap.querySelector('.install-copy-btn'), code = wrap.querySelector('code');
+        if (!btn || !code) return;
+        var label = btn.textContent, aria = btn.getAttribute('aria-label') || 'Copy to clipboard';
+        btn.addEventListener('click', function () {
+          var text = (wrap.dataset.copy || code.textContent || '').trim();
+          if (!text) return;
+          copyText(text).then(
+            function () {
+              btn.textContent = 'Copied'; btn.setAttribute('aria-label', 'Copied to clipboard');
+              clearTimeout(btn._t); btn._t = setTimeout(function () { btn.textContent = label; btn.setAttribute('aria-label', aria); }, 2000);
+            },
+            function () {
+              btn.textContent = 'Failed';
+              clearTimeout(btn._t); btn._t = setTimeout(function () { btn.textContent = label; btn.setAttribute('aria-label', aria); }, 2000);
+            }
+          );
+        });
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll('.install-tab');
+      var panels = document.querySelectorAll('.install-panel');
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var target = tab.dataset.tab;
+          tabs.forEach(function (t) {
+            var a = t.dataset.tab === target;
+            t.setAttribute('aria-selected', a);
+            t.setAttribute('tabindex', a ? '0' : '-1');
+          });
+          panels.forEach(function (p) { p.style.display = p.dataset.panel === target ? '' : 'none'; });
+        });
+        tab.addEventListener('keydown', function (e) {
+          var idx = Array.from(tabs).indexOf(tab), next = -1;
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (idx + 1) % tabs.length;
+          else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (idx - 1 + tabs.length) % tabs.length;
+          else if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = tabs.length - 1;
+          if (next >= 0) { e.preventDefault(); tabs[next].click(); tabs[next].focus(); }
+        });
+      });
+      document.querySelectorAll('.install-btn[data-activate-tab]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var target = btn.dataset.activateTab;
+          var tab = document.querySelector('.install-tab[data-tab="' + target + '"]');
+          if (tab) tab.click();
+        });
+      });
+      var hash = window.location.hash;
+      if (hash === '#install-linux') tabs[1].click();
+      else if (hash === '#install-windows') tabs[2].click();
+    })();
+  </script>
+  <script>
+    (function () {
+      var ua = navigator.userAgent || '', p = navigator.platform || '';
+      var os = 'macos';
+      if (/Win/.test(p) || /Windows/.test(ua)) os = 'windows';
+      else if (/Linux/.test(p) || /Linux/.test(ua)) os = 'linux';
+      else if (/Mac|iPhone|iPad/.test(p) || /Macintosh/.test(ua)) os = 'macos';
 
-  var row=document.querySelector('.plat-row');
-  if(!row) return;
-  var btns=Array.from(row.querySelectorAll('.plat-btn'));
-  var match=btns.find(function(b){ return b.dataset.activateTab===os; });
-  if(match){
-    match.classList.add('plat-btn-primary');
-    row.insertBefore(match,row.firstChild);
-  }
+      var row = document.querySelector('.plat-row');
+      if (!row) return;
+      var btns = Array.from(row.querySelectorAll('.plat-btn'));
+      var match = btns.find(function (b) { return b.dataset.activateTab === os; });
+      if (match) {
+        match.classList.add('plat-btn-primary');
+        row.insertBefore(match, row.firstChild);
+      }
 
-  var tab=document.querySelector('.install-tab[data-tab="'+os+'"]');
-  if(tab&&!window.location.hash) tab.click();
-})();
-</script>
+      var tab = document.querySelector('.install-tab[data-tab="' + os + '"]');
+      if (tab && !window.location.hash) tab.click();
+    })();
+  </script>
 
+  <script>
+    (function () {
+      var el = document.getElementById('gh-star-count');
+      if (!el) return;
+      fetch('https://api.github.com/repos/arnica/depsguard')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.stargazers_count != null) { el.textContent = d.stargazers_count; el.classList.add('visible'); }
+        })
+        .catch(function () { });
+    })();
+  </script>
+  <script>
+    (function () {
+      var host = location.hostname;
+      document.querySelectorAll('a[href]').forEach(function (a) {
+        try {
+          var u = new URL(a.href, location.href);
+          if (u.hostname && u.hostname !== host) {
+            a.setAttribute('target', '_blank');
+            if (!/arnica\.io$/i.test(u.hostname)) {
+              a.setAttribute('rel', 'noopener');
+            }
+          }
+        } catch (e) { }
+      });
+      document.querySelectorAll('.doc-link').forEach(function (a) {
+        var label = a.getAttribute('title');
+        if (label) a.setAttribute('aria-label', label);
+        var svg = a.querySelector('svg');
+        if (svg) svg.setAttribute('aria-hidden', 'true');
+      });
+      document.querySelectorAll('.plat-btn svg, .install-tab svg, .footer-right svg').forEach(function (svg) {
+        svg.setAttribute('aria-hidden', 'true');
+      });
+      var timer = document.querySelector('.ap-timer');
+      if (timer) timer.setAttribute('aria-label', 'Playback time');
+    })();
+  </script>
 </body>
+
 </html>
