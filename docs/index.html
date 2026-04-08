@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DepsGuard - Supply Chain Defense</title>
   <meta name="description"
     content="Guard your dependencies against supply chain attacks. Zero dependencies. One command.">
@@ -680,10 +680,13 @@
 
     .code-note a {
       color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
     }
 
     .code-note a:hover {
-      text-decoration: underline;
+      text-decoration-color: var(--arnica);
     }
 
     .install-also {
@@ -699,10 +702,13 @@
 
     .install-also a {
       color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
     }
 
     .install-also a:hover {
-      text-decoration: underline;
+      text-decoration-color: var(--arnica);
     }
 
     /* ── Checks table ────────────────── */
@@ -927,6 +933,17 @@
       scroll-margin-top: 5rem;
     }
 
+    .body-link {
+      color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
+    }
+
+    .body-link:hover {
+      text-decoration-color: var(--arnica);
+    }
+
     .sr-only {
       position:absolute; width:1px; height:1px;
       padding:0; margin:-1px; overflow:hidden;
@@ -1011,10 +1028,13 @@
 
     .faq-list .faq-body a {
       color: var(--arnica);
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--arnica) 40%, transparent);
+      text-underline-offset: 2px;
     }
 
     .faq-list .faq-body a:hover {
-      text-decoration: underline;
+      text-decoration-color: var(--arnica);
     }
 
     .faq-list .faq-body ul {
@@ -1189,7 +1209,7 @@ scoop install depsguard</code></pre>
       <h2>How to use</h2>
       <ol style="color:var(--text-dim); line-height:1.85; padding-left:1.25rem; margin-bottom:1.75rem;">
         <li><strong style="color:var(--text);">Install</strong> &ndash; pick your platform <a href="#install"
-            style="color:var(--arnica);">above</a>.</li>
+            class="body-link">above</a>.</li>
         <li><strong style="color:var(--text);">Run</strong> <code>depsguard</code> in your terminal to launch the
           interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix
           selector. Use <code>depsguard scan</code> for a read-only report, or <code>depsguard --no-search</code> to
@@ -1220,7 +1240,7 @@ scoop install depsguard</code></pre>
 
       <p style="color:var(--text-mute); font-size:.875rem; margin-top:1.25rem;">
         Full documentation, config file locations, and troubleshooting tips are in the
-        <a href="https://github.com/arnica/depsguard#readme" style="color:var(--arnica);">README</a>.
+        <a href="https://github.com/arnica/depsguard#readme" class="body-link">README</a>.
       </p>
     </section>
 
@@ -1230,7 +1250,7 @@ scoop install depsguard</code></pre>
       <p style="color:var(--text-dim); margin-bottom:1.25rem; line-height:1.75;">
         Software supply chain attacks are increasing. On March&nbsp;31, 2026, a compromised maintainer account was used
         to
-        <a href="https://github.com/axios/axios/issues/10636" style="color:var(--arnica)">publish malicious versions of
+        <a href="https://github.com/axios/axios/issues/10636" class="body-link">publish malicious versions of
           axios</a>.
         The bad versions were live for ~3&nbsp;hours before removal. Similar short-lived attacks hit
         <code style="color:var(--text-dim)">ua-parser-js</code>,
@@ -1345,7 +1365,7 @@ scoop install depsguard</code></pre>
             </tr>
             <tr>
               <td class="mgr-name"><img class="mgr-icon"
-                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 32 32'%3E%3Cpath fill='%230288d1' d='M27.575 23.967a9.9 9.9 0 0 0-3.751 1.726a22.6 22.6 0 0 1-5.537 2.504a1.55 1.55 0 0 1-.931.52a59 59 0 0 1-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49 1.49 0 0 1 .82-1.965a3.6 3.6 0 0 1-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324 1.794-.897 2.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69 0 0 1-.94-.324a4.6 4.6 0 0 1-.632-2.794a5.2 5.2 0 0 1 1.674-2.76a8.84 8.84 0 0 1 .624-4.17a9.9 9.9 0 0 1 3-3.469S7.136 11.015 7.82 9.177c.444-1.196.623-1.187.769-1.239a3.44 3.44 0 0 0 1.375-.811a4.99 4.99 0 0 1 4.178-1.607s1.094-3.357 2.12-2.7a17.4 17.4 0 0 1 1.452 2.735s1.213-.71 1.35-.445a10.74 10.74 0 0 1 .495 5.81a13.3 13.3 0 0 1-2.46 5.127c-.129.214 1.47.889 2.477 3.683c.932 2.554.103 4.699.248 4.938c.026.043.034.06.034.06s1.068.085 3.213-1.24a8.05 8.05 0 0 1 4.05-1.52a1.026 1.026 0 0 1 .453 2Z'/%3E%3C/svg%3E"
+                  src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='%230288d1'%20d='M27.575%2023.967a9.9%209.9%200%200%200-3.751%201.726a22.6%2022.6%200%200%201-5.537%202.504a1.55%201.55%200%200%201-.931.52a59%2059%200%200%201-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49%201.49%200%200%201%20.82-1.965a3.6%203.6%200%200%201-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324%201.794-.897%202.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69%200%200%201-.94-.324a4.6%204.6%200%200%201-.632-2.794a5.2%205.2%200%200%201%201.674-2.76a8.84%208.84%200%200%201%20.624-4.17a9.9%209.9%200%200%201%203-3.469S7.136%2011.015%207.82%209.177c.444-1.196.623-1.187.769-1.239a3.44%203.44%200%200%200%201.375-.811a4.99%204.99%200%200%201%204.178-1.607s1.094-3.357%202.12-2.7a17.4%2017.4%200%200%201%201.452%202.735s1.213-.71%201.35-.445a10.74%2010.74%200%200%201%20.495%205.81a13.3%2013.3%200%200%201-2.46%205.127c-.129.214%201.47.889%202.477%203.683c.932%202.554.103%204.699.248%204.938c.026.043.034.06.034.06s1.068.085%203.213-1.24a8.05%208.05%200%200%201%204.05-1.52a1.026%201.026%200%200%201%20.453%202Z'/%3E%3C/svg%3E"
                   alt=""> Yarn</td>
               <td><code>.yarnrc.yml</code></td>
               <td><code>npmMinimalAgeGate: "7d"</code></td>
@@ -1768,6 +1788,8 @@ scoop install depsguard</code></pre>
       document.querySelectorAll('.plat-btn svg, .install-tab svg, .footer-right svg').forEach(function (svg) {
         svg.setAttribute('aria-hidden', 'true');
       });
+      var timer = document.querySelector('.ap-timer');
+      if (timer) timer.setAttribute('aria-label', 'Playback time');
     })();
   </script>
 </body>
