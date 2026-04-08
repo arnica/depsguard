@@ -5,11 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>DepsGuard - Supply Chain Defense</title>
 <meta name="description" content="Guard your dependencies against supply chain attacks. Zero dependencies. One command.">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://depsguard.com/">
+<meta property="og:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
+<meta property="og:description" content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+<meta property="og:image" content="https://depsguard.com/img/select.png">
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
+<meta name="twitter:description" content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+<meta name="twitter:image" content="https://depsguard.com/img/select.png">
 <link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
 <link rel="apple-touch-icon" href="img/favicon/favicon.svg">
 <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZRM6FFZHT6');
+</script>
 <link rel="stylesheet" href="vendor/asciinema-player.css">
 <style>
   @media (prefers-reduced-motion: no-preference) { html { scroll-behavior:smooth; } }
@@ -316,6 +335,30 @@
     font-family:var(--mono); font-size:.75rem; color:var(--text-mute);
     margin-bottom:.25rem;
   }
+
+  /* ── FAQ ────────────────────────── */
+  .faq-list { padding:0; }
+  .faq-item {
+    border:1px solid var(--border); border-radius:.5rem;
+    margin-bottom:.75rem; background:var(--surface);
+  }
+  .faq-q {
+    padding:.85rem 1rem; font-weight:600;
+    color:var(--text); font-size:.9375rem; margin:0;
+  }
+  .faq-list .faq-body {
+    padding:0 1rem 1rem 2.8rem;
+    color:var(--text-dim); line-height:1.75; font-size:.875rem;
+  }
+  .faq-list .faq-body code {
+    font-family:var(--mono); font-size:.8125em;
+    background:var(--surface-2); color:var(--text);
+    padding:.1em .3em; border-radius:3px;
+  }
+  .faq-list .faq-body a { color:var(--arnica); }
+  .faq-list .faq-body a:hover { text-decoration:underline; }
+  .faq-list .faq-body ul { padding-left:1.25rem; margin:.5rem 0; }
+  .faq-list .faq-body li { margin-bottom:.35rem; }
 </style>
 </head>
 <body>
@@ -469,15 +512,13 @@ scoop install depsguard</code></pre>
 <section class="section section-border">
   <h2>Why this exists</h2>
   <p style="color:var(--text-dim); margin-bottom:1.25rem; line-height:1.75;">
-    Software supply chain attacks are accelerating. On March&nbsp;31, 2026, the popular
-    <a href="https://github.com/axios/axios/issues/10636" style="color:var(--arnica)">axios package was compromised</a>
-    via a hijacked maintainer account. Malicious versions were live for ~3&nbsp;hours and pulled in
-    by countless projects before removal. The same pattern hit
-    <code style="color:var(--text-dim)">event-stream</code>,
+    Software supply chain attacks are increasing. On March&nbsp;31, 2026, a compromised maintainer account was used to
+    <a href="https://github.com/axios/axios/issues/10636" style="color:var(--arnica)">publish malicious versions of axios</a>.
+    The bad versions were live for ~3&nbsp;hours before removal. Similar short-lived attacks hit
     <code style="color:var(--text-dim)">ua-parser-js</code>,
     <code style="color:var(--text-dim)">colors</code>, and
     <code style="color:var(--text-dim)">node-ipc</code>.
-    Attackers publish a poisoned version, and every <code style="color:var(--text-dim)">npm install</code> that runs in the next few hours pulls it in.
+    The pattern is the same: an attacker publishes a poisoned version, and every <code style="color:var(--text-dim)">npm install</code> that runs before it's caught pulls it in.
   </p>
   <p style="color:var(--text-dim); margin-bottom:2.5rem; line-height:1.75;">
     Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
@@ -504,6 +545,83 @@ scoop install depsguard</code></pre>
         <tr><td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24" fill="currentColor" style="color:#0969da"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> Dependabot</td><td><code>dependabot.yml</code></td><td><code>cooldown.default-days: 7</code></td><td>Delay dependency update PRs</td><td><a class="doc-link" href="https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference" target="_blank" rel="noopener" title="Dependabot docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td></tr>
       </tbody>
     </table>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section section-border scroll-mt" id="faq">
+  <h2>FAQ</h2>
+  <div class="faq-list">
+
+    <div class="faq-item">
+      <h3 class="faq-q">Will this protect against all supply chain attacks?</h3>
+      <div class="faq-body">
+        <p>No. DepsGuard focuses on one specific layer: <strong>delaying the adoption of brand-new package versions</strong> and disabling risky install scripts. This buys you time when an attacker publishes a poisoned release, because your package manager won't pull it in immediately. It does not protect against compromised packages that go undetected for weeks, typosquatting, or attacks that don't involve publishing a new version.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How would this have helped during the axios compromise?</h3>
+      <div class="faq-body">
+        <p>On March 31, 2026, a compromised maintainer account published malicious versions of <a href="https://github.com/axios/axios/issues/10636">axios</a>. The bad versions were live for roughly 3 hours before being removed from the registry. If your package manager was configured with a 7-day minimum release age (like <code>min-release-age=7</code> in <code>.npmrc</code>), it would have refused to download the new version during that window. The same logic applies to incidents like <code>ua-parser-js</code> (compromised for ~4 hours in Oct 2021) and <code>node-ipc</code> (caught within days in Mar 2022) &ndash; in each case, the poisoned version was removed well within a 7-day quarantine period. Note: this would <em>not</em> have helped with attacks like <code>event-stream</code>, where the malicious code went undetected for months.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Why can this protect me against future attacks?</h3>
+      <div class="faq-body">
+        <p>Many supply chain attacks follow the same pattern: an attacker publishes a poisoned package version and relies on automated installs pulling it in before anyone notices. Registry security teams, community reports, and automated scanners often catch and remove these within hours or days. A minimum release age means your package manager won't pull in a version that hasn't been publicly available for at least 7 days, giving that detection window time to work. This is effective against fast-response attacks (like axios, ua-parser-js, node-ipc) but does not help if malicious code goes undetected for longer than the quarantine period.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What's the difference between this and Software Composition Analysis (SCA)?</h3>
+      <div class="faq-body">
+        <p>SCA tools (like npm audit, <a href="https://github.com/owasp-dep-scan/dep-scan">OWASP dep-scan</a>, <a href="https://github.com/anchore/grype">Grype</a>, <a href="https://arnica.io/use-cases/sca">Arnica</a>, or Snyk) scan your <em>existing</em> dependencies for known vulnerabilities after you've already installed them. DepsGuard works <em>before</em> installation &ndash; it configures your package manager to avoid pulling in newly published versions until they've had time to be vetted. They're complementary: SCA finds known CVEs in your current lockfile, DepsGuard reduces the chance that a freshly poisoned version gets installed in the first place.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What else can I do to protect myself?</h3>
+      <div class="faq-body">
+        <p>DepsGuard covers package manager config, but there's more you can do:</p>
+        <ul>
+          <li>Pin GitHub Actions by commit SHA (<code>uses: actions/checkout@a81bbb...</code>) instead of a tag like <code>@v4</code>. Tags can be moved to point at different commits; SHAs can't.</li>
+          <li>Use <code>npm ci</code>, <code>pnpm install --frozen-lockfile</code>, or <code>yarn install --immutable</code> in CI. These commands fail if the lockfile is out of date, so CI never resolves new versions on its own.</li>
+          <li>Don't auto-merge Dependabot or Renovate PRs without reviewing changelogs, diffs, and provenance.</li>
+          <li>Audit your dependency tree periodically with <code>npm ls</code> or <code>pnpm why</code>. Fewer dependencies means fewer places an attacker can hide.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Is this free?</h3>
+      <div class="faq-body">
+        <p>Yes. DepsGuard is free and open source under the <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT license</a>.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Can I use this commercially?</h3>
+      <div class="faq-body">
+        <p>Yes. The MIT license permits commercial use, modification, and distribution with no restrictions.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Who made this?</h3>
+      <div class="faq-body">
+        <p><a href="https://arnica.io">Arnica</a>, an application security company based in Atlanta. DepsGuard is a free, open-source tool we built to help anyone harden their package manager config.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">I found a bug. What should I do?</h3>
+      <div class="faq-body">
+        <p><a href="https://github.com/arnica/depsguard/issues">Open an issue on GitHub</a>. For security vulnerabilities, please use <a href="https://github.com/arnica/depsguard/security/advisories/new">GitHub Security Advisories</a> to report privately.</p>
+      </div>
+    </div>
+
   </div>
 </section>
 
