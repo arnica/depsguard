@@ -111,9 +111,7 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 | crates.io | yes | yes | yes | `cargo install depsguard` |
 | Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard https://github.com/arnica/depsguard ; brew install depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add depsguard https://github.com/arnica/depsguard ; scoop install depsguard` |
-<!-- | WinGet (community pkg) | no | no | yes | `winget install Arnica.DepsGuard` | uncomment once approved in microsoft/winget-pkgs -->
-
-> Note: Scoop and WinGet availability depends on package publication status.
+| WinGet | no | no | yes | `winget install Arnica.DepsGuard` |
 
 ### Build from source
 
@@ -155,10 +153,10 @@ depsguard --help       # CLI help
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
-| pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Same idea for workspace |
-| pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Stricter transitive deps |
-| pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Avoid provenance downgrade |
-| pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Stricter build scripts |
+| pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
+| pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
+| pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
+| pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
 | bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes |
 | renovate | `renovate.json` etc. | `minimumReleaseAge` | `7 days` | Delay dependency update PRs by 7 days |
