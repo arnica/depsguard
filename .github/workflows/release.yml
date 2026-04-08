@@ -356,6 +356,7 @@ jobs:
   sync-homebrew-formula:
     name: Sync Homebrew formula on main
     needs:
+      - publish-github
       - publish-apt
       - prepare
     runs-on: ubuntu-latest
@@ -374,31 +375,52 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          REPO_SLUG: ${{ github.repository }}
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
-          TARBALL_URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz"
-          TMP_TARBALL="$(mktemp)"
-          curl -fsSL \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "${TARBALL_URL}" \
-            -o "${TMP_TARBALL}"
-          SHA256_SOURCE="$(sha256sum "${TMP_TARBALL}" | awk '{print $1}')"
-          export VERSION GITHUB_REPOSITORY SHA256_SOURCE
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "${TMP_DIR}"' EXIT
+
+          for name in macos-arm64 macos-amd64 linux-arm64-gnu linux-amd64-gnu; do
+            gh release download "${RELEASE_TAG}" \
+              -R "${REPO_SLUG}" \
+              -p "depsguard-${name}.tar.gz.sha256" \
+              -D "${TMP_DIR}"
+          done
+
+          SHA256_MACOS_ARM64="$(awk '{print $1}' "${TMP_DIR}/depsguard-macos-arm64.tar.gz.sha256")"
+          SHA256_MACOS_AMD64="$(awk '{print $1}' "${TMP_DIR}/depsguard-macos-amd64.tar.gz.sha256")"
+          SHA256_LINUX_ARM64="$(awk '{print $1}' "${TMP_DIR}/depsguard-linux-arm64-gnu.tar.gz.sha256")"
+          SHA256_LINUX_AMD64="$(awk '{print $1}' "${TMP_DIR}/depsguard-linux-amd64-gnu.tar.gz.sha256")"
+
+          for var in VERSION SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64; do
+            val="${!var}"
+            if [ -z "${val}" ]; then
+              echo "error: ${var} is empty" >&2; exit 1
+            fi
+          done
+          HEX_RE='^[0-9a-f]{64}$'
+          for var in SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64; do
+            val="${!var}"
+            if ! [[ "${val}" =~ ${HEX_RE} ]]; then
+              echo "error: ${var} is not a valid sha256 hex digest: ${val}" >&2; exit 1
+            fi
+          done
+
+          export VERSION SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64
+          export GITHUB_REPOSITORY="${REPO_SLUG}"
           mkdir -p Formula
           envsubst < packaging/homebrew/depsguard.rb.in > Formula/depsguard.rb
       - name: Validate Homebrew formula render
         run: |
           set -euo pipefail
-          if grep -En 'system "cargo", "install".*--path".*\*std_cargo_args' \
-            packaging/homebrew/depsguard.rb.in Formula/depsguard.rb; then
-            echo "Found invalid cargo install invocation in Homebrew formula files."
-            echo "Do not combine --path with *std_cargo_args."
+          if ! grep -q 'bin.install "depsguard"' Formula/depsguard.rb; then
+            echo "Rendered formula is missing expected bin.install invocation."
             exit 1
           fi
-
-          if ! grep -Eq 'system "cargo", "install", \*std_cargo_args' Formula/depsguard.rb; then
-            echo "Rendered formula is missing expected cargo install invocation."
+          if grep -qE '\$[A-Z_]' Formula/depsguard.rb; then
+            echo "Rendered formula still contains unsubstituted placeholders."
             exit 1
           fi
       - name: Commit and push formula update to main
