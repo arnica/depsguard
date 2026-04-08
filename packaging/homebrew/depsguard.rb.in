@@ -6,29 +6,40 @@ class Depsguard < Formula
   homepage "https://depsguard.com"
   version "$VERSION"
   license "MIT"
+  head "https://github.com/$GITHUB_REPOSITORY.git", branch: "main"
 
   on_macos do
-    if Hardware::CPU.arm?
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
       url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/depsguard-macos-arm64.tar.gz"
       sha256 "$SHA256_MACOS_ARM64"
-    else
+    elsif Hardware::CPU.intel?
       url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/depsguard-macos-amd64.tar.gz"
       sha256 "$SHA256_MACOS_AMD64"
+    else
+      odie "depsguard: unsupported macOS architecture: #{Hardware::CPU.arch}"
     end
   end
 
   on_linux do
-    if Hardware::CPU.arm?
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
       url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/depsguard-linux-arm64-gnu.tar.gz"
       sha256 "$SHA256_LINUX_ARM64"
-    else
+    elsif Hardware::CPU.intel?
       url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/depsguard-linux-amd64-gnu.tar.gz"
       sha256 "$SHA256_LINUX_AMD64"
+    else
+      odie "depsguard: unsupported Linux architecture: #{Hardware::CPU.arch}"
     end
   end
 
+  depends_on "rust" => :build if build.head?
+
   def install
-    bin.install "depsguard"
+    if build.head?
+      system "cargo", "install", *std_cargo_args
+    else
+      bin.install "depsguard"
+    end
   end
 
   test do

@@ -394,6 +394,20 @@ jobs:
           SHA256_LINUX_ARM64="$(awk '{print $1}' "${TMP_DIR}/depsguard-linux-arm64-gnu.tar.gz.sha256")"
           SHA256_LINUX_AMD64="$(awk '{print $1}' "${TMP_DIR}/depsguard-linux-amd64-gnu.tar.gz.sha256")"
 
+          for var in VERSION SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64; do
+            val="${!var}"
+            if [ -z "${val}" ]; then
+              echo "error: ${var} is empty" >&2; exit 1
+            fi
+          done
+          HEX_RE='^[0-9a-f]{64}$'
+          for var in SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64; do
+            val="${!var}"
+            if ! [[ "${val}" =~ ${HEX_RE} ]]; then
+              echo "error: ${var} is not a valid sha256 hex digest: ${val}" >&2; exit 1
+            fi
+          done
+
           export VERSION SHA256_MACOS_ARM64 SHA256_MACOS_AMD64 SHA256_LINUX_ARM64 SHA256_LINUX_AMD64
           export GITHUB_REPOSITORY="${REPO_SLUG}"
           mkdir -p Formula
@@ -401,13 +415,12 @@ jobs:
       - name: Validate Homebrew formula render
         run: |
           set -euo pipefail
-          if grep -q 'cargo' Formula/depsguard.rb; then
-            echo "Rendered formula should not reference cargo (binary install only)."
-            exit 1
-          fi
-
           if ! grep -q 'bin.install "depsguard"' Formula/depsguard.rb; then
             echo "Rendered formula is missing expected bin.install invocation."
+            exit 1
+          fi
+          if grep -qE '\$[A-Z_]' Formula/depsguard.rb; then
+            echo "Rendered formula still contains unsubstituted placeholders."
             exit 1
           fi
       - name: Commit and push formula update to main
