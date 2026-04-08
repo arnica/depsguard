@@ -1,12 +1,12 @@
 {
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "Harden package manager configs against supply chain attacks",
   "homepage": "https://depsguard.com",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/arnica/depsguard/releases/download/v0.1.27/depsguard-x86_64-pc-windows-msvc.zip",
-      "hash": "sha256:78b1071179a5201ab0578bbfea8bcc4177a8501dd8bec65d7f01e3a1e2b3725c"
+      "url": "https://github.com/arnica/depsguard/releases/download/v0.1.28/depsguard-x86_64-pc-windows-msvc.zip",
+      "hash": "sha256:ef84b402dbea60eec082c6eb9345152aa95e9f743b3681d283998e7c39bec849"
     }
   },
   "bin": "depsguard.exe",
