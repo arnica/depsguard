@@ -95,7 +95,7 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 |--------|---------|
 | `CARGO_REGISTRY_TOKEN` | `cargo publish` to crates.io |
 | `RELEASE_BOT_TOKEN` | PAT used by release workflow to push Homebrew formula updates directly to `main` |
-| `WINGET_PKGS_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
+| `WINGATE_RELEASE_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
 Homebrew formula is now maintained in this repository at `Formula/depsguard.rb`.
 On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and pushes
@@ -122,7 +122,7 @@ Document these in your org’s internal runbooks or public docs once the repos e
 
 **WinGet**
 
-- Optional job uses [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) when `WINGET_PKGS_TOKEN` is set.
+- Optional job uses [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) when `WINGATE_RELEASE_TOKEN` is set.
 - At least one version of `Arnica.DepsGuard` must exist in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) (first manifest is usually manual); the token owner needs a fork of `winget-pkgs`.
 
 **Other templates in-repo**
