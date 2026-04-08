@@ -927,6 +927,12 @@
       scroll-margin-top: 5rem;
     }
 
+    .sr-only {
+      position:absolute; width:1px; height:1px;
+      padding:0; margin:-1px; overflow:hidden;
+      clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
+
     /* ── Keyboard ref ──────────────────── */
     .kb-bar {
       font-family: var(--mono);
@@ -1029,22 +1035,24 @@
     <!-- Nav -->
     <nav class="nav">
       <div class="nav-inner">
-        <a href="./" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true"> _ _
-            __| | ___ _ __ ___ __ _ _ _ __ _ _ __ __| |
-            / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
-            | (_| | __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
-            \__,_|\___| .__/|___/\__, |\__,_|\__,_|_| \__,_|
-            |_| |___/</span></a>
+        <!-- prettier-ignore-start -->
+        <a href="./" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
         <div class="nav-right">
           <a href="https://crates.io/crates/depsguard" title="Crates.io">
             <img src="https://crates.io/assets/cargo.png" alt="Crates.io">
           </a>
           <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
-            <svg class="gh-icon" viewBox="0 0 16 16" fill="currentColor">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
               <path
                 d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
             </svg>
-            <svg class="gh-icon gh-star-icon" viewBox="0 0 16 16" fill="currentColor">
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
               <path
                 d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
             </svg>
@@ -1068,7 +1076,7 @@
         </p>
         <div class="plat-row fade-d2">
           <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
-            <svg fill="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
               <path
                 d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11" />
             </svg>
@@ -1079,7 +1087,7 @@
             Linux
           </a>
           <a href="#install" data-activate-tab="windows" class="plat-btn install-btn">
-            <svg fill="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
               <path
                 d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z" />
             </svg>
@@ -1108,14 +1116,14 @@
       <div class="install-card">
         <div class="tab-bar" role="tablist">
           <button role="tab" aria-selected="true" data-tab="macos" id="tab-macos" aria-controls="panel-macos"
-            tabindex="0" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24">
+            tabindex="0" class="install-tab"><svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
               <path
                 d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11" />
             </svg> macOS</button>
           <button role="tab" aria-selected="false" data-tab="linux" id="tab-linux" aria-controls="panel-linux"
             tabindex="-1" class="install-tab"><img src="img/tux.svg" alt=""> Linux</button>
           <button role="tab" aria-selected="false" data-tab="windows" id="tab-windows" aria-controls="panel-windows"
-            tabindex="-1" class="install-tab"><svg fill="currentColor" viewBox="0 0 24 24">
+            tabindex="-1" class="install-tab"><svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
               <path
                 d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.38l9.5-1.63V12h-9.5V5.38zM21 12.5h-9.5v6.87l9.5 1.63V12.5z" />
             </svg> Windows</button>
@@ -1245,7 +1253,7 @@ scoop install depsguard</code></pre>
               <th>Config file</th>
               <th>Setting</th>
               <th>What it does</th>
-              <th></th>
+              <th><span class="sr-only">Docs</span></th>
             </tr>
           </thead>
           <tbody>
@@ -1579,7 +1587,7 @@ scoop install depsguard</code></pre>
       <h2>Help &amp; feedback</h2>
       <div style="display:flex; flex-wrap:wrap; gap:1rem;">
         <a href="https://github.com/arnica/depsguard/issues" class="plat-btn" style="text-decoration:none;">
-          <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path
               d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
           </svg>
@@ -1587,7 +1595,7 @@ scoop install depsguard</code></pre>
         </a>
         <a href="https://github.com/arnica/depsguard/security/advisories/new" class="plat-btn"
           style="text-decoration:none;">
-          <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path
               d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11V11.99z" />
           </svg>
@@ -1745,10 +1753,20 @@ scoop install depsguard</code></pre>
           var u = new URL(a.href, location.href);
           if (u.hostname && u.hostname !== host) {
             a.setAttribute('target', '_blank');
-            a.setAttribute('rel', 'noopener');
-
+            if (!/arnica\.io$/i.test(u.hostname)) {
+              a.setAttribute('rel', 'noopener');
+            }
           }
         } catch (e) { }
+      });
+      document.querySelectorAll('.doc-link').forEach(function (a) {
+        var label = a.getAttribute('title');
+        if (label) a.setAttribute('aria-label', label);
+        var svg = a.querySelector('svg');
+        if (svg) svg.setAttribute('aria-hidden', 'true');
+      });
+      document.querySelectorAll('.plat-btn svg, .install-tab svg, .footer-right svg').forEach(function (svg) {
+        svg.setAttribute('aria-hidden', 'true');
       });
     })();
   </script>
