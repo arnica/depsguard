@@ -489,7 +489,6 @@ fn apply_dependabot_fix(path: &Path, _key: &str, value: &str) -> io::Result<Stri
     let content = read_or_create(path)?;
     let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
     let target_line = format!("default-days: {value}");
-    let mut modified = false;
 
     // First pass: update existing `default-days:` lines only within `cooldown:` blocks
     let mut in_cooldown = false;
@@ -511,12 +510,11 @@ fn apply_dependabot_fix(path: &Path, _key: &str, value: &str) -> io::Result<Stri
             } else if trimmed.starts_with("default-days:") {
                 let indent_str: String = line.chars().take_while(|c| c.is_whitespace()).collect();
                 *line = format!("{indent_str}default-days: {value}");
-                modified = true;
             }
         }
     }
 
-    if !modified {
+    {
         // Second pass: find update entries that lack cooldown and insert it
         let mut i = 0;
         while i < lines.len() {
@@ -943,6 +941,29 @@ mod tests {
         let content = f.read();
         assert!(content.contains("cooldown:"));
         assert!(content.contains("default-days: 7"));
+    }
+
+    #[test]
+    fn dependabot_fix_mixed_entries() {
+        let f = tmp_file(concat!(
+            "version: 2\nupdates:\n",
+            "  - package-ecosystem: \"cargo\"\n    directory: \"/\"\n",
+            "    cooldown:\n      default-days: 7\n",
+            "  - package-ecosystem: \"npm\"\n    directory: \"/docs\"\n",
+            "    schedule:\n      interval: \"weekly\"\n",
+        ));
+        apply_dependabot_fix(f.path(), "cooldown.default-days (npm)", "7").unwrap();
+        let content = f.read();
+        assert_eq!(
+            content.matches("cooldown:").count(),
+            2,
+            "both entries should have cooldown blocks: {content}"
+        );
+        assert_eq!(
+            content.matches("default-days: 7").count(),
+            2,
+            "both entries should have default-days: 7: {content}"
+        );
     }
 
     #[test]
