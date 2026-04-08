@@ -6,6 +6,11 @@ Guidelines for AI agents working on this codebase.
 
 DepsGuard is a zero-dependency Rust CLI that scans package manager configs (npm, pnpm, bun, uv) for supply chain security best practices and offers interactive fixes. It targets Linux, macOS, and Windows.
 
+## Git workflow
+
+- **Never push directly to `main`** without explicit permission from the user. Always use a feature branch and open a pull request.
+- Do not force-push or run destructive git operations unless explicitly asked.
+
 ## Commit messages
 
 Use **Conventional Commits** (<https://www.conventionalcommits.org/>).
