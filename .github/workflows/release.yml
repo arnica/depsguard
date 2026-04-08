@@ -465,11 +465,11 @@ jobs:
     permissions:
       contents: read
     env:
-      WINGET_PKGS_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+      WINGET_PKGS_TOKEN: ${{ secrets.WINGATE_RELEASE_TOKEN }}
     steps:
       - name: Skip WinGet publish when token is missing
         if: ${{ env.WINGET_PKGS_TOKEN == '' }}
-        run: echo "RELEASE_BOT_TOKEN is not set; skipping WinGet publish."
+        run: echo "WINGATE_RELEASE_TOKEN is not set; skipping WinGet publish."
       - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         if: ${{ env.WINGET_PKGS_TOKEN != '' }}
         with:
@@ -477,4 +477,4 @@ jobs:
           release-tag: ${{ needs.prepare.outputs.tag }}
           installers-regex: ^depsguard-x86_64-pc-windows-msvc\.zip$
           token: ${{ env.WINGET_PKGS_TOKEN }}
-          fork-user: ${{ github.repository_owner }}
+          fork-user: ${{ vars.WINGATE_FORK_USER }}
