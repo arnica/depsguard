@@ -26,7 +26,7 @@ target
 /target
 .DS_Store
 
-# JS (pnpm workspace root + docs package)
+# JS (docs package)
 node_modules/
 dist/
 

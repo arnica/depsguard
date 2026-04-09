@@ -22,3 +22,5 @@ updates:
       interval: weekly
     commit-message:
       prefix: "deps(docs):"
+    cooldown:
+      default-days: 7

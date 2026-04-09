@@ -1167,7 +1167,7 @@ brew install depsguard</code></pre>
           <div class="code-wrap install-code-wrap"
             data-copy="sudo install -d -m 0755 /etc/apt/keyrings&#10;curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg&#10;echo &quot;deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main&quot; | sudo tee /etc/apt/sources.list.d/depsguard.list &gt;/dev/null&#10;sudo apt update&#10;sudo apt install depsguard">
             <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
-            <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
+            <pre tabindex="0"><code>sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
 echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
   | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
