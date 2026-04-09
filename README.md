@@ -164,8 +164,13 @@ depsguard --help       # CLI help
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
 | pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
-| pnpm | global `rc` | `ignore-scripts` | `true` | Reduce install-script risk in pnpm's global config |
-| pnpm | global `rc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days in pnpm's global config |
+| pnpm | global `rc` (pnpm <= 10) | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
+| pnpm | global `rc` (pnpm <= 10) | `block-exotic-subdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
+| pnpm | global `rc` (pnpm <= 10) | `trust-policy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
+| pnpm | global `rc` (pnpm <= 10) | `strict-dep-builds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
+| pnpm | global `rc` (pnpm <= 10) | `ignore-scripts` | `true` | Block malicious install scripts |
+| pnpm | global `config.yaml` (pnpm >= 11) | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
+| pnpm | global `config.yaml` (pnpm >= 11) | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
@@ -189,7 +194,7 @@ depsguard --help       # CLI help
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. If multiple user-level uv or bun config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately instead of merging them. When `~/.npmrc` is missing, DepsGuard uses pnpm's global config path so fixes can create the default global `rc` file directly.
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. If multiple user-level uv or bun config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately instead of merging them. When `~/.npmrc` is missing, DepsGuard uses pnpm's global config path so fixes can create the config file directly.
 
 ## Backups and restore
 

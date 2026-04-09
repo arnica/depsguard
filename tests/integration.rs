@@ -627,7 +627,8 @@ fn bun_config_fix_and_rescan_from_xdg() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("bun"), "bun not detected");
     assert!(
-        stdout.contains("\u{2713} minimumReleaseAge") || stdout.contains("✓ minimumReleaseAge"),
+        stdout.contains("\u{2713} install.minimumReleaseAge")
+            || stdout.contains("✓ install.minimumReleaseAge"),
         "Expected SECURE after bun XDG config:\n{stdout}"
     );
 }
@@ -662,12 +663,12 @@ fn bun_scan_checks_both_user_configs_when_both_exist() {
         "expected home bunfig path:\n{stdout}"
     );
     assert!(
-        stdout.contains("✓ minimumReleaseAge — 604800")
-            || stdout.contains("\u{2713} minimumReleaseAge — 604800"),
+        stdout.contains("✓ install.minimumReleaseAge — 604800")
+            || stdout.contains("\u{2713} install.minimumReleaseAge — 604800"),
         "expected configured bun entry:\n{stdout}"
     );
     assert!(
-        stdout.contains("minimumReleaseAge — not set"),
+        stdout.contains("install.minimumReleaseAge — not set"),
         "expected missing bun entry for the second config:\n{stdout}"
     );
 }

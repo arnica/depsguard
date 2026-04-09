@@ -336,7 +336,7 @@ fn xdg_config_home() -> Option<PathBuf> {
 /// Rules:
 /// - If exactly one candidate exists, scan it and ignore the others.
 /// - If multiple candidates exist, scan all existing candidates independently.
-/// - If none exist, scan only the default candidate (treat missing as empty).
+/// - If none exist, scan only the default candidate (reported as missing).
 fn select_scan_paths(candidates: &[PathBuf], default_idx: usize) -> Vec<PathBuf> {
     let existing: Vec<PathBuf> = candidates.iter().filter(|p| p.exists()).cloned().collect();
     if existing.is_empty() {
