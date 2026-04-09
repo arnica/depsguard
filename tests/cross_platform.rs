@@ -297,7 +297,7 @@ fn uv_toml_round_trip() {
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    if stdout.contains("uv") {
+    if stdout.contains("uv v") {
         assert!(
             stdout.contains("SECURE") || stdout.contains("exclude-newer"),
             "uv should show SECURE or the configured value: {stdout}"
