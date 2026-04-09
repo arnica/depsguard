@@ -1532,6 +1532,14 @@ scoop install depsguard</code></pre>
             </tr>
           </tbody>
         </table>
+        <p style="margin-top:.9rem; color:var(--text-dim); font-size:.9rem; line-height:1.7;">
+          User-level config locations vary by tool. On macOS and Linux, uv uses
+          <code>$XDG_CONFIG_HOME/uv/uv.toml</code> or <code>~/.config/uv/uv.toml</code>; Bun uses
+          <code>$XDG_CONFIG_HOME/.bunfig.toml</code> or <code>~/.bunfig.toml</code>; pnpm's global rc uses
+          <code>$XDG_CONFIG_HOME/pnpm/rc</code> or, on macOS by default, <code>~/Library/Preferences/pnpm/rc</code>.
+          If <code>~/.npmrc</code> is missing, DepsGuard uses pnpm's global config path so fixes can create the default
+          global <code>rc</code> file directly.
+        </p>
       </div>
     </section>
 

@@ -179,15 +179,15 @@ depsguard --help       # CLI help
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
 | npm/pnpm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
-| pnpm global | `~/.config/pnpm/rc` | `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
+| pnpm global | `$XDG_CONFIG_HOME/pnpm/rc` or `~/.config/pnpm/rc` | `$XDG_CONFIG_HOME/pnpm/rc` or `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
 | yarn | `~/.yarnrc.yml` | `~/.yarnrc.yml` | `%USERPROFILE%\.yarnrc.yml` |
 | pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
-| bun | `~/.bunfig.toml` | `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
-| uv | `~/.config/uv/uv.toml` | `~/Library/Application Support/uv/uv.toml` | `%APPDATA%\uv\uv.toml` |
+| bun | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
+| uv | `$XDG_CONFIG_HOME/uv/uv.toml` or `~/.config/uv/uv.toml` | `$XDG_CONFIG_HOME/uv/uv.toml` or `~/.config/uv/uv.toml` | `%APPDATA%\uv\uv.toml` |
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-User-level config files are read from their standard locations (for example `~/.npmrc`, `~/.yarnrc.yml`, and platform-specific pnpm/uv paths). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations.
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations. When `~/.npmrc` is missing, DepsGuard uses pnpm's global config path so fixes can create the default global `rc` file directly.
 
 ## Backups and restore
 

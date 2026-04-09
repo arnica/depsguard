@@ -206,7 +206,9 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
                 apply_flat_fix(path, &rec.key, &rec.expected)
             }
         }
-        ManagerKind::Pnpm => apply_flat_fix(path, &rec.key, &rec.expected),
+        ManagerKind::Pnpm | ManagerKind::PnpmGlobal => {
+            apply_flat_fix(path, &rec.key, &rec.expected)
+        }
         ManagerKind::Bun => apply_toml_fix(path, &rec.key, &rec.expected, false),
         ManagerKind::Uv => apply_toml_fix(path, &rec.key, &rec.expected, true),
         ManagerKind::PnpmWorkspace => {

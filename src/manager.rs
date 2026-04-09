@@ -47,7 +47,8 @@ pub fn is_excluded(kind: ManagerKind) -> bool {
     let name = kind.name();
     excluded.iter().any(|e| {
         e.eq_ignore_ascii_case(name)
-            || (kind == ManagerKind::PnpmWorkspace && e.eq_ignore_ascii_case("pnpm"))
+            || ((kind == ManagerKind::PnpmWorkspace || kind == ManagerKind::PnpmGlobal)
+                && e.eq_ignore_ascii_case("pnpm"))
     })
 }
 
@@ -135,6 +136,7 @@ fn version_at_least(version: &str, min_major: u64, min_minor: u64) -> bool {
 pub enum ManagerKind {
     Npm,
     Pnpm,
+    PnpmGlobal,
     PnpmWorkspace,
     Bun,
     Uv,
@@ -148,6 +150,7 @@ impl ManagerKind {
     pub const USER_LEVEL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
+        ManagerKind::PnpmGlobal,
         ManagerKind::Bun,
         ManagerKind::Uv,
         ManagerKind::Yarn,
@@ -156,6 +159,7 @@ impl ManagerKind {
     pub const ALL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
+        ManagerKind::PnpmGlobal,
         ManagerKind::PnpmWorkspace,
         ManagerKind::Bun,
         ManagerKind::Uv,
@@ -167,7 +171,7 @@ impl ManagerKind {
     pub fn name(self) -> &'static str {
         match self {
             ManagerKind::Npm => "npm",
-            ManagerKind::Pnpm => "pnpm",
+            ManagerKind::Pnpm | ManagerKind::PnpmGlobal => "pnpm",
             ManagerKind::PnpmWorkspace => "pnpm-workspace",
             ManagerKind::Bun => "bun",
             ManagerKind::Uv => "uv",
@@ -180,7 +184,7 @@ impl ManagerKind {
     pub fn icon(self) -> &'static str {
         match self {
             ManagerKind::Npm => "📦",
-            ManagerKind::Pnpm | ManagerKind::PnpmWorkspace => "⚡",
+            ManagerKind::Pnpm | ManagerKind::PnpmGlobal | ManagerKind::PnpmWorkspace => "⚡",
             ManagerKind::Bun => "🥟",
             ManagerKind::Uv => "🐍",
             ManagerKind::Yarn => "🧶",
@@ -215,7 +219,10 @@ impl ManagerKind {
     pub fn is_repo_only(self) -> bool {
         matches!(
             self,
-            ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot
+            ManagerKind::PnpmGlobal
+                | ManagerKind::PnpmWorkspace
+                | ManagerKind::Renovate
+                | ManagerKind::Dependabot
         )
     }
 }
@@ -318,20 +325,79 @@ pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf 
     config_path_full(kind, home, &home.join("AppData/Roaming"), os)
 }
 
-fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
-    match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
-        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
-            PathBuf::new()
+fn xdg_config_home() -> Option<PathBuf> {
+    env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from)
+}
+
+/// Given a list of candidate paths for a user-level config file, return the
+/// primary path (used for scanning and creating) plus any extra existing paths
+/// that should also be scanned.
+///
+/// Rules:
+/// - If exactly one candidate exists on disk, use it; ignore the rest.
+/// - If multiple candidates exist, use the first as primary and return the
+///   rest as extras (all are scanned, but fixes target the primary).
+/// - If none exist, use `default_idx` as the creation target.
+fn resolve_candidates(candidates: &[PathBuf], default_idx: usize) -> (PathBuf, Vec<PathBuf>) {
+    let existing: Vec<&PathBuf> = candidates.iter().filter(|p| p.exists()).collect();
+    match existing.len() {
+        0 => (candidates[default_idx].clone(), Vec::new()),
+        1 => (existing[0].clone(), Vec::new()),
+        _ => {
+            let primary = existing[0].clone();
+            let extras = existing[1..].iter().map(|p| (*p).clone()).collect();
+            (primary, extras)
         }
-        ManagerKind::Bun => home.join(".bunfig.toml"),
-        ManagerKind::Yarn => home.join(".yarnrc.yml"),
+    }
+}
+
+/// Return (candidates, default_index) for a manager's user-level config.
+fn user_config_candidates(
+    kind: ManagerKind,
+    home: &Path,
+    appdata: &Path,
+    os: TargetOs,
+) -> (Vec<PathBuf>, usize) {
+    match kind {
+        ManagerKind::Npm | ManagerKind::Pnpm => (vec![home.join(".npmrc")], 0),
+        ManagerKind::Yarn => (vec![home.join(".yarnrc.yml")], 0),
+        ManagerKind::PnpmGlobal
+        | ManagerKind::PnpmWorkspace
+        | ManagerKind::Renovate
+        | ManagerKind::Dependabot => (vec![PathBuf::new()], 0),
+        ManagerKind::Bun => {
+            let mut cands = Vec::new();
+            let mut default_idx = 0;
+            if let Some(xdg) = xdg_config_home() {
+                cands.push(xdg.join(".bunfig.toml"));
+                cands.push(home.join(".bunfig.toml"));
+                default_idx = 0; // XDG is set, so create there
+            } else {
+                cands.push(home.join(".bunfig.toml"));
+            }
+            (cands, default_idx)
+        }
         ManagerKind::Uv => match os {
-            TargetOs::MacOs => home.join("Library/Application Support/uv/uv.toml"),
-            TargetOs::Windows => appdata.join("uv/uv.toml"),
-            TargetOs::Linux => home.join(".config/uv/uv.toml"),
+            TargetOs::Windows => (vec![appdata.join("uv/uv.toml")], 0),
+            TargetOs::MacOs | TargetOs::Linux => {
+                let mut cands = Vec::new();
+                let mut default_idx = 0;
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("uv/uv.toml"));
+                    cands.push(home.join(".config/uv/uv.toml"));
+                    default_idx = 0; // XDG is set, so create there
+                } else {
+                    cands.push(home.join(".config/uv/uv.toml"));
+                }
+                (cands, default_idx)
+            }
         },
     }
+}
+
+fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
+    let (cands, default_idx) = user_config_candidates(kind, home, appdata, os);
+    resolve_candidates(&cands, default_idx).0
 }
 
 /// Resolve the config file path for a package manager on the current OS.
@@ -345,20 +411,24 @@ pub fn config_path(kind: ManagerKind) -> PathBuf {
 /// Mirrors `getConfigDir` from pnpm's `config/reader/src/dirs.ts`.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
-    let dir = match os {
-        TargetOs::MacOs => home.join("Library/Preferences/pnpm"),
-        TargetOs::Windows => {
-            if let Ok(local) = env::var("LOCALAPPDATA") {
-                PathBuf::from(local).join("pnpm/config")
-            } else {
-                home.join(".config/pnpm")
+    let dir = if let Some(xdg) = xdg_config_home() {
+        xdg.join("pnpm")
+    } else {
+        match os {
+            TargetOs::MacOs => home.join("Library/Preferences/pnpm"),
+            TargetOs::Windows => {
+                if let Ok(local) = env::var("LOCALAPPDATA") {
+                    PathBuf::from(local).join("pnpm/config")
+                } else {
+                    home.join(".config/pnpm")
+                }
             }
-        }
-        TargetOs::Linux => {
-            if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
-                PathBuf::from(xdg).join("pnpm")
-            } else {
-                home.join(".config/pnpm")
+            TargetOs::Linux => {
+                if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
+                    PathBuf::from(xdg).join("pnpm")
+                } else {
+                    home.join(".config/pnpm")
+                }
             }
         }
     };
@@ -368,6 +438,30 @@ pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
 /// Resolve the pnpm global `rc` file on the current OS.
 pub fn pnpm_global_rc() -> PathBuf {
     pnpm_global_rc_for(&home_dir(), TargetOs::current())
+}
+
+fn parse_command_path(output: &[u8]) -> Option<PathBuf> {
+    let value = String::from_utf8(output.to_vec()).ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("undefined") {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
+fn pnpm_global_rc_from_cli(version: &str) -> Option<PathBuf> {
+    if !version_at_least(version, 10, 21) {
+        return None;
+    }
+    let output = Command::new("pnpm")
+        .args(["config", "get", "globalconfig"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_command_path(&output.stdout)
 }
 
 // ── Config reading ────────────────────────────────────────────────────
@@ -1010,6 +1104,25 @@ fn check_yaml(
     }
 }
 
+fn scan_bun_with_extras(path: &Path, extras: &[PathBuf]) -> Vec<Recommendation> {
+    let mut recs = scan_bun(path);
+    if !extras.is_empty() {
+        for extra in extras {
+            let extra_recs = scan_bun(extra);
+            for (i, rec) in recs.iter_mut().enumerate() {
+                if matches!(rec.status, CheckStatus::Missing) {
+                    if let Some(er) = extra_recs.get(i) {
+                        if !matches!(er.status, CheckStatus::Missing) {
+                            rec.status = er.status.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    recs
+}
+
 fn scan_bun(path: &Path) -> Vec<Recommendation> {
     let days = get_delay_days();
     let seconds = days.saturating_mul(86400);
@@ -1044,6 +1157,25 @@ fn parse_relative_days(s: &str) -> Option<u64> {
     } else {
         None
     }
+}
+
+fn scan_uv_with_extras(path: &Path, extras: &[PathBuf]) -> Vec<Recommendation> {
+    let mut recs = scan_uv(path);
+    if !extras.is_empty() {
+        for extra in extras {
+            let extra_recs = scan_uv(extra);
+            for (i, rec) in recs.iter_mut().enumerate() {
+                if matches!(rec.status, CheckStatus::Missing) {
+                    if let Some(er) = extra_recs.get(i) {
+                        if !matches!(er.status, CheckStatus::Missing) {
+                            rec.status = er.status.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    recs
 }
 
 fn scan_uv(path: &Path) -> Vec<Recommendation> {
@@ -1218,20 +1350,26 @@ fn check_flat_min_int(
 /// Scan a single package manager: detect version, read config, and return recommendations.
 pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
     let version = detect_version(kind.name())?;
-    let path = config_path(kind);
+    let home = home_dir();
+    let appdata = appdata_dir();
+    let os = TargetOs::current();
+
+    let (path, extras) = match kind {
+        ManagerKind::PnpmGlobal => {
+            let global = pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc);
+            (global, Vec::new())
+        }
+        _ => {
+            let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
+            resolve_candidates(&cands, default_idx)
+        }
+    };
+
     let recommendations = match kind {
         ManagerKind::Npm => scan_npm(&path, &version),
-        ManagerKind::Pnpm => {
-            let grc = pnpm_global_rc();
-            let grc_ref = if grc.exists() {
-                Some(grc.as_path())
-            } else {
-                None
-            };
-            scan_pnpm_with_global(&path, grc_ref, &version)
-        }
-        ManagerKind::Bun => scan_bun(&path),
-        ManagerKind::Uv => scan_uv(&path),
+        ManagerKind::Pnpm | ManagerKind::PnpmGlobal => scan_pnpm(&path, &version),
+        ManagerKind::Bun => scan_bun_with_extras(&path, &extras),
+        ManagerKind::Uv => scan_uv_with_extras(&path, &extras),
         ManagerKind::Yarn => scan_yarn(&path, &version),
         ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
@@ -1388,7 +1526,7 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    static CWD_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn tmp_file(content: &str) -> tempfile::NamedTempFile {
         let mut f = tempfile::NamedTempFile::new().unwrap();
@@ -1468,6 +1606,53 @@ mod tests {
         let cfg = read_flat_config(f.path());
         assert_eq!(cfg.len(), 1);
         assert_eq!(cfg.get("key").unwrap(), "val");
+    }
+
+    #[test]
+    fn parse_command_path_trims_and_parses() {
+        assert_eq!(
+            parse_command_path(b"/tmp/pnpm/rc\n"),
+            Some(PathBuf::from("/tmp/pnpm/rc"))
+        );
+        assert_eq!(parse_command_path(b"undefined\n"), None);
+        assert_eq!(parse_command_path(b"\n"), None);
+    }
+
+    #[test]
+    fn resolve_candidates_none_exist_uses_default() {
+        let a = PathBuf::from("/tmp/does-not-exist-a");
+        let b = PathBuf::from("/tmp/does-not-exist-b");
+        let (primary, extras) = resolve_candidates(&[a.clone(), b], 0);
+        assert_eq!(primary, a);
+        assert!(extras.is_empty());
+    }
+
+    #[test]
+    fn resolve_candidates_one_exists() {
+        let exists = tmp_file("content\n");
+        let missing = PathBuf::from("/tmp/does-not-exist-x");
+        let (primary, extras) = resolve_candidates(&[missing, exists.path().to_path_buf()], 0);
+        assert_eq!(primary, exists.path());
+        assert!(extras.is_empty());
+    }
+
+    #[test]
+    fn resolve_candidates_both_exist() {
+        let a = tmp_file("a\n");
+        let b = tmp_file("b\n");
+        let (primary, extras) =
+            resolve_candidates(&[a.path().to_path_buf(), b.path().to_path_buf()], 0);
+        assert_eq!(primary, a.path());
+        assert_eq!(extras, vec![b.path().to_path_buf()]);
+    }
+
+    #[test]
+    fn resolve_candidates_none_exist_uses_xdg_default() {
+        let xdg = PathBuf::from("/tmp/xdg-not-exist/uv/uv.toml");
+        let fallback = PathBuf::from("/tmp/not-exist/.config/uv/uv.toml");
+        let (primary, extras) = resolve_candidates(&[xdg.clone(), fallback], 0);
+        assert_eq!(primary, xdg, "should use XDG as default when it's index 0");
+        assert!(extras.is_empty());
     }
 
     #[test]
@@ -1815,7 +2000,7 @@ mod tests {
         fs::write(cwd.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
         fs::write(outside.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
 
-        let _cwd_lock = CWD_ENV_LOCK.lock().unwrap();
+        let _cwd_lock = TEST_ENV_LOCK.lock().unwrap();
         let prev_cwd = std::env::current_dir().unwrap();
         let prev_home = std::env::var_os("HOME");
 
@@ -1863,19 +2048,49 @@ mod tests {
 
     #[test]
     fn pnpm_global_rc_linux() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/home/testuser");
         let p = pnpm_global_rc_for(home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("/home/testuser/.config/pnpm/rc"));
     }
 
     #[test]
     fn pnpm_global_rc_macos() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/Users/testuser");
         let p = pnpm_global_rc_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(
             p,
             PathBuf::from("/Users/testuser/Library/Preferences/pnpm/rc")
         );
+    }
+
+    #[test]
+    fn pnpm_global_rc_macos_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/pnpm/rc"));
     }
 
     #[test]
@@ -1890,15 +2105,29 @@ mod tests {
 
     #[test]
     fn config_path_linux_bun() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/home/testuser");
         let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("/home/testuser/.bunfig.toml"));
     }
 
     #[test]
     fn config_path_linux_uv() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/home/testuser");
         let p = config_path_for(ManagerKind::Uv, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("/home/testuser/.config/uv/uv.toml"));
     }
 
@@ -1911,12 +2140,32 @@ mod tests {
 
     #[test]
     fn config_path_macos_uv() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/Users/testuser");
         let p = config_path_for(ManagerKind::Uv, home, TargetOs::MacOs);
-        assert_eq!(
-            p,
-            PathBuf::from("/Users/testuser/Library/Application Support/uv/uv.toml")
-        );
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(p, PathBuf::from("/Users/testuser/.config/uv/uv.toml"));
+    }
+
+    #[test]
+    fn config_path_macos_uv_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/Users/testuser");
+        let p = config_path_for(ManagerKind::Uv, home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/uv/uv.toml"));
     }
 
     #[test]
@@ -1941,9 +2190,32 @@ mod tests {
 
     #[test]
     fn config_path_windows_bun() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("C:/Users/testuser");
         let p = config_path_for(ManagerKind::Bun, home, TargetOs::Windows);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("C:/Users/testuser/.bunfig.toml"));
+    }
+
+    #[test]
+    fn config_path_linux_bun_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/.bunfig.toml"));
     }
 
     #[test]

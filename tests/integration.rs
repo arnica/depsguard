@@ -55,6 +55,46 @@ fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
         .expect("failed to run depsguard")
 }
 
+fn run_depsguard_with_env(
+    args: &[&str],
+    home: &Path,
+    envs: &[(&str, &std::ffi::OsStr)],
+) -> std::process::Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_depsguard"));
+    cmd.args(args).env("HOME", home);
+    for (key, val) in envs {
+        cmd.env(key, val);
+    }
+    cmd.output().expect("failed to run depsguard")
+}
+
+fn display_under_home(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rel) => format!("~/{}", rel.display()).replace('\\', "/"),
+        Err(_) => path.display().to_string().replace('\\', "/"),
+    }
+}
+
+fn pnpm_globalconfig_path(home: &Path, envs: &[(&str, &std::ffi::OsStr)]) -> Option<PathBuf> {
+    let mut cmd = Command::new("pnpm");
+    cmd.args(["config", "get", "globalconfig"])
+        .env("HOME", home);
+    for (key, val) in envs {
+        cmd.env(key, val);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(out.stdout).ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("undefined") {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────
 
 #[test]
@@ -202,6 +242,63 @@ fn pnpm_scan_detects_missing_config() {
     let out = run_depsguard(&["--scan"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("pnpm"), "pnpm not detected");
+}
+
+#[test]
+fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_globalconfig_missing");
+    let Some(globalconfig) = pnpm_globalconfig_path(home.path(), &[]) else {
+        return;
+    };
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected_display = display_under_home(&globalconfig, home.path());
+
+    assert!(
+        stdout.contains(&expected_display),
+        "depsguard should use pnpm globalconfig path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("minimum-release-age — not set"),
+        "expected pnpm minimum-release-age finding:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_globalconfig_xdg_missing");
+    let xdg = home.path().join("xdg");
+    fs::create_dir_all(&xdg).unwrap();
+    let Some(globalconfig) =
+        pnpm_globalconfig_path(home.path(), &[("XDG_CONFIG_HOME", xdg.as_os_str())])
+    else {
+        return;
+    };
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected_display = display_under_home(&globalconfig, home.path());
+
+    assert!(
+        stdout.contains(&expected_display),
+        "depsguard should use pnpm globalconfig XDG path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("minimum-release-age — not set"),
+        "expected pnpm minimum-release-age finding:\n{stdout}"
+    );
 }
 
 #[test]
@@ -381,6 +478,51 @@ fn pnpm_scan_detects_minimum_release_age_in_npmrc() {
     );
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn pnpm_scan_detects_global_rc_in_library_preferences() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_global_rc");
+    let rc = home.path().join("Library/Preferences/pnpm/rc");
+    fs::create_dir_all(rc.parent().unwrap()).unwrap();
+    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("✓ minimum-release-age — 10080")
+            || stdout.contains("\u{2713} minimum-release-age — 10080"),
+        "depsguard should detect pnpm global rc in Library/Preferences:\n{stdout}"
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn pnpm_scan_detects_global_rc_in_xdg_config_home() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_global_xdg");
+    let xdg = home.path().join("xdg");
+    let rc = xdg.join("pnpm/rc");
+    fs::create_dir_all(rc.parent().unwrap()).unwrap();
+    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("✓ minimum-release-age — 10080")
+            || stdout.contains("\u{2713} minimum-release-age — 10080"),
+        "depsguard should detect pnpm global rc in XDG_CONFIG_HOME:\n{stdout}"
+    );
+}
+
 // ── bun integration ──────────────────────────────────────────────────
 
 #[test]
@@ -410,6 +552,31 @@ fn bun_config_fix_and_rescan() {
     assert!(
         stdout.contains("SECURE") || stdout.contains("OK"),
         "Expected SECURE after bun config:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn bun_config_fix_and_rescan_from_xdg() {
+    if !has_command("bun") {
+        return;
+    }
+    let home = TmpHome::new("bun_xdg_fix");
+    let xdg = home.path().join("xdg");
+    let bunfig = xdg.join(".bunfig.toml");
+    fs::create_dir_all(&xdg).unwrap();
+    fs::write(&bunfig, "[install]\nminimumReleaseAge = 604800\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("bun"), "bun not detected");
+    assert!(
+        stdout.contains("\u{2713} minimumReleaseAge") || stdout.contains("✓ minimumReleaseAge"),
+        "Expected SECURE after bun XDG config:\n{stdout}"
     );
 }
 
@@ -470,7 +637,7 @@ fn uv_config_fix_and_rescan() {
     let home = TmpHome::new("uv_fix");
     // uv config path differs by OS
     let uv_config = if cfg!(target_os = "macos") {
-        home.path().join("Library/Application Support/uv/uv.toml")
+        home.path().join(".config/uv/uv.toml")
     } else if cfg!(target_os = "windows") {
         home.path().join("AppData/Roaming/uv/uv.toml")
     } else {
@@ -486,6 +653,31 @@ fn uv_config_fix_and_rescan() {
     assert!(
         stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
         "Expected exclude-newer OK after uv config:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn uv_config_fix_and_rescan_from_xdg() {
+    if !has_command("uv") {
+        return;
+    }
+    let home = TmpHome::new("uv_xdg_fix");
+    let xdg = home.path().join("xdg");
+    let uv_config = xdg.join("uv/uv.toml");
+    fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
+    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("uv"), "uv not detected");
+    assert!(
+        stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
+        "Expected exclude-newer OK after uv XDG config:\n{stdout}"
     );
 }
 

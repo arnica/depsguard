@@ -371,6 +371,7 @@ fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
     use crate::manager::ManagerKind;
     match kind {
         ManagerKind::Npm | ManagerKind::Pnpm => ".npmrc",
+        ManagerKind::PnpmGlobal => "pnpm-global",
         ManagerKind::PnpmWorkspace => "pnpm-workspace",
         ManagerKind::Bun => ".bunfig.toml",
         ManagerKind::Uv => "uv.toml",
@@ -384,7 +385,7 @@ fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
 fn toggle_canonical(kind: crate::manager::ManagerKind) -> crate::manager::ManagerKind {
     use crate::manager::ManagerKind;
     if kind == ManagerKind::Pnpm {
-        ManagerKind::Npm // group under .npmrc
+        ManagerKind::Npm // group .npmrc pnpm with npm
     } else {
         kind
     }
