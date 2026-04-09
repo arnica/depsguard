@@ -192,6 +192,58 @@ fn npm_config_fix_and_rescan() {
 }
 
 #[test]
+fn npm_scan_distinguishes_missing_file_from_empty_file() {
+    if !has_command("npm") {
+        return;
+    }
+
+    let missing_home = TmpHome::new("npm_missing_file");
+    let missing_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "uv",
+            "--exclude",
+            "yarn",
+        ],
+        missing_home.path(),
+    );
+    let missing_stdout = String::from_utf8_lossy(&missing_out.stdout);
+    assert!(
+        missing_stdout.contains("file missing"),
+        "expected missing npm config to say file missing:\n{missing_stdout}"
+    );
+
+    let empty_home = TmpHome::new("npm_empty_file");
+    fs::write(empty_home.path().join(".npmrc"), "").unwrap();
+    let empty_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "uv",
+            "--exclude",
+            "yarn",
+        ],
+        empty_home.path(),
+    );
+    let empty_stdout = String::from_utf8_lossy(&empty_out.stdout);
+    assert!(
+        empty_stdout.contains("not set"),
+        "expected empty npm config to say not set:\n{empty_stdout}"
+    );
+}
+
+#[test]
 #[ignore] // requires network access — run with: cargo test -- --ignored
 fn npm_install_with_min_release_age() {
     if !has_command("npm") {
@@ -263,7 +315,7 @@ fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
         "depsguard should use pnpm globalconfig path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
     assert!(
-        stdout.contains("minimum-release-age — not set"),
+        stdout.contains("minimum-release-age — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -296,7 +348,7 @@ fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
         "depsguard should use pnpm globalconfig XDG path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
     assert!(
-        stdout.contains("minimum-release-age — not set"),
+        stdout.contains("minimum-release-age — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -580,6 +632,46 @@ fn bun_config_fix_and_rescan_from_xdg() {
     );
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn bun_scan_checks_both_user_configs_when_both_exist() {
+    if !has_command("bun") {
+        return;
+    }
+    let home = TmpHome::new("bun_both_configs");
+    let xdg = home.path().join("xdg");
+    let xdg_bunfig = xdg.join(".bunfig.toml");
+    let home_bunfig = home.path().join(".bunfig.toml");
+    fs::create_dir_all(&xdg).unwrap();
+    fs::write(&xdg_bunfig, "[install]\nminimumReleaseAge = 604800\n").unwrap();
+    fs::write(&home_bunfig, "").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/xdg/.bunfig.toml"),
+        "expected XDG bunfig path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("~/.bunfig.toml"),
+        "expected home bunfig path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ minimumReleaseAge — 604800")
+            || stdout.contains("\u{2713} minimumReleaseAge — 604800"),
+        "expected configured bun entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("minimumReleaseAge — not set"),
+        "expected missing bun entry for the second config:\n{stdout}"
+    );
+}
+
 #[test]
 #[ignore] // requires network access
 fn bun_install_with_config() {
@@ -656,6 +748,60 @@ fn uv_config_fix_and_rescan() {
     );
 }
 
+#[test]
+fn uv_scan_distinguishes_missing_file_from_empty_file() {
+    if !has_command("uv") {
+        return;
+    }
+
+    let missing_home = TmpHome::new("uv_missing_file");
+    let missing_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "npm",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "yarn",
+        ],
+        missing_home.path(),
+    );
+    let missing_stdout = String::from_utf8_lossy(&missing_out.stdout);
+    assert!(
+        missing_stdout.contains("file missing"),
+        "expected missing uv config to say file missing:\n{missing_stdout}"
+    );
+
+    let empty_home = TmpHome::new("uv_empty_file");
+    let uv_config = empty_home.path().join(".config/uv/uv.toml");
+    fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
+    fs::write(&uv_config, "").unwrap();
+    let empty_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "npm",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "yarn",
+        ],
+        empty_home.path(),
+    );
+    let empty_stdout = String::from_utf8_lossy(&empty_out.stdout);
+    assert!(
+        empty_stdout.contains("not set"),
+        "expected empty uv config to say not set:\n{empty_stdout}"
+    );
+}
+
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn uv_config_fix_and_rescan_from_xdg() {
@@ -678,6 +824,47 @@ fn uv_config_fix_and_rescan_from_xdg() {
     assert!(
         stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
         "Expected exclude-newer OK after uv XDG config:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn uv_scan_checks_both_user_configs_when_both_exist() {
+    if !has_command("uv") {
+        return;
+    }
+    let home = TmpHome::new("uv_both_configs");
+    let xdg = home.path().join("xdg");
+    let xdg_uv = xdg.join("uv/uv.toml");
+    let home_uv = home.path().join(".config/uv/uv.toml");
+    fs::create_dir_all(xdg_uv.parent().unwrap()).unwrap();
+    fs::create_dir_all(home_uv.parent().unwrap()).unwrap();
+    fs::write(&xdg_uv, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    fs::write(&home_uv, "").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/xdg/uv/uv.toml"),
+        "expected XDG uv path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("~/.config/uv/uv.toml"),
+        "expected home uv path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ exclude-newer — 7 days")
+            || stdout.contains("\u{2713} exclude-newer — 7 days"),
+        "expected configured uv entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("exclude-newer — not set"),
+        "expected missing uv entry for the second config:\n{stdout}"
     );
 }
 

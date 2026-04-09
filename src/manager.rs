@@ -61,6 +61,8 @@ pub enum CheckStatus {
     Ok,
     /// The setting is not configured at all.
     Missing,
+    /// The config file itself does not exist yet.
+    FileMissing,
     /// The setting exists but has an incorrect value.
     WrongValue(String),
     /// The feature is not available (e.g. tool version too old). Not auto-fixable.
@@ -84,6 +86,7 @@ impl std::fmt::Display for CheckStatus {
         match self {
             CheckStatus::Ok => write!(f, "OK"),
             CheckStatus::Missing => write!(f, "Not set"),
+            CheckStatus::FileMissing => write!(f, "file missing"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),
             CheckStatus::Unsupported(v) => write!(f, "{v}"),
         }
@@ -219,10 +222,7 @@ impl ManagerKind {
     pub fn is_repo_only(self) -> bool {
         matches!(
             self,
-            ManagerKind::PnpmGlobal
-                | ManagerKind::PnpmWorkspace
-                | ManagerKind::Renovate
-                | ManagerKind::Dependabot
+            ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot
         )
     }
 }
@@ -326,28 +326,23 @@ pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf 
 }
 
 fn xdg_config_home() -> Option<PathBuf> {
-    env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from)
+    env::var_os("XDG_CONFIG_HOME")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
 }
 
-/// Given a list of candidate paths for a user-level config file, return the
-/// primary path (used for scanning and creating) plus any extra existing paths
-/// that should also be scanned.
+/// Select the user-level config paths to scan.
 ///
 /// Rules:
-/// - If exactly one candidate exists on disk, use it; ignore the rest.
-/// - If multiple candidates exist, use the first as primary and return the
-///   rest as extras (all are scanned, but fixes target the primary).
-/// - If none exist, use `default_idx` as the creation target.
-fn resolve_candidates(candidates: &[PathBuf], default_idx: usize) -> (PathBuf, Vec<PathBuf>) {
-    let existing: Vec<&PathBuf> = candidates.iter().filter(|p| p.exists()).collect();
-    match existing.len() {
-        0 => (candidates[default_idx].clone(), Vec::new()),
-        1 => (existing[0].clone(), Vec::new()),
-        _ => {
-            let primary = existing[0].clone();
-            let extras = existing[1..].iter().map(|p| (*p).clone()).collect();
-            (primary, extras)
-        }
+/// - If exactly one candidate exists, scan it and ignore the others.
+/// - If multiple candidates exist, scan all existing candidates independently.
+/// - If none exist, scan only the default candidate (treat missing as empty).
+fn select_scan_paths(candidates: &[PathBuf], default_idx: usize) -> Vec<PathBuf> {
+    let existing: Vec<PathBuf> = candidates.iter().filter(|p| p.exists()).cloned().collect();
+    if existing.is_empty() {
+        vec![candidates[default_idx].clone()]
+    } else {
+        existing
     }
 }
 
@@ -397,7 +392,10 @@ fn user_config_candidates(
 
 fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
     let (cands, default_idx) = user_config_candidates(kind, home, appdata, os);
-    resolve_candidates(&cands, default_idx).0
+    select_scan_paths(&cands, default_idx)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
 }
 
 /// Resolve the config file path for a package manager on the current OS.
@@ -407,11 +405,11 @@ pub fn config_path(kind: ManagerKind) -> PathBuf {
     config_path_full(kind, &home, &appdata, TargetOs::current())
 }
 
-/// Resolve the pnpm global config directory `rc` file for a given OS.
+/// Resolve the pnpm global config directory for a given OS.
 /// Mirrors `getConfigDir` from pnpm's `config/reader/src/dirs.ts`.
 #[cfg_attr(not(test), allow(dead_code))]
-pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
-    let dir = if let Some(xdg) = xdg_config_home() {
+pub fn pnpm_config_dir_for(home: &Path, os: TargetOs) -> PathBuf {
+    if let Some(xdg) = xdg_config_home() {
         xdg.join("pnpm")
     } else {
         match os {
@@ -431,13 +429,29 @@ pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
                 }
             }
         }
-    };
-    dir.join("rc")
+    }
+}
+
+/// Resolve the pnpm global `rc` file (pnpm <= 10) for a given OS.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
+    pnpm_config_dir_for(home, os).join("rc")
+}
+
+/// Resolve the pnpm global `config.yaml` file (pnpm >= 11) for a given OS.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_global_yaml_for(home: &Path, os: TargetOs) -> PathBuf {
+    pnpm_config_dir_for(home, os).join("config.yaml")
 }
 
 /// Resolve the pnpm global `rc` file on the current OS.
 pub fn pnpm_global_rc() -> PathBuf {
     pnpm_global_rc_for(&home_dir(), TargetOs::current())
+}
+
+/// Resolve the pnpm global `config.yaml` file on the current OS.
+pub fn pnpm_global_yaml() -> PathBuf {
+    pnpm_global_yaml_for(&home_dir(), TargetOs::current())
 }
 
 fn parse_command_path(output: &[u8]) -> Option<PathBuf> {
@@ -447,6 +461,14 @@ fn parse_command_path(output: &[u8]) -> Option<PathBuf> {
         None
     } else {
         Some(PathBuf::from(trimmed))
+    }
+}
+
+fn missing_status_for_path(path: &Path) -> CheckStatus {
+    if path.exists() {
+        CheckStatus::Missing
+    } else {
+        CheckStatus::FileMissing
     }
 }
 
@@ -462,6 +484,11 @@ fn pnpm_global_rc_from_cli(version: &str) -> Option<PathBuf> {
         return None;
     }
     parse_command_path(&output.stdout)
+}
+
+/// Whether this pnpm version uses `config.yaml` (>= 11) instead of `rc`.
+fn pnpm_uses_yaml_config(version: &str) -> bool {
+    version_at_least(version, 11, 0)
 }
 
 // ── Config reading ────────────────────────────────────────────────────
@@ -944,6 +971,7 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     let cfg = read_flat_config(path);
     let release_age = if version_at_least(version, 11, 10) {
         check_flat(
+            path,
             &cfg,
             "min-release-age",
             &days.to_string(),
@@ -962,6 +990,7 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     vec![
         release_age,
         check_flat(
+            path,
             &cfg,
             "ignore-scripts",
             "true",
@@ -971,27 +1000,13 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
 }
 
 fn scan_pnpm(path: &Path, version: &str) -> Vec<Recommendation> {
-    scan_pnpm_with_global(path, None, version)
-}
-
-/// Inner scanner that merges the project/user `.npmrc` with an optional pnpm
-/// global `rc` file. A key found in *either* file counts as present.
-fn scan_pnpm_with_global(
-    path: &Path,
-    global_rc: Option<&Path>,
-    version: &str,
-) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
-    let mut cfg = read_flat_config(path);
-    if let Some(g) = global_rc {
-        for (k, v) in read_flat_config(g) {
-            cfg.entry(k).or_insert(v);
-        }
-    }
+    let cfg = read_flat_config(path);
 
     let release_age = if version_at_least(version, 10, 16) {
         check_flat_min_int(
+            path,
             &cfg,
             "minimum-release-age",
             minutes,
@@ -1011,12 +1026,128 @@ fn scan_pnpm_with_global(
     vec![
         release_age,
         check_flat(
+            path,
             &cfg,
             "ignore-scripts",
             "true",
             "Block malicious install scripts",
         ),
     ]
+}
+
+/// Scan the pnpm global config file.
+///
+/// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all 4 security
+///   settings are accepted.
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase) — only
+///   `minimumReleaseAge` and `blockExoticSubdeps` are valid globally;
+///   `trustPolicy` and `strictDepBuilds` are workspace-only.
+fn scan_pnpm_global(path: &Path, version: &str) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let minutes = days.saturating_mul(24).saturating_mul(60);
+
+    if pnpm_uses_yaml_config(version) {
+        // pnpm >= 11: config.yaml (YAML, camelCase)
+        let check = |min_major, min_minor, key: &str, expected: &str, desc: &str, mode| {
+            if version_at_least(version, min_major, min_minor) {
+                check_yaml(path, key, expected, desc, mode)
+            } else {
+                Recommendation {
+                    key: key.into(),
+                    description: desc.into(),
+                    expected: expected.into(),
+                    status: CheckStatus::Unsupported(format!(
+                        "requires pnpm \u{2265} {min_major}.{min_minor} (have {version})"
+                    )),
+                }
+            }
+        };
+        vec![
+            check(
+                10,
+                16,
+                "minimumReleaseAge",
+                &minutes.to_string(),
+                &format!("Delay new versions by {days} days"),
+                YamlCheck::MinInt(minutes),
+            ),
+            check(
+                10,
+                26,
+                "blockExoticSubdeps",
+                "true",
+                "Block untrusted transitive deps",
+                YamlCheck::Exact,
+            ),
+        ]
+    } else {
+        // pnpm <= 10: rc file (INI, kebab-case) — all settings accepted
+        let cfg = read_flat_config(path);
+        let check_ver =
+            |min_major, min_minor, key: &str, expected: &str, desc: &str, mode: FlatCheck| {
+                if version_at_least(version, min_major, min_minor) {
+                    match mode {
+                        FlatCheck::Exact => check_flat(path, &cfg, key, expected, desc),
+                        FlatCheck::MinInt(min) => check_flat_min_int(path, &cfg, key, min, desc),
+                    }
+                } else {
+                    Recommendation {
+                        key: key.into(),
+                        description: desc.into(),
+                        expected: expected.into(),
+                        status: CheckStatus::Unsupported(format!(
+                            "requires pnpm \u{2265} {min_major}.{min_minor} (have {version})"
+                        )),
+                    }
+                }
+            };
+        vec![
+            check_ver(
+                10,
+                16,
+                "minimum-release-age",
+                &minutes.to_string(),
+                &format!("Delay new versions by {days} days"),
+                FlatCheck::MinInt(minutes),
+            ),
+            check_ver(
+                10,
+                26,
+                "block-exotic-subdeps",
+                "true",
+                "Block untrusted transitive deps",
+                FlatCheck::Exact,
+            ),
+            check_ver(
+                10,
+                21,
+                "trust-policy",
+                "no-downgrade",
+                "Block provenance downgrades",
+                FlatCheck::Exact,
+            ),
+            check_ver(
+                10,
+                3,
+                "strict-dep-builds",
+                "true",
+                "Fail on unreviewed build scripts",
+                FlatCheck::Exact,
+            ),
+            check_flat(
+                path,
+                &cfg,
+                "ignore-scripts",
+                "true",
+                "Block malicious install scripts",
+            ),
+        ]
+    }
+}
+
+enum FlatCheck {
+    Exact,
+    MinInt(u64),
 }
 
 fn scan_pnpm_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
@@ -1088,7 +1219,7 @@ fn check_yaml(
 ) -> Recommendation {
     let val = read_yaml_value(path, key);
     let status = match (&val, &check) {
-        (None, _) => CheckStatus::Missing,
+        (None, _) => missing_status_for_path(path),
         (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok,
         (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
             Ok(n) if n >= *min => CheckStatus::Ok,
@@ -1104,25 +1235,6 @@ fn check_yaml(
     }
 }
 
-fn scan_bun_with_extras(path: &Path, extras: &[PathBuf]) -> Vec<Recommendation> {
-    let mut recs = scan_bun(path);
-    if !extras.is_empty() {
-        for extra in extras {
-            let extra_recs = scan_bun(extra);
-            for (i, rec) in recs.iter_mut().enumerate() {
-                if matches!(rec.status, CheckStatus::Missing) {
-                    if let Some(er) = extra_recs.get(i) {
-                        if !matches!(er.status, CheckStatus::Missing) {
-                            rec.status = er.status.clone();
-                        }
-                    }
-                }
-            }
-        }
-    }
-    recs
-}
-
 fn scan_bun(path: &Path) -> Vec<Recommendation> {
     let days = get_delay_days();
     let seconds = days.saturating_mul(86400);
@@ -1133,7 +1245,7 @@ fn scan_bun(path: &Path) -> Vec<Recommendation> {
             Ok(_) => CheckStatus::WrongValue(v.clone()),
             Err(_) => CheckStatus::WrongValue(v.clone()),
         },
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "install.minimumReleaseAge".into(),
@@ -1159,25 +1271,6 @@ fn parse_relative_days(s: &str) -> Option<u64> {
     }
 }
 
-fn scan_uv_with_extras(path: &Path, extras: &[PathBuf]) -> Vec<Recommendation> {
-    let mut recs = scan_uv(path);
-    if !extras.is_empty() {
-        for extra in extras {
-            let extra_recs = scan_uv(extra);
-            for (i, rec) in recs.iter_mut().enumerate() {
-                if matches!(rec.status, CheckStatus::Missing) {
-                    if let Some(er) = extra_recs.get(i) {
-                        if !matches!(er.status, CheckStatus::Missing) {
-                            rec.status = er.status.clone();
-                        }
-                    }
-                }
-            }
-        }
-    }
-    recs
-}
-
 fn scan_uv(path: &Path) -> Vec<Recommendation> {
     let days = get_delay_days();
     let val = read_toml_value(path, "exclude-newer");
@@ -1196,7 +1289,7 @@ fn scan_uv(path: &Path) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "exclude-newer".into(),
@@ -1238,7 +1331,7 @@ fn scan_yarn(path: &Path, version: &str) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "npmMinimalAgeGate".into(),
@@ -1263,7 +1356,7 @@ fn scan_renovate(path: &Path) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "minimumReleaseAge".into(),
@@ -1306,6 +1399,7 @@ fn scan_dependabot(path: &Path) -> Vec<Recommendation> {
 }
 
 fn check_flat(
+    path: &Path,
     cfg: &HashMap<String, String>,
     key: &str,
     expected: &str,
@@ -1314,7 +1408,7 @@ fn check_flat(
     let status = match cfg.get(key) {
         Some(v) if v == expected => CheckStatus::Ok,
         Some(v) => CheckStatus::WrongValue(v.clone()),
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     Recommendation {
         key: key.into(),
@@ -1327,6 +1421,7 @@ fn check_flat(
 /// Like [`check_flat`] but treats the value as an integer and checks `>= min`.
 /// A value equal to or higher than `min` is Ok (more protective is fine).
 fn check_flat_min_int(
+    path: &Path,
     cfg: &HashMap<String, String>,
     key: &str,
     min: u64,
@@ -1337,7 +1432,7 @@ fn check_flat_min_int(
             Ok(n) if n >= min => CheckStatus::Ok,
             _ => CheckStatus::WrongValue(v.clone()),
         },
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     Recommendation {
         key: key.into(),
@@ -1347,41 +1442,52 @@ fn check_flat_min_int(
     }
 }
 
-/// Scan a single package manager: detect version, read config, and return recommendations.
-pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
-    let version = detect_version(kind.name())?;
+/// Scan a user-level package manager and return one or more config entries.
+pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
+    let Some(version) = detect_version(kind.name()) else {
+        return Vec::new();
+    };
     let home = home_dir();
     let appdata = appdata_dir();
     let os = TargetOs::current();
 
-    let (path, extras) = match kind {
+    let paths = match kind {
         ManagerKind::PnpmGlobal => {
-            let global = pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc);
-            (global, Vec::new())
+            if pnpm_uses_yaml_config(&version) {
+                vec![pnpm_global_yaml()]
+            } else {
+                vec![pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc)]
+            }
         }
         _ => {
             let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
-            resolve_candidates(&cands, default_idx)
+            select_scan_paths(&cands, default_idx)
         }
     };
 
-    let recommendations = match kind {
-        ManagerKind::Npm => scan_npm(&path, &version),
-        ManagerKind::Pnpm | ManagerKind::PnpmGlobal => scan_pnpm(&path, &version),
-        ManagerKind::Bun => scan_bun_with_extras(&path, &extras),
-        ManagerKind::Uv => scan_uv_with_extras(&path, &extras),
-        ManagerKind::Yarn => scan_yarn(&path, &version),
-        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
-            unreachable!("repo-level managers are scanned via find_repo_configs")
-        }
-    };
-    Some(ManagerInfo {
-        kind,
-        version,
-        config_path: path,
-        recommendations,
-        discovered: false,
-    })
+    paths
+        .into_iter()
+        .map(|path| {
+            let recommendations = match kind {
+                ManagerKind::Npm => scan_npm(&path, &version),
+                ManagerKind::Pnpm => scan_pnpm(&path, &version),
+                ManagerKind::PnpmGlobal => scan_pnpm_global(&path, &version),
+                ManagerKind::Bun => scan_bun(&path),
+                ManagerKind::Uv => scan_uv(&path),
+                ManagerKind::Yarn => scan_yarn(&path, &version),
+                ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
+                    unreachable!("repo-level managers are scanned via find_repo_configs")
+                }
+            };
+            ManagerInfo {
+                kind,
+                version: version.clone(),
+                config_path: path,
+                recommendations,
+                discovered: false,
+            }
+        })
+        .collect()
 }
 
 /// Scan discovered repo configs and return ManagerInfo entries.
@@ -1394,7 +1500,7 @@ fn scan_repo_configs_with_progress(
     let configs = find_repo_configs(&mut |dir| {
         let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("...");
         on_progress(
-            &format!("Searching for configs in ~/{}...", dir_name),
+            &format!("Searching current tree in {dir_name}/..."),
             base_frac,
         );
     });
@@ -1502,9 +1608,10 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
             &format!("Checking {} configuration...", kind.name()),
             i as f32 / base_steps as f32,
         );
-        if let Some(info) = scan_manager(kind) {
-            detected_versions.insert(kind.name(), info.version.clone());
-            results.push(info);
+        let infos = scan_manager_infos(kind);
+        if let Some(first) = infos.first() {
+            detected_versions.insert(kind.name(), first.version.clone());
+            results.extend(infos);
         }
     }
 
@@ -1619,40 +1726,39 @@ mod tests {
     }
 
     #[test]
-    fn resolve_candidates_none_exist_uses_default() {
+    fn select_scan_paths_none_exist_uses_default() {
         let a = PathBuf::from("/tmp/does-not-exist-a");
         let b = PathBuf::from("/tmp/does-not-exist-b");
-        let (primary, extras) = resolve_candidates(&[a.clone(), b], 0);
-        assert_eq!(primary, a);
-        assert!(extras.is_empty());
+        let paths = select_scan_paths(&[a.clone(), b], 0);
+        assert_eq!(paths, vec![a]);
     }
 
     #[test]
-    fn resolve_candidates_one_exists() {
+    fn select_scan_paths_one_exists() {
         let exists = tmp_file("content\n");
         let missing = PathBuf::from("/tmp/does-not-exist-x");
-        let (primary, extras) = resolve_candidates(&[missing, exists.path().to_path_buf()], 0);
-        assert_eq!(primary, exists.path());
-        assert!(extras.is_empty());
+        let paths = select_scan_paths(&[missing, exists.path().to_path_buf()], 0);
+        assert_eq!(paths, vec![exists.path().to_path_buf()]);
     }
 
     #[test]
-    fn resolve_candidates_both_exist() {
+    fn select_scan_paths_both_exist() {
         let a = tmp_file("a\n");
         let b = tmp_file("b\n");
-        let (primary, extras) =
-            resolve_candidates(&[a.path().to_path_buf(), b.path().to_path_buf()], 0);
-        assert_eq!(primary, a.path());
-        assert_eq!(extras, vec![b.path().to_path_buf()]);
+        let paths = select_scan_paths(&[a.path().to_path_buf(), b.path().to_path_buf()], 0);
+        assert_eq!(paths, vec![a.path().to_path_buf(), b.path().to_path_buf()]);
     }
 
     #[test]
-    fn resolve_candidates_none_exist_uses_xdg_default() {
+    fn select_scan_paths_none_exist_uses_xdg_default() {
         let xdg = PathBuf::from("/tmp/xdg-not-exist/uv/uv.toml");
         let fallback = PathBuf::from("/tmp/not-exist/.config/uv/uv.toml");
-        let (primary, extras) = resolve_candidates(&[xdg.clone(), fallback], 0);
-        assert_eq!(primary, xdg, "should use XDG as default when it's index 0");
-        assert!(extras.is_empty());
+        let paths = select_scan_paths(&[xdg.clone(), fallback], 0);
+        assert_eq!(
+            paths,
+            vec![xdg],
+            "should use XDG as default when it's index 0"
+        );
     }
 
     #[test]
@@ -1712,6 +1818,7 @@ mod tests {
     fn check_status_display() {
         assert_eq!(format!("{}", CheckStatus::Ok), "OK");
         assert_eq!(format!("{}", CheckStatus::Missing), "Not set");
+        assert_eq!(format!("{}", CheckStatus::FileMissing), "file missing");
         assert_eq!(
             format!("{}", CheckStatus::WrongValue("3".into())),
             "Current: 3"
@@ -1719,9 +1826,32 @@ mod tests {
     }
 
     #[test]
+    fn scan_npm_missing_file_is_not_same_as_empty_file() {
+        let missing = scan_npm(Path::new("/definitely/not/a/file"), "11.12.1");
+        assert_eq!(missing[0].status.to_string(), "file missing");
+        assert_eq!(missing[1].status.to_string(), "file missing");
+
+        let empty = tmp_file("");
+        let empty_recs = scan_npm(empty.path(), "11.12.1");
+        assert_eq!(empty_recs[0].status.to_string(), "Not set");
+        assert_eq!(empty_recs[1].status.to_string(), "Not set");
+    }
+
+    #[test]
+    fn scan_uv_missing_file_is_not_same_as_empty_file() {
+        let missing = scan_uv(Path::new("/definitely/not/a/file"));
+        assert_eq!(missing[0].status.to_string(), "file missing");
+
+        let empty = tmp_file("");
+        let empty_recs = scan_uv(empty.path());
+        assert_eq!(empty_recs[0].status.to_string(), "Not set");
+    }
+
+    #[test]
     fn check_status_is_ok() {
         assert!(CheckStatus::Ok.is_ok());
         assert!(!CheckStatus::Missing.is_ok());
+        assert!(!CheckStatus::FileMissing.is_ok());
         assert!(!CheckStatus::WrongValue("x".into()).is_ok());
     }
 
@@ -1741,6 +1871,13 @@ mod tests {
             status: CheckStatus::Missing,
         };
         assert!(bad.needs_fix());
+        let missing_file = Recommendation {
+            key: "k".into(),
+            description: "d".into(),
+            expected: "v".into(),
+            status: CheckStatus::FileMissing,
+        };
+        assert!(missing_file.needs_fix());
     }
 
     #[test]
@@ -1849,40 +1986,34 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_global_rc_fallback() {
-        let npmrc = tmp_file("ignore-scripts=true\n");
-        let global = tmp_file("minimum-release-age=10080\n");
-        let recs = scan_pnpm_with_global(npmrc.path(), Some(global.path()), "10.16.0");
-        assert_eq!(recs.len(), 2);
-        assert!(
-            recs[0].status.is_ok(),
-            "should find minimum-release-age from global rc"
-        );
-        assert!(recs[1].status.is_ok());
-    }
-
-    #[test]
-    fn scan_pnpm_npmrc_wins_over_global_rc() {
-        let npmrc = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
-        let global = tmp_file("minimum-release-age=100\n");
-        let recs = scan_pnpm_with_global(npmrc.path(), Some(global.path()), "10.16.0");
-        assert!(
-            recs[0].status.is_ok(),
-            ".npmrc value 20160 should win over global rc value 100"
-        );
-    }
-
-    #[test]
     fn check_flat_min_int_basic() {
         let mut cfg = HashMap::new();
         cfg.insert("minimum-release-age".into(), "10080".into());
-        let r = check_flat_min_int(&cfg, "minimum-release-age", 10080, "test");
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            10080,
+            "test",
+        );
         assert!(r.status.is_ok());
 
-        let r = check_flat_min_int(&cfg, "minimum-release-age", 5000, "test");
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            5000,
+            "test",
+        );
         assert!(r.status.is_ok(), "10080 >= 5000 should be Ok");
 
-        let r = check_flat_min_int(&cfg, "minimum-release-age", 20000, "test");
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            20000,
+            "test",
+        );
         assert!(matches!(r.status, CheckStatus::WrongValue(_)));
     }
 
@@ -2615,6 +2746,127 @@ mod tests {
         let recs = scan_dependabot(f.path());
         assert_eq!(recs.len(), 1);
         assert_eq!(recs[0].key, "cooldown.default-days");
+    }
+
+    // ── pnpm global config.yaml path tests ─────────────────────────
+
+    #[test]
+    fn pnpm_global_yaml_linux() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/home/testuser");
+        let p = pnpm_global_yaml_for(home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/pnpm/config.yaml"));
+    }
+
+    #[test]
+    fn pnpm_global_yaml_macos() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_yaml_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(
+            p,
+            PathBuf::from("/Users/testuser/Library/Preferences/pnpm/config.yaml")
+        );
+    }
+
+    // ── scan_pnpm_global tests (v10 rc format) ──────────────────────
+
+    #[test]
+    fn scan_pnpm_global_v10_all_ok() {
+        let f = tmp_file(
+            "minimum-release-age=10080\nblock-exotic-subdeps=true\ntrust-policy=no-downgrade\nstrict-dep-builds=true\nignore-scripts=true\n",
+        );
+        let recs = scan_pnpm_global(f.path(), "10.33.0");
+        assert_eq!(recs.len(), 5);
+        assert!(
+            recs.iter().all(|r| r.status.is_ok()),
+            "all should be Ok: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_missing_all() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "10.33.0");
+        assert_eq!(recs.len(), 5);
+        let missing_count = recs
+            .iter()
+            .filter(|r| matches!(r.status, CheckStatus::Missing))
+            .count();
+        assert_eq!(missing_count, 5);
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_old_version_partial() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm_global(f.path(), "10.16.0");
+        let age = recs
+            .iter()
+            .find(|r| r.key == "minimum-release-age")
+            .unwrap();
+        assert!(age.status.is_ok());
+        let ignore = recs.iter().find(|r| r.key == "ignore-scripts").unwrap();
+        assert!(ignore.status.is_ok());
+        let trust = recs.iter().find(|r| r.key == "trust-policy").unwrap();
+        assert!(trust.status.is_unsupported());
+        let exotic = recs
+            .iter()
+            .find(|r| r.key == "block-exotic-subdeps")
+            .unwrap();
+        assert!(exotic.status.is_unsupported());
+    }
+
+    // ── scan_pnpm_global tests (v11 config.yaml format) ─────────────
+
+    #[test]
+    fn scan_pnpm_global_v11_all_ok() {
+        let f = tmp_file("minimumReleaseAge: 10080\nblockExoticSubdeps: true\n");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2);
+        assert!(recs.iter().all(|r| r.status.is_ok()));
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_missing() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2, "v11 global should only have 2 settings");
+        assert!(recs
+            .iter()
+            .all(|r| matches!(r.status, CheckStatus::Missing)));
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_no_trust_or_strict() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert!(
+            recs.iter()
+                .all(|r| r.key != "trustPolicy" && r.key != "strictDepBuilds"),
+            "v11 global should not check trustPolicy or strictDepBuilds"
+        );
+    }
+
+    #[test]
+    fn pnpm_uses_yaml_config_versions() {
+        assert!(!pnpm_uses_yaml_config("10.33.0"));
+        assert!(!pnpm_uses_yaml_config("10.0.0"));
+        assert!(pnpm_uses_yaml_config("11.0.0"));
+        assert!(pnpm_uses_yaml_config("11.0.0-beta.8"));
+        assert!(pnpm_uses_yaml_config("12.0.0"));
     }
 
     // ── config_path_yarn tests ───────────────────────────────────────

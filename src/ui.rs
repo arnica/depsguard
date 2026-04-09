@@ -135,7 +135,7 @@ fn format_manager_header(managers: &[&ManagerInfo]) -> String {
 fn status_icon(s: &CheckStatus) -> &'static str {
     match s {
         CheckStatus::Ok => "✓",
-        CheckStatus::Missing => "✗",
+        CheckStatus::Missing | CheckStatus::FileMissing => "✗",
         CheckStatus::WrongValue(_) => "~",
         CheckStatus::Unsupported(_) => "ℹ",
     }
@@ -144,7 +144,7 @@ fn status_icon(s: &CheckStatus) -> &'static str {
 fn status_color(s: &CheckStatus) -> &'static str {
     match s {
         CheckStatus::Ok => GREEN,
-        CheckStatus::Missing => RED,
+        CheckStatus::Missing | CheckStatus::FileMissing => RED,
         CheckStatus::WrongValue(_) => YELLOW,
         CheckStatus::Unsupported(_) => BLUE,
     }
@@ -167,6 +167,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
     // Count issues (deduplicate by config_path + key, matching display logic)
     let mut ok_count = 0usize;
     let mut missing_count = 0usize;
+    let mut file_missing_count = 0usize;
     let mut wrong_count = 0usize;
     let mut unsupported_count = 0usize;
     let mut seen_keys = std::collections::HashSet::new();
@@ -178,12 +179,13 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             match &rec.status {
                 CheckStatus::Ok => ok_count += 1,
                 CheckStatus::Missing => missing_count += 1,
+                CheckStatus::FileMissing => file_missing_count += 1,
                 CheckStatus::WrongValue(_) => wrong_count += 1,
                 CheckStatus::Unsupported(_) => unsupported_count += 1,
             }
         }
     }
-    let total_issues = missing_count + wrong_count;
+    let total_issues = missing_count + file_missing_count + wrong_count;
     let unique_configs = {
         let s: std::collections::HashSet<_> = managers.iter().map(|m| &m.config_path).collect();
         s.len()
@@ -242,6 +244,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 let detail = match &rec.status {
                     CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
                     CheckStatus::Missing => format!("{RED}not set{RESET}"),
+                    CheckStatus::FileMissing => format!("{RED}file missing{RESET}"),
                     CheckStatus::WrongValue(v) => {
                         format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
                     }
@@ -272,6 +275,13 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         )?;
     } else {
         write!(w, "  ")?;
+        if file_missing_count > 0 {
+            write!(
+                w,
+                "{RED}{BOLD}{}{RESET}  ",
+                plural(file_missing_count, "file missing", "files missing")
+            )?;
+        }
         if missing_count > 0 {
             write!(w, "{RED}{BOLD}{missing_count} not set{RESET}  ")?;
         }
@@ -282,7 +292,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             write!(w, "{BLUE}{unsupported_count} unsupported{RESET}  ")?;
         }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
-        let total = ok_count + missing_count + wrong_count + unsupported_count;
+        let total = ok_count + file_missing_count + missing_count + wrong_count + unsupported_count;
         writeln!(
             w,
             "  {DIM}({} total across {}){RESET}\n",
@@ -1056,6 +1066,16 @@ mod tests {
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("ACTION NEEDED"));
         assert!(s.contains("not set"));
+    }
+
+    #[test]
+    fn scan_results_file_missing() {
+        let mgr = make_manager(vec![make_rec("key", CheckStatus::FileMissing)]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("ACTION NEEDED"));
+        assert!(s.contains("file missing"));
     }
 
     #[test]
