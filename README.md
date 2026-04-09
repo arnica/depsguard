@@ -147,7 +147,7 @@ depsguard --help       # CLI help
 ### How to use
 
 1. **Install** – pick your platform [above](#install).
-2. **Run** `depsguard` to launch the interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix selector. Use `depsguard scan` for a read-only report, or `depsguard --no-search` to skip the recursive file search and only check local configs.
+2. **Run** `depsguard` to launch the interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix selector. Repo-level config discovery starts from the current directory and searches downward. Use `depsguard scan` for a read-only report, or `depsguard --no-search` to skip the recursive file search and only check user-level configs.
    > **Note:** some settings require a minimum version. If your version is too old you'll see:
    > `ℹ min-release-age – requires npm ≥ 11.10 (have 10.2.0)`.
    > Upgrade with `npm install -g npm@latest` and re-run.
@@ -187,7 +187,7 @@ depsguard --help       # CLI help
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-Config files are discovered by searching from the home directory downward, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations.
+User-level config files are read from their standard locations (for example `~/.npmrc`, `~/.yarnrc.yml`, and platform-specific pnpm/uv paths). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations.
 
 ## Backups and restore
 

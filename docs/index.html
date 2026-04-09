@@ -1214,8 +1214,9 @@ scoop install depsguard</code></pre>
             class="body-link">above</a>.</li>
         <li><strong style="color:var(--text);">Run</strong> <code>depsguard</code> in your terminal to launch the
           interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix
-          selector. Use <code>depsguard scan</code> for a read-only report, or <code>depsguard --no-search</code> to
-          skip the recursive file search and only check local configs.
+          selector. Repo-level config discovery starts from the current directory and searches downward. Use
+          <code>depsguard scan</code> for a read-only report, or <code>depsguard --no-search</code> to skip the
+          recursive file search and only check user-level configs.
           <div
             style="margin-top:.6rem; padding:.6rem .8rem; background:var(--surface); border:1px solid var(--border); border-radius:.5rem; font-size:.8125rem; line-height:1.65;">
             <strong style="color:var(--text);">Note:</strong> some settings require a minimum version. If your version
@@ -1280,16 +1281,13 @@ scoop install depsguard</code></pre>
           </thead>
           <tbody>
             <tr>
-              <td class="mgr-name" rowspan="2"><svg class="mgr-icon-sm" viewBox="0 0 128 128">
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 128 128">
                   <path fill="#cb3837"
                     d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z" />
                   <path fill="#fff"
                     d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z" />
-                </svg><svg class="mgr-icon-sm" viewBox="0 0 32 32">
-                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
-                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
-                </svg> npm / pnpm</td>
-              <td rowspan="3"><code>.npmrc</code></td>
+                </svg> npm</td>
+              <td><code>.npmrc</code></td>
               <td><code>min-release-age=7</code></td>
               <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(npm &ge;
                   11.10)</span></td>
@@ -1302,6 +1300,32 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 128 128">
+                  <path fill="#cb3837"
+                    d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z" />
+                  <path fill="#fff"
+                    d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z" />
+                </svg><svg class="mgr-icon-sm" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> npm / pnpm</td>
+              <td><code>.npmrc</code></td>
+              <td><code>ignore-scripts=true</code></td>
+              <td>Block malicious install scripts</td>
+              <td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts"
+                  target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td><code>.npmrc</code></td>
               <td><code>minimum-release-age=10080</code></td>
               <td>Delay new versions by 7 days (in minutes) <span
                   style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge; 10.16)</span></td>
@@ -1314,22 +1338,11 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
-              <td><code>ignore-scripts=true</code></td>
-              <td>Block malicious install scripts</td>
-              <td><a class="doc-link" href="https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts"
-                  target="_blank" rel="noopener" title="npm docs"><svg viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg></a></td>
-            </tr>
-            <tr>
-              <td class="mgr-name" rowspan="4"><svg class="mgr-icon" viewBox="0 0 32 32">
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
                   <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
                   <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
                 </svg> pnpm</td>
-              <td rowspan="4"><code>pnpm-workspace.yaml</code></td>
+              <td><code>pnpm-workspace.yaml</code></td>
               <td><code>minimumReleaseAge: 10080</code></td>
               <td>Delay new versions by 7 days (in minutes) <span
                   style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge; 10.16)</span></td>
@@ -1342,6 +1355,11 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td><code>pnpm-workspace.yaml</code></td>
               <td><code>strictDepBuilds: true</code></td>
               <td>Stricter build scripts <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge; 10.3)</span>
               </td>
@@ -1354,6 +1372,11 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td><code>pnpm-workspace.yaml</code></td>
               <td><code>trustPolicy: "no-downgrade"</code></td>
               <td>Block provenance downgrades <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge;
                   10.21)</span></td>
@@ -1366,6 +1389,11 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td><code>pnpm-workspace.yaml</code></td>
               <td><code>blockExoticSubdeps: true</code></td>
               <td>Block exotic sub-dependencies <span style="color:var(--text-mute); font-size:.75rem;">(pnpm &ge;
                   10.26)</span></td>
