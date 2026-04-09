@@ -81,7 +81,18 @@ brew tap arnica/depsguard https://github.com/arnica/depsguard
 brew install depsguard
 ```
 
-#### Windows (PowerShell)
+#### Windows
+
+```powershell
+# WinGet
+winget install Arnica.DepsGuard
+
+# Scoop
+scoop bucket add depsguard https://github.com/arnica/depsguard
+scoop install depsguard
+```
+
+Or download manually via PowerShell:
 
 ```powershell
 $zip = "$env:TEMP\\depsguard.zip"
