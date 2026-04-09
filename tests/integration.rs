@@ -168,10 +168,10 @@ fn npm_install_with_min_release_age() {
     )
     .unwrap();
 
-    // Create a minimal package.json
+    // Create a minimal package.json using a tiny package with no deps/scripts.
     fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 
@@ -183,7 +183,7 @@ fn npm_install_with_min_release_age() {
         .output()
         .unwrap();
 
-    // Should succeed (is-odd 3.0.1 is old enough)
+    // Should succeed (picocolors 1.1.1 is old enough)
     assert!(
         out.status.success(),
         "npm install failed: {}",
@@ -224,40 +224,160 @@ fn pnpm_config_fix_and_rescan() {
     assert!(stdout.contains("pnpm"), "pnpm not detected");
 }
 
+/// Prove that pnpm READS `minimum-release-age` from `.npmrc`.
+///
+/// Strategy:
+///   1. Set minimum-release-age to an impossibly high value (999_999_999 min ~ 1902 years).
+///   2. Try `pnpm install` with a well-known old package pinned to an exact version.
+///   3. pnpm must REJECT the install (no version can be that old).
+///   4. Then set minimum-release-age=0 and re-run: pnpm must SUCCEED.
+///
+/// This proves that pnpm reads the setting from `.npmrc` and uses it.
 #[test]
-#[ignore] // requires network access
-fn pnpm_install_with_config() {
+#[ignore] // requires network access + pnpm >= 10.16
+fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
     if !has_command("pnpm") {
         return;
     }
-    let home = TmpHome::new("pnpm_install");
+    let home = TmpHome::new("pnpm_mra_block");
     let project = home.path().join("testproject");
     fs::create_dir_all(&project).unwrap();
 
     fs::write(
-        home.path().join(".npmrc"),
-        "minimum-release-age=10080\nignore-scripts=true\n",
-    )
-    .unwrap();
-
-    fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 
-    let out = Command::new("pnpm")
+    // Step 1: impossibly high minimum-release-age -> install should FAIL
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=999999999\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_blocked = Command::new("pnpm")
         .args(["install", "--no-frozen-lockfile"])
         .current_dir(&project)
         .env("HOME", home.path())
         .output()
         .unwrap();
 
-    // pnpm install should succeed
+    let stderr_blocked = String::from_utf8_lossy(&out_blocked.stderr);
     assert!(
-        out.status.success(),
-        "pnpm install failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        !out_blocked.status.success(),
+        "pnpm install should FAIL with minimum-release-age=999999999 but succeeded.\n\
+         stderr: {stderr_blocked}"
+    );
+
+    // Clean up any partial lockfile / node_modules from the failed attempt
+    let _ = fs::remove_file(project.join("pnpm-lock.yaml"));
+    let _ = fs::remove_dir_all(project.join("node_modules"));
+
+    // Step 2: minimum-release-age=0 -> install should SUCCEED
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=0\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_ok = Command::new("pnpm")
+        .args(["install", "--no-frozen-lockfile"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        out_ok.status.success(),
+        "pnpm install should SUCCEED with minimum-release-age=0.\n\
+         stderr: {}",
+        String::from_utf8_lossy(&out_ok.stderr)
+    );
+}
+
+/// Same proof for npm: `min-release-age` in `.npmrc` actually blocks installs.
+#[test]
+#[ignore] // requires network access + npm >= 11.10
+fn npm_min_release_age_from_npmrc_blocks_install() {
+    if !has_command("npm") {
+        return;
+    }
+    let home = TmpHome::new("npm_mra_block");
+    let project = home.path().join("testproject");
+    fs::create_dir_all(&project).unwrap();
+
+    fs::write(
+        project.join("package.json"),
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
+    )
+    .unwrap();
+
+    // Step 1: impossibly high min-release-age -> install should FAIL
+    fs::write(
+        home.path().join(".npmrc"),
+        "min-release-age=999999\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_blocked = Command::new("npm")
+        .args(["install"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    let stderr_blocked = String::from_utf8_lossy(&out_blocked.stderr);
+    assert!(
+        !out_blocked.status.success(),
+        "npm install should FAIL with min-release-age=999999 but succeeded.\n\
+         stderr: {stderr_blocked}"
+    );
+
+    // Clean up
+    let _ = fs::remove_file(project.join("package-lock.json"));
+    let _ = fs::remove_dir_all(project.join("node_modules"));
+
+    // Step 2: min-release-age=0 -> install should SUCCEED
+    fs::write(
+        home.path().join(".npmrc"),
+        "min-release-age=0\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_ok = Command::new("npm")
+        .args(["install"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        out_ok.status.success(),
+        "npm install should SUCCEED with min-release-age=0.\n\
+         stderr: {}",
+        String::from_utf8_lossy(&out_ok.stderr)
+    );
+}
+
+/// Prove that depsguard detects minimum-release-age in pnpm's .npmrc correctly.
+#[test]
+fn pnpm_scan_detects_minimum_release_age_in_npmrc() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_mra_scan");
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=10080\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out = run_depsguard(&["--scan"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("minimum-release-age"),
+        "depsguard should report minimum-release-age for pnpm:\n{stdout}"
     );
 }
 
@@ -311,7 +431,7 @@ fn bun_install_with_config() {
 
     fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 

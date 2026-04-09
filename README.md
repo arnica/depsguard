@@ -163,6 +163,7 @@ depsguard --help       # CLI help
 |---------|--------|---------|--------|-----|
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
+| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
@@ -178,6 +179,7 @@ depsguard --help       # CLI help
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
 | npm/pnpm | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
+| pnpm global | `~/.config/pnpm/rc` | `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
 | yarn | `~/.yarnrc.yml` | `~/.yarnrc.yml` | `%USERPROFILE%\.yarnrc.yml` |
 | pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
 | bun | `~/.bunfig.toml` | `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
@@ -185,7 +187,7 @@ depsguard --help       # CLI help
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-Config files are discovered by searching from the home directory downward, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched.
+Config files are discovered by searching from the home directory downward, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global `rc` file, or `pnpm-workspace.yaml`; DepsGuard checks all three locations.
 
 ## Backups and restore
 

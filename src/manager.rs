@@ -341,6 +341,35 @@ pub fn config_path(kind: ManagerKind) -> PathBuf {
     config_path_full(kind, &home, &appdata, TargetOs::current())
 }
 
+/// Resolve the pnpm global config directory `rc` file for a given OS.
+/// Mirrors `getConfigDir` from pnpm's `config/reader/src/dirs.ts`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
+    let dir = match os {
+        TargetOs::MacOs => home.join("Library/Preferences/pnpm"),
+        TargetOs::Windows => {
+            if let Ok(local) = env::var("LOCALAPPDATA") {
+                PathBuf::from(local).join("pnpm/config")
+            } else {
+                home.join(".config/pnpm")
+            }
+        }
+        TargetOs::Linux => {
+            if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
+                PathBuf::from(xdg).join("pnpm")
+            } else {
+                home.join(".config/pnpm")
+            }
+        }
+    };
+    dir.join("rc")
+}
+
+/// Resolve the pnpm global `rc` file on the current OS.
+pub fn pnpm_global_rc() -> PathBuf {
+    pnpm_global_rc_for(&home_dir(), TargetOs::current())
+}
+
 // ── Config reading ────────────────────────────────────────────────────
 
 /// Read a flat key=value config file (.npmrc style). Ignores comments (#/;).
@@ -719,14 +748,15 @@ pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Search from the user's home directory downward for all recognized repo config files.
+/// Search from the current working directory downward for all recognized repo config files.
 ///
 /// Calls `on_dir` for each directory visited to enable live progress display.
 /// Skips files at the HOME level for `.npmrc` and `.yarnrc.yml` (handled by user-level scan).
 pub fn find_repo_configs(on_dir: &mut dyn FnMut(&Path)) -> Vec<(PathBuf, RepoConfigKind)> {
     let mut results = Vec::new();
     let home = home_dir();
-    search_downward(&home, 0, &home, &mut results, on_dir);
+    let start = env::current_dir().unwrap_or_else(|_| home.clone());
+    search_downward(&start, 0, &home, &mut results, on_dir);
     results.sort_by(|a, b| a.0.cmp(&b.0));
     results.dedup_by(|a, b| a.0 == b.0);
     results
@@ -846,16 +876,53 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     ]
 }
 
-fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
-    let cfg = read_flat_config(path);
-    // ignore-scripts is shared with npm in the same .npmrc — only check
-    // pnpm-specific keys here. Release age is handled via pnpm-workspace.yaml.
-    vec![check_flat(
-        &cfg,
-        "ignore-scripts",
-        "true",
-        "Block malicious install scripts",
-    )]
+fn scan_pnpm(path: &Path, version: &str) -> Vec<Recommendation> {
+    scan_pnpm_with_global(path, None, version)
+}
+
+/// Inner scanner that merges the project/user `.npmrc` with an optional pnpm
+/// global `rc` file. A key found in *either* file counts as present.
+fn scan_pnpm_with_global(
+    path: &Path,
+    global_rc: Option<&Path>,
+    version: &str,
+) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let minutes = days.saturating_mul(24).saturating_mul(60);
+    let mut cfg = read_flat_config(path);
+    if let Some(g) = global_rc {
+        for (k, v) in read_flat_config(g) {
+            cfg.entry(k).or_insert(v);
+        }
+    }
+
+    let release_age = if version_at_least(version, 10, 16) {
+        check_flat_min_int(
+            &cfg,
+            "minimum-release-age",
+            minutes,
+            &format!("Delay new versions by {days} days"),
+        )
+    } else {
+        Recommendation {
+            key: "minimum-release-age".into(),
+            description: format!("Delay new versions by {days} days"),
+            expected: minutes.to_string(),
+            status: CheckStatus::Unsupported(format!(
+                "requires pnpm \u{2265} 10.16 (have {version})"
+            )),
+        }
+    };
+
+    vec![
+        release_age,
+        check_flat(
+            &cfg,
+            "ignore-scripts",
+            "true",
+            "Block malicious install scripts",
+        ),
+    ]
 }
 
 fn scan_pnpm_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
@@ -1125,13 +1192,44 @@ fn check_flat(
     }
 }
 
+/// Like [`check_flat`] but treats the value as an integer and checks `>= min`.
+/// A value equal to or higher than `min` is Ok (more protective is fine).
+fn check_flat_min_int(
+    cfg: &HashMap<String, String>,
+    key: &str,
+    min: u64,
+    desc: &str,
+) -> Recommendation {
+    let status = match cfg.get(key) {
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) if n >= min => CheckStatus::Ok,
+            _ => CheckStatus::WrongValue(v.clone()),
+        },
+        None => CheckStatus::Missing,
+    };
+    Recommendation {
+        key: key.into(),
+        description: desc.into(),
+        expected: min.to_string(),
+        status,
+    }
+}
+
 /// Scan a single package manager: detect version, read config, and return recommendations.
 pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
     let version = detect_version(kind.name())?;
     let path = config_path(kind);
     let recommendations = match kind {
         ManagerKind::Npm => scan_npm(&path, &version),
-        ManagerKind::Pnpm => scan_pnpm(&path),
+        ManagerKind::Pnpm => {
+            let grc = pnpm_global_rc();
+            let grc_ref = if grc.exists() {
+                Some(grc.as_path())
+            } else {
+                None
+            };
+            scan_pnpm_with_global(&path, grc_ref, &version)
+        }
         ManagerKind::Bun => scan_bun(&path),
         ManagerKind::Uv => scan_uv(&path),
         ManagerKind::Yarn => scan_yarn(&path, &version),
@@ -1198,7 +1296,7 @@ fn scan_repo_configs_with_progress(
                             kind: ManagerKind::Pnpm,
                             version: ver.clone(),
                             config_path: path.clone(),
-                            recommendations: scan_pnpm(&path),
+                            recommendations: scan_pnpm(&path, ver),
                             discovered: true,
                         });
                     }
@@ -1289,6 +1387,8 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 mod tests {
     use super::*;
     use std::io::Write;
+
+    static CWD_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn tmp_file(content: &str) -> tempfile::NamedTempFile {
         let mut f = tempfile::NamedTempFile::new().unwrap();
@@ -1515,11 +1615,90 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_checks() {
+    fn scan_pnpm_all_ok() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert_eq!(recs.len(), 2);
+        assert!(recs[0].status.is_ok(), "minimum-release-age should be Ok");
+        assert!(recs[1].status.is_ok(), "ignore-scripts should be Ok");
+    }
+
+    #[test]
+    fn scan_pnpm_higher_release_age_ok() {
+        let f = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert!(recs[0].status.is_ok(), "20160 >= 10080 should be Ok");
+    }
+
+    #[test]
+    fn scan_pnpm_release_age_too_low() {
+        let f = tmp_file("minimum-release-age=100\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "100 < 10080 should be WrongValue"
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_release_age_missing() {
         let f = tmp_file("ignore-scripts=true\n");
-        let recs = scan_pnpm(f.path());
-        assert_eq!(recs.len(), 1);
-        assert!(recs[0].status.is_ok());
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert_eq!(recs.len(), 2);
+        assert!(
+            matches!(recs[0].status, CheckStatus::Missing),
+            "minimum-release-age should be Missing"
+        );
+        assert!(recs[1].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pnpm_old_version_unsupported() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.15.0");
+        assert!(
+            recs[0].status.is_unsupported(),
+            "pnpm 10.15 should be Unsupported for minimum-release-age"
+        );
+        assert!(recs[1].status.is_ok(), "ignore-scripts has no version gate");
+    }
+
+    #[test]
+    fn scan_pnpm_global_rc_fallback() {
+        let npmrc = tmp_file("ignore-scripts=true\n");
+        let global = tmp_file("minimum-release-age=10080\n");
+        let recs = scan_pnpm_with_global(npmrc.path(), Some(global.path()), "10.16.0");
+        assert_eq!(recs.len(), 2);
+        assert!(
+            recs[0].status.is_ok(),
+            "should find minimum-release-age from global rc"
+        );
+        assert!(recs[1].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pnpm_npmrc_wins_over_global_rc() {
+        let npmrc = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
+        let global = tmp_file("minimum-release-age=100\n");
+        let recs = scan_pnpm_with_global(npmrc.path(), Some(global.path()), "10.16.0");
+        assert!(
+            recs[0].status.is_ok(),
+            ".npmrc value 20160 should win over global rc value 100"
+        );
+    }
+
+    #[test]
+    fn check_flat_min_int_basic() {
+        let mut cfg = HashMap::new();
+        cfg.insert("minimum-release-age".into(), "10080".into());
+        let r = check_flat_min_int(&cfg, "minimum-release-age", 10080, "test");
+        assert!(r.status.is_ok());
+
+        let r = check_flat_min_int(&cfg, "minimum-release-age", 5000, "test");
+        assert!(r.status.is_ok(), "10080 >= 5000 should be Ok");
+
+        let r = check_flat_min_int(&cfg, "minimum-release-age", 20000, "test");
+        assert!(matches!(r.status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1619,6 +1798,53 @@ mod tests {
         assert!(!h.as_os_str().is_empty());
     }
 
+    #[test]
+    fn find_repo_configs_starts_from_current_dir() {
+        let root = std::env::temp_dir().join(format!(
+            "depsguard_search_root_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let cwd = root.join("cwd");
+        let outside = root.join("outside");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(cwd.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
+        fs::write(outside.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
+
+        let _cwd_lock = CWD_ENV_LOCK.lock().unwrap();
+        let prev_cwd = std::env::current_dir().unwrap();
+        let prev_home = std::env::var_os("HOME");
+
+        unsafe {
+            std::env::set_var("HOME", &root);
+        }
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let results = find_repo_configs(&mut |_| {});
+
+        std::env::set_current_dir(prev_cwd).unwrap();
+        match prev_home {
+            Some(val) => unsafe { std::env::set_var("HOME", val) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+        let _ = fs::remove_dir_all(&root);
+
+        let paths: Vec<PathBuf> = results.into_iter().map(|(p, _)| p).collect();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(
+            paths[0].file_name().and_then(|n| n.to_str()),
+            Some("pnpm-workspace.yaml")
+        );
+        assert!(
+            !paths[0].to_string_lossy().contains("/outside/"),
+            "search should stay under current_dir; got {paths:?}"
+        );
+    }
+
     // ── Cross-platform config path tests ──────────────────────────────
 
     #[test]
@@ -1633,6 +1859,33 @@ mod tests {
         let home = Path::new("/home/testuser");
         let p = config_path_for(ManagerKind::Pnpm, home, TargetOs::Linux);
         assert_eq!(p, PathBuf::from("/home/testuser/.npmrc"));
+    }
+
+    #[test]
+    fn pnpm_global_rc_linux() {
+        let home = Path::new("/home/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::Linux);
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/pnpm/rc"));
+    }
+
+    #[test]
+    fn pnpm_global_rc_macos() {
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::MacOs);
+        assert_eq!(
+            p,
+            PathBuf::from("/Users/testuser/Library/Preferences/pnpm/rc")
+        );
+    }
+
+    #[test]
+    fn pnpm_global_rc_windows() {
+        let home = Path::new("C:/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::Windows);
+        assert!(
+            p.to_str().unwrap().contains("pnpm"),
+            "Windows pnpm global rc should contain 'pnpm': {p:?}"
+        );
     }
 
     #[test]
