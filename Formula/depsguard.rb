@@ -4,17 +4,17 @@
 class Depsguard < Formula
   desc "Harden package manager configs against supply chain attacks, built by Arnica"
   homepage "https://depsguard.com"
-  version "0.1.28"
+  version "0.1.29"
   license "MIT"
   head "https://github.com/arnica/depsguard.git", branch: "main"
 
   on_macos do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/arnica/depsguard/releases/download/v0.1.28/depsguard-macos-arm64.tar.gz"
-      sha256 "a6270d81d50f806292c3078bd33378ff31990a566e62c93821184e8392136b2c"
+      url "https://github.com/arnica/depsguard/releases/download/v0.1.29/depsguard-macos-arm64.tar.gz"
+      sha256 "f7612846d81aa6c4250847584b503392d5fd4585313b806c11fadc11f607e158"
     elsif Hardware::CPU.intel?
-      url "https://github.com/arnica/depsguard/releases/download/v0.1.28/depsguard-macos-amd64.tar.gz"
-      sha256 "d88605cfdad0cbf84ad15403066b6fd3a6f40fd4758e473a9f4aaf2291a06171"
+      url "https://github.com/arnica/depsguard/releases/download/v0.1.29/depsguard-macos-amd64.tar.gz"
+      sha256 "ed259e88949ec094e2c789ba99fbeb417dd8b6fa0d09d50772d9af893e4f4829"
     else
       odie "depsguard: unsupported macOS architecture: #{Hardware::CPU.arch}"
     end
@@ -22,11 +22,11 @@ class Depsguard < Formula
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/arnica/depsguard/releases/download/v0.1.28/depsguard-linux-arm64-gnu.tar.gz"
-      sha256 "83bc38805f8f09acd9eb4eebfb5e3da435b01ca4c41e147a2f9328dde69950d8"
+      url "https://github.com/arnica/depsguard/releases/download/v0.1.29/depsguard-linux-arm64-gnu.tar.gz"
+      sha256 "ab415d0f02bd40ffc6c3d510a846ca9eb07b85b9a740554d00ec80c1270a6cd9"
     elsif Hardware::CPU.intel?
-      url "https://github.com/arnica/depsguard/releases/download/v0.1.28/depsguard-linux-amd64-gnu.tar.gz"
-      sha256 "2eeaa5cc71c8ba1c349f68b66cc6efc7446a86a1191bcb09dd7913dda0894a4f"
+      url "https://github.com/arnica/depsguard/releases/download/v0.1.29/depsguard-linux-amd64-gnu.tar.gz"
+      sha256 "8b7f75f04037bda3ff01b73fe7c68129651ae4a337357fa454a0ba77706db8cd"
     else
       odie "depsguard: unsupported Linux architecture: #{Hardware::CPU.arch}"
     end
