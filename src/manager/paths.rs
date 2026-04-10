@@ -142,13 +142,7 @@ pub fn pnpm_config_dir_for(home: &Path, os: TargetOs) -> PathBuf {
                     home.join(".config/pnpm")
                 }
             }
-            TargetOs::Linux => {
-                if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
-                    PathBuf::from(xdg).join("pnpm")
-                } else {
-                    home.join(".config/pnpm")
-                }
-            }
+            TargetOs::Linux => home.join(".config/pnpm"),
         }
     }
 }
@@ -189,13 +183,17 @@ pub fn pnpm_global_rc_from_cli(version: &str) -> Option<PathBuf> {
     if !version_at_least(version, 10, 21) {
         return None;
     }
-    let output = Command::new("pnpm")
-        .args(["config", "get", "globalconfig"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
+    let args = ["config", "get", "globalconfig"];
+    let result = Command::new("pnpm").args(args).output();
+    let output = match result {
+        Ok(o) if o.status.success() => o,
+        _ if cfg!(target_os = "windows") => Command::new("pnpm.cmd")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?,
+        _ => return None,
+    };
     parse_command_path(&output.stdout)
 }
 
