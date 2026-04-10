@@ -193,11 +193,6 @@ fn scan_repo_configs_with_progress(
     results
 }
 
-#[cfg(test)]
-pub fn scan_all() -> Vec<ManagerInfo> {
-    scan_all_with_progress(|_, _| {})
-}
-
 /// Scan all managers, calling `on_progress(step_description, fraction)` after each step.
 pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<ManagerInfo> {
     let managers: Vec<ManagerKind> = ManagerKind::USER_LEVEL
@@ -237,8 +232,8 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 #[cfg(test)]
 mod tests {
     use super::config::{
-        check_flat_min_int, read_dependabot_entries, read_flat_config, read_json_string_value,
-        read_toml_value, read_yaml_value,
+        read_dependabot_entries, read_flat_config, read_json_string_value, read_toml_value,
+        read_yaml_value,
     };
     use super::paths::{
         config_path_for, pnpm_global_rc_for, pnpm_global_yaml_for, select_scan_paths,

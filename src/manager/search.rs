@@ -47,16 +47,6 @@ const RENOVATE_FILENAMES: &[&str] = &[
     ".renovaterc.json5",
 ];
 
-/// Find pnpm-workspace.yaml files (backward-compat wrapper around `find_repo_configs`).
-#[cfg(test)]
-pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
-    find_repo_configs(on_dir)
-        .into_iter()
-        .filter(|(_, kind)| *kind == RepoConfigKind::PnpmWorkspace)
-        .map(|(p, _)| p)
-        .collect()
-}
-
 /// Search from the current working directory downward for all recognized repo config files.
 pub fn find_repo_configs(on_dir: &mut dyn FnMut(&Path)) -> Vec<(PathBuf, RepoConfigKind)> {
     let mut results = Vec::new();

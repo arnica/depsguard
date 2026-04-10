@@ -139,14 +139,6 @@ impl ManagerKind {
         names
     }
 
-    /// Whether this kind is only discovered in repos (not user-level config).
-    #[cfg(test)]
-    pub fn is_repo_only(self) -> bool {
-        matches!(
-            self,
-            ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot
-        )
-    }
 }
 
 /// A detected package manager with its version, config location, and security check results.
