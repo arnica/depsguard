@@ -58,7 +58,7 @@ pub fn find_repo_configs(on_dir: &mut dyn FnMut(&Path)) -> Vec<(PathBuf, RepoCon
     results
 }
 
-fn classify_file(name: &str, parent: &Path, home: &Path) -> Option<RepoConfigKind> {
+pub(super) fn classify_file(name: &str, parent: &Path, home: &Path) -> Option<RepoConfigKind> {
     match name {
         "pnpm-workspace.yaml" => Some(RepoConfigKind::PnpmWorkspace),
         ".npmrc" => {

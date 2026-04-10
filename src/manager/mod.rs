@@ -235,12 +235,15 @@ mod tests {
         read_dependabot_entries, read_flat_config, read_json_string_value, read_toml_value,
         read_yaml_value,
     };
-    use super::detect::{get_delay_days, is_excluded, set_delay_days, set_excluded_managers};
-    use super::paths::{
-        config_path_for, pnpm_config_dir_for, pnpm_global_rc_for, pnpm_global_rc_from_cli,
-        pnpm_global_yaml_for, select_scan_paths, user_config_candidates,
+    use super::detect::{
+        get_delay_days, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
+        skip_search_enabled,
     };
-    use super::search::find_repo_configs;
+    use super::paths::{
+        appdata_dir, config_path_for, display_path, pnpm_config_dir_for, pnpm_global_rc_for,
+        pnpm_global_rc_from_cli, pnpm_global_yaml_for, select_scan_paths, user_config_candidates,
+    };
+    use super::search::{classify_file, find_repo_configs};
     use super::*;
     use std::collections::HashMap;
     use std::io::Write;
@@ -501,6 +504,155 @@ mod tests {
         set_delay_days(14);
         assert_eq!(get_delay_days(), 14);
         set_delay_days(prev);
+    }
+
+    #[test]
+    fn skip_search_round_trip() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = skip_search_enabled();
+        set_skip_search(true);
+        assert!(skip_search_enabled());
+        set_skip_search(false);
+        assert!(!skip_search_enabled());
+        set_skip_search(prev);
+    }
+
+    // ── display_path tests ──────────────────────────────────────────
+
+    #[test]
+    fn display_path_under_home() {
+        let home = home_dir();
+        let p = home.join("projects/foo");
+        let result = display_path(&p);
+        assert_eq!(result, "~/projects/foo");
+    }
+
+    #[test]
+    fn display_path_outside_home() {
+        let p = Path::new("/tmp/somewhere/else");
+        let result = display_path(p);
+        assert_eq!(result, "/tmp/somewhere/else");
+    }
+
+    // ── appdata_dir tests ───────────────────────────────────────────
+
+    #[test]
+    fn appdata_dir_fallback_when_unset() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("APPDATA");
+        unsafe { std::env::remove_var("APPDATA") };
+        let result = appdata_dir();
+        match prev {
+            Some(v) => unsafe { std::env::set_var("APPDATA", v) },
+            None => {}
+        }
+        let home = home_dir();
+        assert_eq!(result, home.join("AppData/Roaming"));
+    }
+
+    #[test]
+    fn appdata_dir_uses_env_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("APPDATA");
+        unsafe { std::env::set_var("APPDATA", "/tmp/fake-appdata") };
+        let result = appdata_dir();
+        match prev {
+            Some(v) => unsafe { std::env::set_var("APPDATA", v) },
+            None => unsafe { std::env::remove_var("APPDATA") },
+        }
+        assert_eq!(result, PathBuf::from("/tmp/fake-appdata"));
+    }
+
+    // ── classify_file tests ─────────────────────────────────────────
+
+    #[test]
+    fn classify_pnpm_workspace() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(
+            classify_file("pnpm-workspace.yaml", dir, home),
+            Some(RepoConfigKind::PnpmWorkspace)
+        );
+    }
+
+    #[test]
+    fn classify_npmrc_at_home_is_none() {
+        let home = Path::new("/home/user");
+        assert_eq!(classify_file(".npmrc", home, home), None);
+    }
+
+    #[test]
+    fn classify_npmrc_in_project() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(
+            classify_file(".npmrc", dir, home),
+            Some(RepoConfigKind::Npmrc)
+        );
+    }
+
+    #[test]
+    fn classify_yarnrc_at_home_is_none() {
+        let home = Path::new("/home/user");
+        assert_eq!(classify_file(".yarnrc.yml", home, home), None);
+    }
+
+    #[test]
+    fn classify_yarnrc_in_project() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(
+            classify_file(".yarnrc.yml", dir, home),
+            Some(RepoConfigKind::YarnRc)
+        );
+    }
+
+    #[test]
+    fn classify_dependabot_in_github_dir() {
+        let home = Path::new("/home/user");
+        let gh = Path::new("/home/user/project/.github");
+        assert_eq!(
+            classify_file("dependabot.yml", gh, home),
+            Some(RepoConfigKind::Dependabot)
+        );
+        assert_eq!(
+            classify_file("dependabot.yaml", gh, home),
+            Some(RepoConfigKind::Dependabot)
+        );
+    }
+
+    #[test]
+    fn classify_dependabot_outside_github_is_none() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(classify_file("dependabot.yml", dir, home), None);
+    }
+
+    #[test]
+    fn classify_renovate_filenames() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        for name in &[
+            "renovate.json",
+            "renovate.json5",
+            ".renovaterc",
+            ".renovaterc.json",
+            ".renovaterc.json5",
+        ] {
+            assert_eq!(
+                classify_file(name, dir, home),
+                Some(RepoConfigKind::Renovate),
+                "expected Renovate for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_unknown_file_is_none() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(classify_file("package.json", dir, home), None);
+        assert_eq!(classify_file("Cargo.toml", dir, home), None);
     }
 
     #[test]
