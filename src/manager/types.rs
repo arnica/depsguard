@@ -138,7 +138,6 @@ impl ManagerKind {
         }
         names
     }
-
 }
 
 /// A detected package manager with its version, config location, and security check results.
