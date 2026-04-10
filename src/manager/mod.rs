@@ -235,9 +235,10 @@ mod tests {
         read_dependabot_entries, read_flat_config, read_json_string_value, read_toml_value,
         read_yaml_value,
     };
+    use super::detect::{get_delay_days, is_excluded, set_delay_days, set_excluded_managers};
     use super::paths::{
-        config_path_for, pnpm_global_rc_for, pnpm_global_yaml_for, select_scan_paths,
-        user_config_candidates,
+        config_path_for, pnpm_config_dir_for, pnpm_global_rc_for, pnpm_global_rc_from_cli,
+        pnpm_global_yaml_for, select_scan_paths, user_config_candidates,
     };
     use super::search::find_repo_configs;
     use super::*;
@@ -461,6 +462,45 @@ mod tests {
         for k in ManagerKind::ALL {
             assert!(!k.name().is_empty());
         }
+    }
+
+    // ── detect / exclusion tests ────────────────────────────────────
+
+    #[test]
+    fn is_excluded_pnpm_cascades_to_variants() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        set_excluded_managers(vec!["pnpm".into()]);
+        assert!(is_excluded(ManagerKind::Pnpm));
+        assert!(is_excluded(ManagerKind::PnpmGlobal));
+        assert!(is_excluded(ManagerKind::PnpmWorkspace));
+        assert!(!is_excluded(ManagerKind::Npm));
+        assert!(!is_excluded(ManagerKind::Bun));
+        set_excluded_managers(vec![]);
+    }
+
+    #[test]
+    fn is_excluded_case_insensitive() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        set_excluded_managers(vec!["NPM".into()]);
+        assert!(is_excluded(ManagerKind::Npm));
+        set_excluded_managers(vec![]);
+    }
+
+    #[test]
+    fn is_excluded_empty_list_excludes_nothing() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        set_excluded_managers(vec![]);
+        assert!(!is_excluded(ManagerKind::Npm));
+        assert!(!is_excluded(ManagerKind::Pnpm));
+    }
+
+    #[test]
+    fn delay_days_round_trip() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = get_delay_days();
+        set_delay_days(14);
+        assert_eq!(get_delay_days(), 14);
+        set_delay_days(prev);
     }
 
     #[test]
@@ -927,6 +967,52 @@ mod tests {
     }
 
     #[test]
+    fn pnpm_config_dir_ignores_empty_xdg() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", "") };
+        let home = Path::new("/home/testuser");
+        let p = pnpm_config_dir_for(home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(
+            p,
+            PathBuf::from("/home/testuser/.config/pnpm"),
+            "empty XDG_CONFIG_HOME should fall back to ~/.config/pnpm"
+        );
+    }
+
+    #[test]
+    fn config_path_linux_uv_ignores_empty_xdg() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", "") };
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Uv, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/uv/uv.toml"));
+    }
+
+    #[test]
+    fn config_path_linux_bun_ignores_empty_xdg() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", "") };
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/home/testuser/.bunfig.toml"));
+    }
+
+    #[test]
     fn pnpm_global_rc_windows() {
         let home = Path::new("C:/Users/testuser");
         let p = pnpm_global_rc_for(home, TargetOs::Windows);
@@ -1349,6 +1435,15 @@ mod tests {
             p,
             PathBuf::from("/Users/testuser/Library/Preferences/pnpm/config.yaml")
         );
+    }
+
+    // ── pnpm global CLI path tests ──────────────────────────────────
+
+    #[test]
+    fn pnpm_global_rc_from_cli_rejects_old_version() {
+        assert_eq!(pnpm_global_rc_from_cli("10.20.0"), None);
+        assert_eq!(pnpm_global_rc_from_cli("9.0.0"), None);
+        assert_eq!(pnpm_global_rc_from_cli("10.0.0"), None);
     }
 
     // ── pnpm global scan tests (v10 rc format) ─────────────────────
