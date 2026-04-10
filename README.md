@@ -1,5 +1,11 @@
 # depsguard
 
+[![CI](https://github.com/arnica/depsguard/actions/workflows/ci.yml/badge.svg)](https://github.com/arnica/depsguard/actions/workflows/ci.yml)
+[![Security Audit](https://github.com/arnica/depsguard/actions/workflows/audit.yml/badge.svg)](https://github.com/arnica/depsguard/actions/workflows/audit.yml)
+[![crates.io](https://img.shields.io/crates/v/depsguard.svg)](https://crates.io/crates/depsguard)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/MSRV-1.74-orange.svg)](https://blog.rust-lang.org/2023/11/16/Rust-1.74.0.html)
+
 ```text
      _                                          _
   __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
