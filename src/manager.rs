@@ -47,7 +47,8 @@ pub fn is_excluded(kind: ManagerKind) -> bool {
     let name = kind.name();
     excluded.iter().any(|e| {
         e.eq_ignore_ascii_case(name)
-            || (kind == ManagerKind::PnpmWorkspace && e.eq_ignore_ascii_case("pnpm"))
+            || ((kind == ManagerKind::PnpmWorkspace || kind == ManagerKind::PnpmGlobal)
+                && e.eq_ignore_ascii_case("pnpm"))
     })
 }
 
@@ -60,6 +61,8 @@ pub enum CheckStatus {
     Ok,
     /// The setting is not configured at all.
     Missing,
+    /// The config file itself does not exist yet.
+    FileMissing,
     /// The setting exists but has an incorrect value.
     WrongValue(String),
     /// The feature is not available (e.g. tool version too old). Not auto-fixable.
@@ -83,6 +86,7 @@ impl std::fmt::Display for CheckStatus {
         match self {
             CheckStatus::Ok => write!(f, "OK"),
             CheckStatus::Missing => write!(f, "Not set"),
+            CheckStatus::FileMissing => write!(f, "file missing"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),
             CheckStatus::Unsupported(v) => write!(f, "{v}"),
         }
@@ -135,6 +139,7 @@ fn version_at_least(version: &str, min_major: u64, min_minor: u64) -> bool {
 pub enum ManagerKind {
     Npm,
     Pnpm,
+    PnpmGlobal,
     PnpmWorkspace,
     Bun,
     Uv,
@@ -148,6 +153,7 @@ impl ManagerKind {
     pub const USER_LEVEL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
+        ManagerKind::PnpmGlobal,
         ManagerKind::Bun,
         ManagerKind::Uv,
         ManagerKind::Yarn,
@@ -156,6 +162,7 @@ impl ManagerKind {
     pub const ALL: &[ManagerKind] = &[
         ManagerKind::Npm,
         ManagerKind::Pnpm,
+        ManagerKind::PnpmGlobal,
         ManagerKind::PnpmWorkspace,
         ManagerKind::Bun,
         ManagerKind::Uv,
@@ -167,7 +174,7 @@ impl ManagerKind {
     pub fn name(self) -> &'static str {
         match self {
             ManagerKind::Npm => "npm",
-            ManagerKind::Pnpm => "pnpm",
+            ManagerKind::Pnpm | ManagerKind::PnpmGlobal => "pnpm",
             ManagerKind::PnpmWorkspace => "pnpm-workspace",
             ManagerKind::Bun => "bun",
             ManagerKind::Uv => "uv",
@@ -180,7 +187,7 @@ impl ManagerKind {
     pub fn icon(self) -> &'static str {
         match self {
             ManagerKind::Npm => "📦",
-            ManagerKind::Pnpm | ManagerKind::PnpmWorkspace => "⚡",
+            ManagerKind::Pnpm | ManagerKind::PnpmGlobal | ManagerKind::PnpmWorkspace => "⚡",
             ManagerKind::Bun => "🥟",
             ManagerKind::Uv => "🐍",
             ManagerKind::Yarn => "🧶",
@@ -318,20 +325,77 @@ pub fn config_path_for(kind: ManagerKind, home: &Path, os: TargetOs) -> PathBuf 
     config_path_full(kind, home, &home.join("AppData/Roaming"), os)
 }
 
-fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
+fn xdg_config_home() -> Option<PathBuf> {
+    env::var_os("XDG_CONFIG_HOME")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Select the user-level config paths to scan.
+///
+/// Rules:
+/// - If exactly one candidate exists, scan it and ignore the others.
+/// - If multiple candidates exist, scan all existing candidates independently.
+/// - If none exist, scan only the default candidate (reported as missing).
+fn select_scan_paths(candidates: &[PathBuf], default_idx: usize) -> Vec<PathBuf> {
+    let existing: Vec<PathBuf> = candidates.iter().filter(|p| p.exists()).cloned().collect();
+    if existing.is_empty() {
+        vec![candidates[default_idx].clone()]
+    } else {
+        existing
+    }
+}
+
+/// Return (candidates, default_index) for a manager's user-level config.
+fn user_config_candidates(
+    kind: ManagerKind,
+    home: &Path,
+    appdata: &Path,
+    os: TargetOs,
+) -> (Vec<PathBuf>, usize) {
     match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => home.join(".npmrc"),
-        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
-            PathBuf::new()
+        ManagerKind::Npm | ManagerKind::Pnpm => (vec![home.join(".npmrc")], 0),
+        ManagerKind::Yarn => (vec![home.join(".yarnrc.yml")], 0),
+        ManagerKind::PnpmGlobal
+        | ManagerKind::PnpmWorkspace
+        | ManagerKind::Renovate
+        | ManagerKind::Dependabot => (vec![PathBuf::new()], 0),
+        ManagerKind::Bun => {
+            let mut cands = Vec::new();
+            let mut default_idx = 0;
+            if let Some(xdg) = xdg_config_home() {
+                cands.push(xdg.join(".bunfig.toml"));
+                cands.push(home.join(".bunfig.toml"));
+                default_idx = 0; // XDG is set, so create there
+            } else {
+                cands.push(home.join(".bunfig.toml"));
+            }
+            (cands, default_idx)
         }
-        ManagerKind::Bun => home.join(".bunfig.toml"),
-        ManagerKind::Yarn => home.join(".yarnrc.yml"),
         ManagerKind::Uv => match os {
-            TargetOs::MacOs => home.join("Library/Application Support/uv/uv.toml"),
-            TargetOs::Windows => appdata.join("uv/uv.toml"),
-            TargetOs::Linux => home.join(".config/uv/uv.toml"),
+            TargetOs::Windows => (vec![appdata.join("uv/uv.toml")], 0),
+            TargetOs::MacOs | TargetOs::Linux => {
+                let mut cands = Vec::new();
+                let mut default_idx = 0;
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("uv/uv.toml"));
+                    cands.push(home.join(".config/uv/uv.toml"));
+                    default_idx = 0; // XDG is set, so create there
+                } else {
+                    cands.push(home.join(".config/uv/uv.toml"));
+                }
+                (cands, default_idx)
+            }
         },
     }
+}
+
+fn config_path_full(kind: ManagerKind, home: &Path, appdata: &Path, os: TargetOs) -> PathBuf {
+    let (cands, default_idx) = user_config_candidates(kind, home, appdata, os);
+    select_scan_paths(&cands, default_idx)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
 }
 
 /// Resolve the config file path for a package manager on the current OS.
@@ -339,6 +403,92 @@ pub fn config_path(kind: ManagerKind) -> PathBuf {
     let home = home_dir();
     let appdata = appdata_dir();
     config_path_full(kind, &home, &appdata, TargetOs::current())
+}
+
+/// Resolve the pnpm global config directory for a given OS.
+/// Mirrors `getConfigDir` from pnpm's `config/reader/src/dirs.ts`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_config_dir_for(home: &Path, os: TargetOs) -> PathBuf {
+    if let Some(xdg) = xdg_config_home() {
+        xdg.join("pnpm")
+    } else {
+        match os {
+            TargetOs::MacOs => home.join("Library/Preferences/pnpm"),
+            TargetOs::Windows => {
+                if let Ok(local) = env::var("LOCALAPPDATA") {
+                    PathBuf::from(local).join("pnpm/config")
+                } else {
+                    home.join(".config/pnpm")
+                }
+            }
+            TargetOs::Linux => {
+                if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
+                    PathBuf::from(xdg).join("pnpm")
+                } else {
+                    home.join(".config/pnpm")
+                }
+            }
+        }
+    }
+}
+
+/// Resolve the pnpm global `rc` file (pnpm <= 10) for a given OS.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_global_rc_for(home: &Path, os: TargetOs) -> PathBuf {
+    pnpm_config_dir_for(home, os).join("rc")
+}
+
+/// Resolve the pnpm global `config.yaml` file (pnpm >= 11) for a given OS.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn pnpm_global_yaml_for(home: &Path, os: TargetOs) -> PathBuf {
+    pnpm_config_dir_for(home, os).join("config.yaml")
+}
+
+/// Resolve the pnpm global `rc` file on the current OS.
+pub fn pnpm_global_rc() -> PathBuf {
+    pnpm_global_rc_for(&home_dir(), TargetOs::current())
+}
+
+/// Resolve the pnpm global `config.yaml` file on the current OS.
+pub fn pnpm_global_yaml() -> PathBuf {
+    pnpm_global_yaml_for(&home_dir(), TargetOs::current())
+}
+
+fn parse_command_path(output: &[u8]) -> Option<PathBuf> {
+    let value = String::from_utf8(output.to_vec()).ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("undefined") {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
+fn missing_status_for_path(path: &Path) -> CheckStatus {
+    if path.exists() {
+        CheckStatus::Missing
+    } else {
+        CheckStatus::FileMissing
+    }
+}
+
+fn pnpm_global_rc_from_cli(version: &str) -> Option<PathBuf> {
+    if !version_at_least(version, 10, 21) {
+        return None;
+    }
+    let output = Command::new("pnpm")
+        .args(["config", "get", "globalconfig"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_command_path(&output.stdout)
+}
+
+/// Whether this pnpm version uses `config.yaml` (>= 11) instead of `rc`.
+fn pnpm_uses_yaml_config(version: &str) -> bool {
+    version_at_least(version, 11, 0)
 }
 
 // ── Config reading ────────────────────────────────────────────────────
@@ -719,14 +869,15 @@ pub fn find_pnpm_workspaces(on_dir: &mut dyn FnMut(&Path)) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Search from the user's home directory downward for all recognized repo config files.
+/// Search from the current working directory downward for all recognized repo config files.
 ///
 /// Calls `on_dir` for each directory visited to enable live progress display.
 /// Skips files at the HOME level for `.npmrc` and `.yarnrc.yml` (handled by user-level scan).
 pub fn find_repo_configs(on_dir: &mut dyn FnMut(&Path)) -> Vec<(PathBuf, RepoConfigKind)> {
     let mut results = Vec::new();
     let home = home_dir();
-    search_downward(&home, 0, &home, &mut results, on_dir);
+    let start = env::current_dir().unwrap_or_else(|_| home.clone());
+    search_downward(&start, 0, &home, &mut results, on_dir);
     results.sort_by(|a, b| a.0.cmp(&b.0));
     results.dedup_by(|a, b| a.0 == b.0);
     results
@@ -820,6 +971,7 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     let cfg = read_flat_config(path);
     let release_age = if version_at_least(version, 11, 10) {
         check_flat(
+            path,
             &cfg,
             "min-release-age",
             &days.to_string(),
@@ -838,6 +990,7 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     vec![
         release_age,
         check_flat(
+            path,
             &cfg,
             "ignore-scripts",
             "true",
@@ -846,16 +999,155 @@ fn scan_npm(path: &Path, version: &str) -> Vec<Recommendation> {
     ]
 }
 
-fn scan_pnpm(path: &Path) -> Vec<Recommendation> {
+fn scan_pnpm(path: &Path, version: &str) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let minutes = days.saturating_mul(24).saturating_mul(60);
     let cfg = read_flat_config(path);
-    // ignore-scripts is shared with npm in the same .npmrc — only check
-    // pnpm-specific keys here. Release age is handled via pnpm-workspace.yaml.
-    vec![check_flat(
-        &cfg,
-        "ignore-scripts",
-        "true",
-        "Block malicious install scripts",
-    )]
+
+    let release_age = if version_at_least(version, 10, 16) {
+        check_flat_min_int(
+            path,
+            &cfg,
+            "minimum-release-age",
+            minutes,
+            &format!("Delay new versions by {days} days"),
+        )
+    } else {
+        Recommendation {
+            key: "minimum-release-age".into(),
+            description: format!("Delay new versions by {days} days"),
+            expected: minutes.to_string(),
+            status: CheckStatus::Unsupported(format!(
+                "requires pnpm \u{2265} 10.16 (have {version})"
+            )),
+        }
+    };
+
+    vec![
+        release_age,
+        check_flat(
+            path,
+            &cfg,
+            "ignore-scripts",
+            "true",
+            "Block malicious install scripts",
+        ),
+    ]
+}
+
+/// Scan the pnpm global config file.
+///
+/// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all 4 security
+///   settings are accepted.
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase) — only
+///   `minimumReleaseAge` and `blockExoticSubdeps` are valid globally;
+///   `trustPolicy` and `strictDepBuilds` are workspace-only.
+fn scan_pnpm_global(path: &Path, version: &str) -> Vec<Recommendation> {
+    let days = get_delay_days();
+    let minutes = days.saturating_mul(24).saturating_mul(60);
+
+    if pnpm_uses_yaml_config(version) {
+        // pnpm >= 11: config.yaml (YAML, camelCase)
+        let check = |min_major, min_minor, key: &str, expected: &str, desc: &str, mode| {
+            if version_at_least(version, min_major, min_minor) {
+                check_yaml(path, key, expected, desc, mode)
+            } else {
+                Recommendation {
+                    key: key.into(),
+                    description: desc.into(),
+                    expected: expected.into(),
+                    status: CheckStatus::Unsupported(format!(
+                        "requires pnpm \u{2265} {min_major}.{min_minor} (have {version})"
+                    )),
+                }
+            }
+        };
+        vec![
+            check(
+                10,
+                16,
+                "minimumReleaseAge",
+                &minutes.to_string(),
+                &format!("Delay new versions by {days} days"),
+                YamlCheck::MinInt(minutes),
+            ),
+            check(
+                10,
+                26,
+                "blockExoticSubdeps",
+                "true",
+                "Block untrusted transitive deps",
+                YamlCheck::Exact,
+            ),
+        ]
+    } else {
+        // pnpm <= 10: rc file (INI, kebab-case) — all settings accepted
+        let cfg = read_flat_config(path);
+        let check_ver =
+            |min_major, min_minor, key: &str, expected: &str, desc: &str, mode: FlatCheck| {
+                if version_at_least(version, min_major, min_minor) {
+                    match mode {
+                        FlatCheck::Exact => check_flat(path, &cfg, key, expected, desc),
+                        FlatCheck::MinInt(min) => check_flat_min_int(path, &cfg, key, min, desc),
+                    }
+                } else {
+                    Recommendation {
+                        key: key.into(),
+                        description: desc.into(),
+                        expected: expected.into(),
+                        status: CheckStatus::Unsupported(format!(
+                            "requires pnpm \u{2265} {min_major}.{min_minor} (have {version})"
+                        )),
+                    }
+                }
+            };
+        vec![
+            check_ver(
+                10,
+                16,
+                "minimum-release-age",
+                &minutes.to_string(),
+                &format!("Delay new versions by {days} days"),
+                FlatCheck::MinInt(minutes),
+            ),
+            check_ver(
+                10,
+                26,
+                "block-exotic-subdeps",
+                "true",
+                "Block untrusted transitive deps",
+                FlatCheck::Exact,
+            ),
+            check_ver(
+                10,
+                21,
+                "trust-policy",
+                "no-downgrade",
+                "Block provenance downgrades",
+                FlatCheck::Exact,
+            ),
+            check_ver(
+                10,
+                3,
+                "strict-dep-builds",
+                "true",
+                "Fail on unreviewed build scripts",
+                FlatCheck::Exact,
+            ),
+            check_flat(
+                path,
+                &cfg,
+                "ignore-scripts",
+                "true",
+                "Block malicious install scripts",
+            ),
+        ]
+    }
+}
+
+enum FlatCheck {
+    Exact,
+    MinInt(u64),
 }
 
 fn scan_pnpm_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
@@ -927,7 +1219,7 @@ fn check_yaml(
 ) -> Recommendation {
     let val = read_yaml_value(path, key);
     let status = match (&val, &check) {
-        (None, _) => CheckStatus::Missing,
+        (None, _) => missing_status_for_path(path),
         (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok,
         (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
             Ok(n) if n >= *min => CheckStatus::Ok,
@@ -953,7 +1245,7 @@ fn scan_bun(path: &Path) -> Vec<Recommendation> {
             Ok(_) => CheckStatus::WrongValue(v.clone()),
             Err(_) => CheckStatus::WrongValue(v.clone()),
         },
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "install.minimumReleaseAge".into(),
@@ -997,7 +1289,7 @@ fn scan_uv(path: &Path) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "exclude-newer".into(),
@@ -1039,7 +1331,7 @@ fn scan_yarn(path: &Path, version: &str) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "npmMinimalAgeGate".into(),
@@ -1064,7 +1356,7 @@ fn scan_renovate(path: &Path) -> Vec<Recommendation> {
                 CheckStatus::WrongValue(v.clone())
             }
         }
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     vec![Recommendation {
         key: "minimumReleaseAge".into(),
@@ -1107,6 +1399,7 @@ fn scan_dependabot(path: &Path) -> Vec<Recommendation> {
 }
 
 fn check_flat(
+    path: &Path,
     cfg: &HashMap<String, String>,
     key: &str,
     expected: &str,
@@ -1115,7 +1408,7 @@ fn check_flat(
     let status = match cfg.get(key) {
         Some(v) if v == expected => CheckStatus::Ok,
         Some(v) => CheckStatus::WrongValue(v.clone()),
-        None => CheckStatus::Missing,
+        None => missing_status_for_path(path),
     };
     Recommendation {
         key: key.into(),
@@ -1125,27 +1418,76 @@ fn check_flat(
     }
 }
 
-/// Scan a single package manager: detect version, read config, and return recommendations.
-pub fn scan_manager(kind: ManagerKind) -> Option<ManagerInfo> {
-    let version = detect_version(kind.name())?;
-    let path = config_path(kind);
-    let recommendations = match kind {
-        ManagerKind::Npm => scan_npm(&path, &version),
-        ManagerKind::Pnpm => scan_pnpm(&path),
-        ManagerKind::Bun => scan_bun(&path),
-        ManagerKind::Uv => scan_uv(&path),
-        ManagerKind::Yarn => scan_yarn(&path, &version),
-        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
-            unreachable!("repo-level managers are scanned via find_repo_configs")
+/// Like [`check_flat`] but treats the value as an integer and checks `>= min`.
+/// A value equal to or higher than `min` is Ok (more protective is fine).
+fn check_flat_min_int(
+    path: &Path,
+    cfg: &HashMap<String, String>,
+    key: &str,
+    min: u64,
+    desc: &str,
+) -> Recommendation {
+    let status = match cfg.get(key) {
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) if n >= min => CheckStatus::Ok,
+            _ => CheckStatus::WrongValue(v.clone()),
+        },
+        None => missing_status_for_path(path),
+    };
+    Recommendation {
+        key: key.into(),
+        description: desc.into(),
+        expected: min.to_string(),
+        status,
+    }
+}
+
+/// Scan a user-level package manager and return one or more config entries.
+pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
+    let Some(version) = detect_version(kind.name()) else {
+        return Vec::new();
+    };
+    let home = home_dir();
+    let appdata = appdata_dir();
+    let os = TargetOs::current();
+
+    let paths = match kind {
+        ManagerKind::PnpmGlobal => {
+            if pnpm_uses_yaml_config(&version) {
+                vec![pnpm_global_yaml()]
+            } else {
+                vec![pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc)]
+            }
+        }
+        _ => {
+            let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
+            select_scan_paths(&cands, default_idx)
         }
     };
-    Some(ManagerInfo {
-        kind,
-        version,
-        config_path: path,
-        recommendations,
-        discovered: false,
-    })
+
+    paths
+        .into_iter()
+        .map(|path| {
+            let recommendations = match kind {
+                ManagerKind::Npm => scan_npm(&path, &version),
+                ManagerKind::Pnpm => scan_pnpm(&path, &version),
+                ManagerKind::PnpmGlobal => scan_pnpm_global(&path, &version),
+                ManagerKind::Bun => scan_bun(&path),
+                ManagerKind::Uv => scan_uv(&path),
+                ManagerKind::Yarn => scan_yarn(&path, &version),
+                ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
+                    unreachable!("repo-level managers are scanned via find_repo_configs")
+                }
+            };
+            ManagerInfo {
+                kind,
+                version: version.clone(),
+                config_path: path,
+                recommendations,
+                discovered: false,
+            }
+        })
+        .collect()
 }
 
 /// Scan discovered repo configs and return ManagerInfo entries.
@@ -1158,7 +1500,7 @@ fn scan_repo_configs_with_progress(
     let configs = find_repo_configs(&mut |dir| {
         let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("...");
         on_progress(
-            &format!("Searching for configs in ~/{}...", dir_name),
+            &format!("Searching current tree in {dir_name}/..."),
             base_frac,
         );
     });
@@ -1198,7 +1540,7 @@ fn scan_repo_configs_with_progress(
                             kind: ManagerKind::Pnpm,
                             version: ver.clone(),
                             config_path: path.clone(),
-                            recommendations: scan_pnpm(&path),
+                            recommendations: scan_pnpm(&path, ver),
                             discovered: true,
                         });
                     }
@@ -1266,9 +1608,10 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
             &format!("Checking {} configuration...", kind.name()),
             i as f32 / base_steps as f32,
         );
-        if let Some(info) = scan_manager(kind) {
-            detected_versions.insert(kind.name(), info.version.clone());
-            results.push(info);
+        let infos = scan_manager_infos(kind);
+        if let Some(first) = infos.first() {
+            detected_versions.insert(kind.name(), first.version.clone());
+            results.extend(infos);
         }
     }
 
@@ -1289,6 +1632,8 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 mod tests {
     use super::*;
     use std::io::Write;
+
+    static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn tmp_file(content: &str) -> tempfile::NamedTempFile {
         let mut f = tempfile::NamedTempFile::new().unwrap();
@@ -1371,6 +1716,52 @@ mod tests {
     }
 
     #[test]
+    fn parse_command_path_trims_and_parses() {
+        assert_eq!(
+            parse_command_path(b"/tmp/pnpm/rc\n"),
+            Some(PathBuf::from("/tmp/pnpm/rc"))
+        );
+        assert_eq!(parse_command_path(b"undefined\n"), None);
+        assert_eq!(parse_command_path(b"\n"), None);
+    }
+
+    #[test]
+    fn select_scan_paths_none_exist_uses_default() {
+        let a = PathBuf::from("/tmp/does-not-exist-a");
+        let b = PathBuf::from("/tmp/does-not-exist-b");
+        let paths = select_scan_paths(&[a.clone(), b], 0);
+        assert_eq!(paths, vec![a]);
+    }
+
+    #[test]
+    fn select_scan_paths_one_exists() {
+        let exists = tmp_file("content\n");
+        let missing = PathBuf::from("/tmp/does-not-exist-x");
+        let paths = select_scan_paths(&[missing, exists.path().to_path_buf()], 0);
+        assert_eq!(paths, vec![exists.path().to_path_buf()]);
+    }
+
+    #[test]
+    fn select_scan_paths_both_exist() {
+        let a = tmp_file("a\n");
+        let b = tmp_file("b\n");
+        let paths = select_scan_paths(&[a.path().to_path_buf(), b.path().to_path_buf()], 0);
+        assert_eq!(paths, vec![a.path().to_path_buf(), b.path().to_path_buf()]);
+    }
+
+    #[test]
+    fn select_scan_paths_none_exist_uses_xdg_default() {
+        let xdg = PathBuf::from("/tmp/xdg-not-exist/uv/uv.toml");
+        let fallback = PathBuf::from("/tmp/not-exist/.config/uv/uv.toml");
+        let paths = select_scan_paths(&[xdg.clone(), fallback], 0);
+        assert_eq!(
+            paths,
+            vec![xdg],
+            "should use XDG as default when it's index 0"
+        );
+    }
+
+    #[test]
     fn read_toml_value_basic() {
         let f = tmp_file("foo = \"bar\"\n\n[install]\nminimumReleaseAge = 604800\n");
         assert_eq!(read_toml_value(f.path(), "foo"), Some("bar".into()));
@@ -1427,6 +1818,7 @@ mod tests {
     fn check_status_display() {
         assert_eq!(format!("{}", CheckStatus::Ok), "OK");
         assert_eq!(format!("{}", CheckStatus::Missing), "Not set");
+        assert_eq!(format!("{}", CheckStatus::FileMissing), "file missing");
         assert_eq!(
             format!("{}", CheckStatus::WrongValue("3".into())),
             "Current: 3"
@@ -1434,9 +1826,32 @@ mod tests {
     }
 
     #[test]
+    fn scan_npm_missing_file_is_not_same_as_empty_file() {
+        let missing = scan_npm(Path::new("/definitely/not/a/file"), "11.12.1");
+        assert_eq!(missing[0].status.to_string(), "file missing");
+        assert_eq!(missing[1].status.to_string(), "file missing");
+
+        let empty = tmp_file("");
+        let empty_recs = scan_npm(empty.path(), "11.12.1");
+        assert_eq!(empty_recs[0].status.to_string(), "Not set");
+        assert_eq!(empty_recs[1].status.to_string(), "Not set");
+    }
+
+    #[test]
+    fn scan_uv_missing_file_is_not_same_as_empty_file() {
+        let missing = scan_uv(Path::new("/definitely/not/a/file"));
+        assert_eq!(missing[0].status.to_string(), "file missing");
+
+        let empty = tmp_file("");
+        let empty_recs = scan_uv(empty.path());
+        assert_eq!(empty_recs[0].status.to_string(), "Not set");
+    }
+
+    #[test]
     fn check_status_is_ok() {
         assert!(CheckStatus::Ok.is_ok());
         assert!(!CheckStatus::Missing.is_ok());
+        assert!(!CheckStatus::FileMissing.is_ok());
         assert!(!CheckStatus::WrongValue("x".into()).is_ok());
     }
 
@@ -1456,6 +1871,13 @@ mod tests {
             status: CheckStatus::Missing,
         };
         assert!(bad.needs_fix());
+        let missing_file = Recommendation {
+            key: "k".into(),
+            description: "d".into(),
+            expected: "v".into(),
+            status: CheckStatus::FileMissing,
+        };
+        assert!(missing_file.needs_fix());
     }
 
     #[test]
@@ -1515,11 +1937,84 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_checks() {
+    fn scan_pnpm_all_ok() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert_eq!(recs.len(), 2);
+        assert!(recs[0].status.is_ok(), "minimum-release-age should be Ok");
+        assert!(recs[1].status.is_ok(), "ignore-scripts should be Ok");
+    }
+
+    #[test]
+    fn scan_pnpm_higher_release_age_ok() {
+        let f = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert!(recs[0].status.is_ok(), "20160 >= 10080 should be Ok");
+    }
+
+    #[test]
+    fn scan_pnpm_release_age_too_low() {
+        let f = tmp_file("minimum-release-age=100\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "100 < 10080 should be WrongValue"
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_release_age_missing() {
         let f = tmp_file("ignore-scripts=true\n");
-        let recs = scan_pnpm(f.path());
-        assert_eq!(recs.len(), 1);
-        assert!(recs[0].status.is_ok());
+        let recs = scan_pnpm(f.path(), "10.16.0");
+        assert_eq!(recs.len(), 2);
+        assert!(
+            matches!(recs[0].status, CheckStatus::Missing),
+            "minimum-release-age should be Missing"
+        );
+        assert!(recs[1].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pnpm_old_version_unsupported() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm(f.path(), "10.15.0");
+        assert!(
+            recs[0].status.is_unsupported(),
+            "pnpm 10.15 should be Unsupported for minimum-release-age"
+        );
+        assert!(recs[1].status.is_ok(), "ignore-scripts has no version gate");
+    }
+
+    #[test]
+    fn check_flat_min_int_basic() {
+        let mut cfg = HashMap::new();
+        cfg.insert("minimum-release-age".into(), "10080".into());
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            10080,
+            "test",
+        );
+        assert!(r.status.is_ok());
+
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            5000,
+            "test",
+        );
+        assert!(r.status.is_ok(), "10080 >= 5000 should be Ok");
+
+        let r = check_flat_min_int(
+            Path::new("/tmp/existing"),
+            &cfg,
+            "minimum-release-age",
+            20000,
+            "test",
+        );
+        assert!(matches!(r.status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1619,6 +2114,53 @@ mod tests {
         assert!(!h.as_os_str().is_empty());
     }
 
+    #[test]
+    fn find_repo_configs_starts_from_current_dir() {
+        let root = std::env::temp_dir().join(format!(
+            "depsguard_search_root_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let cwd = root.join("cwd");
+        let outside = root.join("outside");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(cwd.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
+        fs::write(outside.join("pnpm-workspace.yaml"), "packages:\n  - .\n").unwrap();
+
+        let _cwd_lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev_cwd = std::env::current_dir().unwrap();
+        let prev_home = std::env::var_os("HOME");
+
+        unsafe {
+            std::env::set_var("HOME", &root);
+        }
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let results = find_repo_configs(&mut |_| {});
+
+        std::env::set_current_dir(prev_cwd).unwrap();
+        match prev_home {
+            Some(val) => unsafe { std::env::set_var("HOME", val) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+        let _ = fs::remove_dir_all(&root);
+
+        let paths: Vec<PathBuf> = results.into_iter().map(|(p, _)| p).collect();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(
+            paths[0].file_name().and_then(|n| n.to_str()),
+            Some("pnpm-workspace.yaml")
+        );
+        assert!(
+            !paths[0].to_string_lossy().contains("/outside/"),
+            "search should stay under current_dir; got {paths:?}"
+        );
+    }
+
     // ── Cross-platform config path tests ──────────────────────────────
 
     #[test]
@@ -1636,16 +2178,87 @@ mod tests {
     }
 
     #[test]
+    fn pnpm_global_rc_linux() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/home/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/pnpm/rc"));
+    }
+
+    #[test]
+    fn pnpm_global_rc_macos() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(
+            p,
+            PathBuf::from("/Users/testuser/Library/Preferences/pnpm/rc")
+        );
+    }
+
+    #[test]
+    fn pnpm_global_rc_macos_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/pnpm/rc"));
+    }
+
+    #[test]
+    fn pnpm_global_rc_windows() {
+        let home = Path::new("C:/Users/testuser");
+        let p = pnpm_global_rc_for(home, TargetOs::Windows);
+        assert!(
+            p.to_str().unwrap().contains("pnpm"),
+            "Windows pnpm global rc should contain 'pnpm': {p:?}"
+        );
+    }
+
+    #[test]
     fn config_path_linux_bun() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/home/testuser");
         let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("/home/testuser/.bunfig.toml"));
     }
 
     #[test]
     fn config_path_linux_uv() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/home/testuser");
         let p = config_path_for(ManagerKind::Uv, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("/home/testuser/.config/uv/uv.toml"));
     }
 
@@ -1658,12 +2271,32 @@ mod tests {
 
     #[test]
     fn config_path_macos_uv() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("/Users/testuser");
         let p = config_path_for(ManagerKind::Uv, home, TargetOs::MacOs);
-        assert_eq!(
-            p,
-            PathBuf::from("/Users/testuser/Library/Application Support/uv/uv.toml")
-        );
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(p, PathBuf::from("/Users/testuser/.config/uv/uv.toml"));
+    }
+
+    #[test]
+    fn config_path_macos_uv_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/Users/testuser");
+        let p = config_path_for(ManagerKind::Uv, home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/uv/uv.toml"));
     }
 
     #[test]
@@ -1688,9 +2321,32 @@ mod tests {
 
     #[test]
     fn config_path_windows_bun() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let home = Path::new("C:/Users/testuser");
         let p = config_path_for(ManagerKind::Bun, home, TargetOs::Windows);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
         assert_eq!(p, PathBuf::from("C:/Users/testuser/.bunfig.toml"));
+    }
+
+    #[test]
+    fn config_path_linux_bun_uses_xdg_when_set() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        }
+        let home = Path::new("/home/testuser");
+        let p = config_path_for(ManagerKind::Bun, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(p, PathBuf::from("/tmp/xdg-test/.bunfig.toml"));
     }
 
     #[test]
@@ -2090,6 +2746,127 @@ mod tests {
         let recs = scan_dependabot(f.path());
         assert_eq!(recs.len(), 1);
         assert_eq!(recs[0].key, "cooldown.default-days");
+    }
+
+    // ── pnpm global config.yaml path tests ─────────────────────────
+
+    #[test]
+    fn pnpm_global_yaml_linux() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/home/testuser");
+        let p = pnpm_global_yaml_for(home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(p, PathBuf::from("/home/testuser/.config/pnpm/config.yaml"));
+    }
+
+    #[test]
+    fn pnpm_global_yaml_macos() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/Users/testuser");
+        let p = pnpm_global_yaml_for(home, TargetOs::MacOs);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(
+            p,
+            PathBuf::from("/Users/testuser/Library/Preferences/pnpm/config.yaml")
+        );
+    }
+
+    // ── scan_pnpm_global tests (v10 rc format) ──────────────────────
+
+    #[test]
+    fn scan_pnpm_global_v10_all_ok() {
+        let f = tmp_file(
+            "minimum-release-age=10080\nblock-exotic-subdeps=true\ntrust-policy=no-downgrade\nstrict-dep-builds=true\nignore-scripts=true\n",
+        );
+        let recs = scan_pnpm_global(f.path(), "10.33.0");
+        assert_eq!(recs.len(), 5);
+        assert!(
+            recs.iter().all(|r| r.status.is_ok()),
+            "all should be Ok: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_missing_all() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "10.33.0");
+        assert_eq!(recs.len(), 5);
+        let missing_count = recs
+            .iter()
+            .filter(|r| matches!(r.status, CheckStatus::Missing))
+            .count();
+        assert_eq!(missing_count, 5);
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_old_version_partial() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = scan_pnpm_global(f.path(), "10.16.0");
+        let age = recs
+            .iter()
+            .find(|r| r.key == "minimum-release-age")
+            .unwrap();
+        assert!(age.status.is_ok());
+        let ignore = recs.iter().find(|r| r.key == "ignore-scripts").unwrap();
+        assert!(ignore.status.is_ok());
+        let trust = recs.iter().find(|r| r.key == "trust-policy").unwrap();
+        assert!(trust.status.is_unsupported());
+        let exotic = recs
+            .iter()
+            .find(|r| r.key == "block-exotic-subdeps")
+            .unwrap();
+        assert!(exotic.status.is_unsupported());
+    }
+
+    // ── scan_pnpm_global tests (v11 config.yaml format) ─────────────
+
+    #[test]
+    fn scan_pnpm_global_v11_all_ok() {
+        let f = tmp_file("minimumReleaseAge: 10080\nblockExoticSubdeps: true\n");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2);
+        assert!(recs.iter().all(|r| r.status.is_ok()));
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_missing() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2, "v11 global should only have 2 settings");
+        assert!(recs
+            .iter()
+            .all(|r| matches!(r.status, CheckStatus::Missing)));
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_no_trust_or_strict() {
+        let f = tmp_file("");
+        let recs = scan_pnpm_global(f.path(), "11.0.0");
+        assert!(
+            recs.iter()
+                .all(|r| r.key != "trustPolicy" && r.key != "strictDepBuilds"),
+            "v11 global should not check trustPolicy or strictDepBuilds"
+        );
+    }
+
+    #[test]
+    fn pnpm_uses_yaml_config_versions() {
+        assert!(!pnpm_uses_yaml_config("10.33.0"));
+        assert!(!pnpm_uses_yaml_config("10.0.0"));
+        assert!(pnpm_uses_yaml_config("11.0.0"));
+        assert!(pnpm_uses_yaml_config("11.0.0-beta.8"));
+        assert!(pnpm_uses_yaml_config("12.0.0"));
     }
 
     // ── config_path_yarn tests ───────────────────────────────────────

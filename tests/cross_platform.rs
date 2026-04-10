@@ -57,8 +57,7 @@ fn uv_config_scan_succeeds() {
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    // On Linux, uv config is at ~/.config/uv/uv.toml
-    // On macOS, it's at ~/Library/Application Support/uv/uv.toml
+    // On Linux and macOS, uv config is at ~/.config/uv/uv.toml
     // This test verifies the tool runs successfully with a fake HOME.
     // The actual path used depends on the host OS.
     assert!(out.status.success(), "scan should succeed: {stdout}");

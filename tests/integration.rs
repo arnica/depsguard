@@ -47,12 +47,68 @@ fn has_command(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Check that `npm` is at least `major.minor` (e.g. 11.10 for min-release-age).
+fn npm_at_least(major: u32, minor: u32) -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|v| {
+            let parts: Vec<&str> = v.trim().split('.').collect();
+            let m = parts.first()?.parse::<u32>().ok()?;
+            let n = parts.get(1)?.parse::<u32>().ok()?;
+            Some(m > major || (m == major && n >= minor))
+        })
+        .unwrap_or(false)
+}
+
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_depsguard"))
         .args(args)
         .env("HOME", home)
         .output()
         .expect("failed to run depsguard")
+}
+
+fn run_depsguard_with_env(
+    args: &[&str],
+    home: &Path,
+    envs: &[(&str, &std::ffi::OsStr)],
+) -> std::process::Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_depsguard"));
+    cmd.args(args).env("HOME", home);
+    for (key, val) in envs {
+        cmd.env(key, val);
+    }
+    cmd.output().expect("failed to run depsguard")
+}
+
+fn display_under_home(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rel) => format!("~/{}", rel.display()).replace('\\', "/"),
+        Err(_) => path.display().to_string().replace('\\', "/"),
+    }
+}
+
+fn pnpm_globalconfig_path(home: &Path, envs: &[(&str, &std::ffi::OsStr)]) -> Option<PathBuf> {
+    let mut cmd = Command::new("pnpm");
+    cmd.args(["config", "get", "globalconfig"])
+        .env("HOME", home);
+    for (key, val) in envs {
+        cmd.env(key, val);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(out.stdout).ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("undefined") {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -152,9 +208,61 @@ fn npm_config_fix_and_rescan() {
 }
 
 #[test]
-#[ignore] // requires network access — run with: cargo test -- --ignored
-fn npm_install_with_min_release_age() {
+fn npm_scan_distinguishes_missing_file_from_empty_file() {
     if !has_command("npm") {
+        return;
+    }
+
+    let missing_home = TmpHome::new("npm_missing_file");
+    let missing_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "uv",
+            "--exclude",
+            "yarn",
+        ],
+        missing_home.path(),
+    );
+    let missing_stdout = String::from_utf8_lossy(&missing_out.stdout);
+    assert!(
+        missing_stdout.contains("file missing"),
+        "expected missing npm config to say file missing:\n{missing_stdout}"
+    );
+
+    let empty_home = TmpHome::new("npm_empty_file");
+    fs::write(empty_home.path().join(".npmrc"), "").unwrap();
+    let empty_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "uv",
+            "--exclude",
+            "yarn",
+        ],
+        empty_home.path(),
+    );
+    let empty_stdout = String::from_utf8_lossy(&empty_out.stdout);
+    assert!(
+        empty_stdout.contains("not set"),
+        "expected empty npm config to say not set:\n{empty_stdout}"
+    );
+}
+
+#[test]
+#[ignore] // requires network access + npm >= 11.10
+fn npm_install_with_min_release_age() {
+    if !has_command("npm") || !npm_at_least(11, 10) {
         return;
     }
     let home = TmpHome::new("npm_install");
@@ -168,10 +276,10 @@ fn npm_install_with_min_release_age() {
     )
     .unwrap();
 
-    // Create a minimal package.json
+    // Create a minimal package.json using a tiny package with no deps/scripts.
     fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 
@@ -183,7 +291,7 @@ fn npm_install_with_min_release_age() {
         .output()
         .unwrap();
 
-    // Should succeed (is-odd 3.0.1 is old enough)
+    // Should succeed (picocolors 1.1.1 is old enough)
     assert!(
         out.status.success(),
         "npm install failed: {}",
@@ -202,6 +310,63 @@ fn pnpm_scan_detects_missing_config() {
     let out = run_depsguard(&["--scan"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("pnpm"), "pnpm not detected");
+}
+
+#[test]
+fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_globalconfig_missing");
+    let Some(globalconfig) = pnpm_globalconfig_path(home.path(), &[]) else {
+        return;
+    };
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected_display = display_under_home(&globalconfig, home.path());
+
+    assert!(
+        stdout.contains(&expected_display),
+        "depsguard should use pnpm globalconfig path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("minimum-release-age — file missing"),
+        "expected pnpm minimum-release-age finding:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_globalconfig_xdg_missing");
+    let xdg = home.path().join("xdg");
+    fs::create_dir_all(&xdg).unwrap();
+    let Some(globalconfig) =
+        pnpm_globalconfig_path(home.path(), &[("XDG_CONFIG_HOME", xdg.as_os_str())])
+    else {
+        return;
+    };
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected_display = display_under_home(&globalconfig, home.path());
+
+    assert!(
+        stdout.contains(&expected_display),
+        "depsguard should use pnpm globalconfig XDG path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("minimum-release-age — file missing"),
+        "expected pnpm minimum-release-age finding:\n{stdout}"
+    );
 }
 
 #[test]
@@ -224,40 +389,205 @@ fn pnpm_config_fix_and_rescan() {
     assert!(stdout.contains("pnpm"), "pnpm not detected");
 }
 
+/// Prove that pnpm READS `minimum-release-age` from `.npmrc`.
+///
+/// Strategy:
+///   1. Set minimum-release-age to an impossibly high value (999_999_999 min ~ 1902 years).
+///   2. Try `pnpm install` with a well-known old package pinned to an exact version.
+///   3. pnpm must REJECT the install (no version can be that old).
+///   4. Then set minimum-release-age=0 and re-run: pnpm must SUCCEED.
+///
+/// This proves that pnpm reads the setting from `.npmrc` and uses it.
 #[test]
-#[ignore] // requires network access
-fn pnpm_install_with_config() {
+#[ignore] // requires network access + pnpm >= 10.16
+fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
     if !has_command("pnpm") {
         return;
     }
-    let home = TmpHome::new("pnpm_install");
+    let home = TmpHome::new("pnpm_mra_block");
     let project = home.path().join("testproject");
     fs::create_dir_all(&project).unwrap();
 
     fs::write(
-        home.path().join(".npmrc"),
-        "minimum-release-age=10080\nignore-scripts=true\n",
-    )
-    .unwrap();
-
-    fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 
-    let out = Command::new("pnpm")
+    // Step 1: impossibly high minimum-release-age -> install should FAIL
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=999999999\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_blocked = Command::new("pnpm")
         .args(["install", "--no-frozen-lockfile"])
         .current_dir(&project)
         .env("HOME", home.path())
         .output()
         .unwrap();
 
-    // pnpm install should succeed
+    let stderr_blocked = String::from_utf8_lossy(&out_blocked.stderr);
     assert!(
-        out.status.success(),
-        "pnpm install failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        !out_blocked.status.success(),
+        "pnpm install should FAIL with minimum-release-age=999999999 but succeeded.\n\
+         stderr: {stderr_blocked}"
+    );
+
+    // Clean up any partial lockfile / node_modules from the failed attempt
+    let _ = fs::remove_file(project.join("pnpm-lock.yaml"));
+    let _ = fs::remove_dir_all(project.join("node_modules"));
+
+    // Step 2: minimum-release-age=0 -> install should SUCCEED
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=0\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_ok = Command::new("pnpm")
+        .args(["install", "--no-frozen-lockfile"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        out_ok.status.success(),
+        "pnpm install should SUCCEED with minimum-release-age=0.\n\
+         stderr: {}",
+        String::from_utf8_lossy(&out_ok.stderr)
+    );
+}
+
+/// Same proof for npm: `min-release-age` in `.npmrc` actually blocks installs.
+#[test]
+#[ignore] // requires network access + npm >= 11.10
+fn npm_min_release_age_from_npmrc_blocks_install() {
+    if !has_command("npm") || !npm_at_least(11, 10) {
+        return;
+    }
+    let home = TmpHome::new("npm_mra_block");
+    let project = home.path().join("testproject");
+    fs::create_dir_all(&project).unwrap();
+
+    fs::write(
+        project.join("package.json"),
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
+    )
+    .unwrap();
+
+    // Step 1: impossibly high min-release-age -> install should FAIL
+    fs::write(
+        home.path().join(".npmrc"),
+        "min-release-age=999999\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_blocked = Command::new("npm")
+        .args(["install"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    let stderr_blocked = String::from_utf8_lossy(&out_blocked.stderr);
+    assert!(
+        !out_blocked.status.success(),
+        "npm install should FAIL with min-release-age=999999 but succeeded.\n\
+         stderr: {stderr_blocked}"
+    );
+
+    // Clean up
+    let _ = fs::remove_file(project.join("package-lock.json"));
+    let _ = fs::remove_dir_all(project.join("node_modules"));
+
+    // Step 2: min-release-age=0 -> install should SUCCEED
+    fs::write(
+        home.path().join(".npmrc"),
+        "min-release-age=0\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out_ok = Command::new("npm")
+        .args(["install"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        out_ok.status.success(),
+        "npm install should SUCCEED with min-release-age=0.\n\
+         stderr: {}",
+        String::from_utf8_lossy(&out_ok.stderr)
+    );
+}
+
+/// Prove that depsguard detects minimum-release-age in pnpm's .npmrc correctly.
+#[test]
+fn pnpm_scan_detects_minimum_release_age_in_npmrc() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_mra_scan");
+    fs::write(
+        home.path().join(".npmrc"),
+        "minimum-release-age=10080\nignore-scripts=true\n",
+    )
+    .unwrap();
+
+    let out = run_depsguard(&["--scan"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("minimum-release-age"),
+        "depsguard should report minimum-release-age for pnpm:\n{stdout}"
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn pnpm_scan_detects_global_rc_in_library_preferences() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_global_rc");
+    let rc = home.path().join("Library/Preferences/pnpm/rc");
+    fs::create_dir_all(rc.parent().unwrap()).unwrap();
+    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("✓ minimum-release-age — 10080")
+            || stdout.contains("\u{2713} minimum-release-age — 10080"),
+        "depsguard should detect pnpm global rc in Library/Preferences:\n{stdout}"
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn pnpm_scan_detects_global_rc_in_xdg_config_home() {
+    if !has_command("pnpm") {
+        return;
+    }
+    let home = TmpHome::new("pnpm_global_xdg");
+    let xdg = home.path().join("xdg");
+    let rc = xdg.join("pnpm/rc");
+    fs::create_dir_all(rc.parent().unwrap()).unwrap();
+    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("✓ minimum-release-age — 10080")
+            || stdout.contains("\u{2713} minimum-release-age — 10080"),
+        "depsguard should detect pnpm global rc in XDG_CONFIG_HOME:\n{stdout}"
     );
 }
 
@@ -293,6 +623,72 @@ fn bun_config_fix_and_rescan() {
     );
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn bun_config_fix_and_rescan_from_xdg() {
+    if !has_command("bun") {
+        return;
+    }
+    let home = TmpHome::new("bun_xdg_fix");
+    let xdg = home.path().join("xdg");
+    let bunfig = xdg.join(".bunfig.toml");
+    fs::create_dir_all(&xdg).unwrap();
+    fs::write(&bunfig, "[install]\nminimumReleaseAge = 604800\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("bun"), "bun not detected");
+    assert!(
+        stdout.contains("\u{2713} install.minimumReleaseAge")
+            || stdout.contains("✓ install.minimumReleaseAge"),
+        "Expected SECURE after bun XDG config:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn bun_scan_checks_both_user_configs_when_both_exist() {
+    if !has_command("bun") {
+        return;
+    }
+    let home = TmpHome::new("bun_both_configs");
+    let xdg = home.path().join("xdg");
+    let xdg_bunfig = xdg.join(".bunfig.toml");
+    let home_bunfig = home.path().join(".bunfig.toml");
+    fs::create_dir_all(&xdg).unwrap();
+    fs::write(&xdg_bunfig, "[install]\nminimumReleaseAge = 604800\n").unwrap();
+    fs::write(&home_bunfig, "").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/xdg/.bunfig.toml"),
+        "expected XDG bunfig path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("~/.bunfig.toml"),
+        "expected home bunfig path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ install.minimumReleaseAge — 604800")
+            || stdout.contains("\u{2713} install.minimumReleaseAge — 604800"),
+        "expected configured bun entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("install.minimumReleaseAge — not set"),
+        "expected missing bun entry for the second config:\n{stdout}"
+    );
+}
+
 #[test]
 #[ignore] // requires network access
 fn bun_install_with_config() {
@@ -311,7 +707,7 @@ fn bun_install_with_config() {
 
     fs::write(
         project.join("package.json"),
-        r#"{"name":"test","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}"#,
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
     )
     .unwrap();
 
@@ -350,7 +746,7 @@ fn uv_config_fix_and_rescan() {
     let home = TmpHome::new("uv_fix");
     // uv config path differs by OS
     let uv_config = if cfg!(target_os = "macos") {
-        home.path().join("Library/Application Support/uv/uv.toml")
+        home.path().join(".config/uv/uv.toml")
     } else if cfg!(target_os = "windows") {
         home.path().join("AppData/Roaming/uv/uv.toml")
     } else {
@@ -366,6 +762,126 @@ fn uv_config_fix_and_rescan() {
     assert!(
         stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
         "Expected exclude-newer OK after uv config:\n{stdout}"
+    );
+}
+
+#[test]
+fn uv_scan_distinguishes_missing_file_from_empty_file() {
+    if !has_command("uv") {
+        return;
+    }
+
+    let missing_home = TmpHome::new("uv_missing_file");
+    let missing_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "npm",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "yarn",
+        ],
+        missing_home.path(),
+    );
+    let missing_stdout = String::from_utf8_lossy(&missing_out.stdout);
+    assert!(
+        missing_stdout.contains("file missing"),
+        "expected missing uv config to say file missing:\n{missing_stdout}"
+    );
+
+    let empty_home = TmpHome::new("uv_empty_file");
+    let uv_config = empty_home.path().join(".config/uv/uv.toml");
+    fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
+    fs::write(&uv_config, "").unwrap();
+    let empty_out = run_depsguard(
+        &[
+            "--scan",
+            "--no-search",
+            "--exclude",
+            "npm",
+            "--exclude",
+            "pnpm",
+            "--exclude",
+            "bun",
+            "--exclude",
+            "yarn",
+        ],
+        empty_home.path(),
+    );
+    let empty_stdout = String::from_utf8_lossy(&empty_out.stdout);
+    assert!(
+        empty_stdout.contains("not set"),
+        "expected empty uv config to say not set:\n{empty_stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn uv_config_fix_and_rescan_from_xdg() {
+    if !has_command("uv") {
+        return;
+    }
+    let home = TmpHome::new("uv_xdg_fix");
+    let xdg = home.path().join("xdg");
+    let uv_config = xdg.join("uv/uv.toml");
+    fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
+    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("uv"), "uv not detected");
+    assert!(
+        stdout.contains("\u{2713}") && stdout.contains("exclude-newer"),
+        "Expected exclude-newer OK after uv XDG config:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn uv_scan_checks_both_user_configs_when_both_exist() {
+    if !has_command("uv") {
+        return;
+    }
+    let home = TmpHome::new("uv_both_configs");
+    let xdg = home.path().join("xdg");
+    let xdg_uv = xdg.join("uv/uv.toml");
+    let home_uv = home.path().join(".config/uv/uv.toml");
+    fs::create_dir_all(xdg_uv.parent().unwrap()).unwrap();
+    fs::create_dir_all(home_uv.parent().unwrap()).unwrap();
+    fs::write(&xdg_uv, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    fs::write(&home_uv, "").unwrap();
+
+    let out = run_depsguard_with_env(
+        &["--scan", "--no-search"],
+        home.path(),
+        &[("XDG_CONFIG_HOME", xdg.as_os_str())],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/xdg/uv/uv.toml"),
+        "expected XDG uv path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("~/.config/uv/uv.toml"),
+        "expected home uv path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ exclude-newer — 7 days")
+            || stdout.contains("\u{2713} exclude-newer — 7 days"),
+        "expected configured uv entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("exclude-newer — not set"),
+        "expected missing uv entry for the second config:\n{stdout}"
     );
 }
 

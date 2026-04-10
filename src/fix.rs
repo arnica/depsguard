@@ -207,6 +207,17 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
             }
         }
         ManagerKind::Pnpm => apply_flat_fix(path, &rec.key, &rec.expected),
+        ManagerKind::PnpmGlobal => {
+            let is_yaml = path
+                .extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml");
+            if is_yaml {
+                let quote = matches!(rec.key.as_str(), "trustPolicy");
+                apply_yaml_fix(path, &rec.key, &rec.expected, quote)
+            } else {
+                apply_flat_fix(path, &rec.key, &rec.expected)
+            }
+        }
         ManagerKind::Bun => apply_toml_fix(path, &rec.key, &rec.expected, false),
         ManagerKind::Uv => apply_toml_fix(path, &rec.key, &rec.expected, true),
         ManagerKind::PnpmWorkspace => {
@@ -853,6 +864,67 @@ mod tests {
         };
         apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
         assert!(f.read().contains("strictDepBuilds: true"));
+    }
+
+    // ── PnpmGlobal fix tests (v10 rc vs v11 yaml) ─────────────────
+
+    #[test]
+    fn apply_fix_pnpm_global_rc_format() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "minimum-release-age".into(),
+            description: "test".into(),
+            expected: "10080".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmGlobal, f.path(), &rec).unwrap();
+        assert!(f.read().contains("minimum-release-age=10080"));
+    }
+
+    #[test]
+    fn apply_fix_pnpm_global_yaml_format() {
+        let dir =
+            std::env::temp_dir().join(format!("depsguard_pnpmglobal_yaml_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        fs::write(&path, "").unwrap();
+        let rec = Recommendation {
+            key: "minimumReleaseAge".into(),
+            description: "test".into(),
+            expected: "10080".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmGlobal, &path, &rec).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(
+            content.contains("minimumReleaseAge: 10080"),
+            "should use YAML format for .yaml file: {content}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn apply_fix_pnpm_global_yaml_trust_policy_quoted() {
+        let dir = std::env::temp_dir().join(format!(
+            "depsguard_pnpmglobal_yaml_tp_{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        fs::write(&path, "").unwrap();
+        let rec = Recommendation {
+            key: "trustPolicy".into(),
+            description: "test".into(),
+            expected: "no-downgrade".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmGlobal, &path, &rec).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(
+            content.contains("trustPolicy: \"no-downgrade\""),
+            "trustPolicy should be quoted: {content}"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     // ── Yarn fix tests ──────────────────────────────────────────────
