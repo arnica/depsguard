@@ -47,6 +47,22 @@ fn has_command(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Check that `npm` is at least `major.minor` (e.g. 11.10 for min-release-age).
+fn npm_at_least(major: u32, minor: u32) -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|v| {
+            let parts: Vec<&str> = v.trim().split('.').collect();
+            let m = parts.first()?.parse::<u32>().ok()?;
+            let n = parts.get(1)?.parse::<u32>().ok()?;
+            Some(m > major || (m == major && n >= minor))
+        })
+        .unwrap_or(false)
+}
+
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_depsguard"))
         .args(args)
@@ -244,9 +260,9 @@ fn npm_scan_distinguishes_missing_file_from_empty_file() {
 }
 
 #[test]
-#[ignore] // requires network access — run with: cargo test -- --ignored
+#[ignore] // requires network access + npm >= 11.10
 fn npm_install_with_min_release_age() {
-    if !has_command("npm") {
+    if !has_command("npm") || !npm_at_least(11, 10) {
         return;
     }
     let home = TmpHome::new("npm_install");
@@ -449,7 +465,7 @@ fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
 #[test]
 #[ignore] // requires network access + npm >= 11.10
 fn npm_min_release_age_from_npmrc_blocks_install() {
-    if !has_command("npm") {
+    if !has_command("npm") || !npm_at_least(11, 10) {
         return;
     }
     let home = TmpHome::new("npm_mra_block");
