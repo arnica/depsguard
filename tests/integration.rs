@@ -47,6 +47,22 @@ fn has_command(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Check that `npm` is at least `major.minor` (e.g. 11.10 for min-release-age).
+fn npm_at_least(major: u32, minor: u32) -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|v| {
+            let parts: Vec<&str> = v.trim().split('.').collect();
+            let m = parts.first()?.parse::<u32>().ok()?;
+            let n = parts.get(1)?.parse::<u32>().ok()?;
+            Some(m > major || (m == major && n >= minor))
+        })
+        .unwrap_or(false)
+}
+
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_depsguard"))
         .args(args)
@@ -244,9 +260,9 @@ fn npm_scan_distinguishes_missing_file_from_empty_file() {
 }
 
 #[test]
-#[ignore] // requires network access — run with: cargo test -- --ignored
+#[ignore] // requires network access + npm >= 11.10
 fn npm_install_with_min_release_age() {
-    if !has_command("npm") {
+    if !has_command("npm") || !npm_at_least(11, 10) {
         return;
     }
     let home = TmpHome::new("npm_install");
@@ -449,7 +465,7 @@ fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
 #[test]
 #[ignore] // requires network access + npm >= 11.10
 fn npm_min_release_age_from_npmrc_blocks_install() {
-    if !has_command("npm") {
+    if !has_command("npm") || !npm_at_least(11, 10) {
         return;
     }
     let home = TmpHome::new("npm_mra_block");
@@ -627,7 +643,8 @@ fn bun_config_fix_and_rescan_from_xdg() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("bun"), "bun not detected");
     assert!(
-        stdout.contains("\u{2713} minimumReleaseAge") || stdout.contains("✓ minimumReleaseAge"),
+        stdout.contains("\u{2713} install.minimumReleaseAge")
+            || stdout.contains("✓ install.minimumReleaseAge"),
         "Expected SECURE after bun XDG config:\n{stdout}"
     );
 }
@@ -662,12 +679,12 @@ fn bun_scan_checks_both_user_configs_when_both_exist() {
         "expected home bunfig path:\n{stdout}"
     );
     assert!(
-        stdout.contains("✓ minimumReleaseAge — 604800")
-            || stdout.contains("\u{2713} minimumReleaseAge — 604800"),
+        stdout.contains("✓ install.minimumReleaseAge — 604800")
+            || stdout.contains("\u{2713} install.minimumReleaseAge — 604800"),
         "expected configured bun entry:\n{stdout}"
     );
     assert!(
-        stdout.contains("minimumReleaseAge — not set"),
+        stdout.contains("install.minimumReleaseAge — not set"),
         "expected missing bun entry for the second config:\n{stdout}"
     );
 }
