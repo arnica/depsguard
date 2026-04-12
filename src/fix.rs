@@ -406,11 +406,13 @@ fn apply_npm_config_set(key: &str, value: &str) -> io::Result<String> {
             other
         }
     };
-    let stderr = output
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
-        .unwrap_or_default();
-    Err(io::Error::other(format!("npm config set failed: {stderr}")))
+    match output {
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            Err(io::Error::other(format!("npm config set failed: {stderr}")))
+        }
+        Err(e) => Err(io::Error::other(format!("npm config set failed: {e}"))),
+    }
 }
 
 /// Set a top-level key in a JSON/JSONC config file (e.g. renovate.json).
