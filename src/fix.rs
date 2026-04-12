@@ -384,29 +384,33 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
 }
 
 /// Try running `npm config set` with the given command name.
-fn try_npm_config_set(cmd: &str, args: &[&str]) -> Option<std::process::Output> {
-    std::process::Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
+/// Returns `Ok(output)` if the process ran (even if it failed), `Err` if it couldn't start.
+fn try_npm_config_set(cmd: &str, args: &[&str]) -> io::Result<std::process::Output> {
+    std::process::Command::new(cmd).args(args).output()
 }
 
 /// Set a user-level npm config value via `npm config set --location=user`.
 fn apply_npm_config_set(key: &str, value: &str) -> io::Result<String> {
     let setting = format!("{key}={value}");
     let args = ["config", "set", &setting, "--location=user"];
-    let result = try_npm_config_set("npm", &args)
-        .or_else(|| {
+    let output = match try_npm_config_set("npm", &args) {
+        Ok(o) if o.status.success() => return Ok(setting),
+        other => {
             if cfg!(target_os = "windows") {
-                try_npm_config_set("npm.cmd", &args)
-            } else {
-                None
+                if let Ok(o) = try_npm_config_set("npm.cmd", &args) {
+                    if o.status.success() {
+                        return Ok(setting);
+                    }
+                }
             }
-        })
-        .ok_or_else(|| io::Error::other("npm config set failed"))?;
-    let _ = result;
-    Ok(setting)
+            other
+        }
+    };
+    let stderr = output
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
+        .unwrap_or_default();
+    Err(io::Error::other(format!("npm config set failed: {stderr}")))
 }
 
 /// Set a top-level key in a JSON/JSONC config file (e.g. renovate.json).
