@@ -13,6 +13,7 @@ use ui::SelectItem;
 // ── CLI argument parsing ──────────────────────────────────────────────
 
 /// The subcommand to execute.
+#[derive(Debug)]
 enum Command {
     Interactive,
     ScanOnly,
@@ -31,9 +32,18 @@ struct CliConfig {
 }
 
 /// Errors from argument parsing, with context for display.
+#[derive(Debug)]
 enum CliError {
     UnknownFlag(String),
     BadValue(String),
+}
+
+impl std::fmt::Display for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliError::UnknownFlag(m) | CliError::BadValue(m) => f.write_str(m),
+        }
+    }
 }
 
 /// Parse command-line arguments into a structured configuration.
@@ -50,6 +60,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         "--no-workspaces", // backward compat alias
         "--delay-days",
         "--exclude",
+        "--restore",
     ];
 
     const SUBCOMMANDS: &[&str] = &["restore", "scan"];

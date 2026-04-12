@@ -874,14 +874,23 @@ fn uv_scan_checks_both_user_configs_when_both_exist() {
         stdout.contains("~/.config/uv/uv.toml"),
         "expected home uv path:\n{stdout}"
     );
-    assert!(
-        stdout.contains("✓ exclude-newer —") || stdout.contains("\u{2713} exclude-newer —"),
-        "expected configured uv entry:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("exclude-newer — not set"),
-        "expected missing uv entry for the second config:\n{stdout}"
-    );
+    let is_unsupported =
+        stdout.contains("ℹ exclude-newer") || stdout.contains("\u{2139} exclude-newer");
+    if is_unsupported {
+        assert!(
+            stdout.contains("requires uv"),
+            "unsupported uv should explain version requirement:\n{stdout}"
+        );
+    } else {
+        assert!(
+            stdout.contains("✓ exclude-newer —") || stdout.contains("\u{2713} exclude-newer —"),
+            "expected configured uv entry:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("exclude-newer — not set"),
+            "expected missing uv entry for the second config:\n{stdout}"
+        );
+    }
 }
 
 #[test]

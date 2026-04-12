@@ -965,12 +965,23 @@ pub fn print_diff_preview(
             .unwrap_or_default()
             .as_nanos();
         let tmp_path = tmp_dir.join(format!(".depsguard-preview-{}-{nonce}", std::process::id()));
+
+        // RAII guard to ensure the temp file is cleaned up on all exit paths.
+        struct TmpCleanup(std::path::PathBuf);
+        impl Drop for TmpCleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
         std::fs::write(&tmp_path, &original)?;
+        let _guard = TmpCleanup(tmp_path.clone());
         for (_item, rec) in fixes {
-            let _ = crate::fix::apply_fix(mgr.kind, &tmp_path, rec);
+            if let Err(e) = crate::fix::apply_fix(mgr.kind, &tmp_path, rec) {
+                writeln!(w, "  {RED}preview error: {e}{RESET}")?;
+            }
         }
         let modified = std::fs::read_to_string(&tmp_path).unwrap_or_default();
-        let _ = std::fs::remove_file(&tmp_path);
 
         // Unified diff with context
         let old_lines: Vec<&str> = original.lines().collect();

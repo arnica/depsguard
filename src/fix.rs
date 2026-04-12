@@ -162,17 +162,15 @@ pub fn list_backups() -> (Vec<(PathBuf, PathBuf)>, usize) {
             stale += 1;
         }
     }
-    results.sort_by(|a, b| {
-        let ts = |p: &Path| -> String {
-            let name = p
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let base = name.strip_suffix(".bak").unwrap_or(&name);
-            base.rsplit('.').next().unwrap_or("").to_string()
-        };
-        ts(&b.1).cmp(&ts(&a.1)).then(a.0.cmp(&b.0))
+    results.sort_by_cached_key(|(orig, backup)| {
+        let name = backup
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let base = name.strip_suffix(".bak").unwrap_or(&name);
+        let ts = base.rsplit('.').next().unwrap_or("").to_owned();
+        (std::cmp::Reverse(ts), orig.clone())
     });
     (results, stale)
 }
@@ -385,49 +383,29 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
     Ok(target_line)
 }
 
+/// Try running `npm config set` with the given command name.
+fn try_npm_config_set(cmd: &str, args: &[&str]) -> Option<std::process::Output> {
+    std::process::Command::new(cmd)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+}
+
 /// Set a user-level npm config value via `npm config set --location=user`.
 fn apply_npm_config_set(key: &str, value: &str) -> io::Result<String> {
     let setting = format!("{key}={value}");
-    let result = std::process::Command::new("npm")
-        .args(["config", "set", &setting, "--location=user"])
-        .output();
-    let output = match result {
-        Ok(o) if o.status.success() => o,
-        Ok(o) => {
-            // Try npm.cmd on Windows
+    let args = ["config", "set", &setting, "--location=user"];
+    let result = try_npm_config_set("npm", &args)
+        .or_else(|| {
             if cfg!(target_os = "windows") {
-                let win = std::process::Command::new("npm.cmd")
-                    .args(["config", "set", &setting, "--location=user"])
-                    .output();
-                match win {
-                    Ok(o2) if o2.status.success() => o2,
-                    _ => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        return Err(io::Error::other(format!("npm config set failed: {stderr}")));
-                    }
-                }
+                try_npm_config_set("npm.cmd", &args)
             } else {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                return Err(io::Error::other(format!("npm config set failed: {stderr}")));
+                None
             }
-        }
-        Err(e) => {
-            if cfg!(target_os = "windows") {
-                let win = std::process::Command::new("npm.cmd")
-                    .args(["config", "set", &setting, "--location=user"])
-                    .output()
-                    .map_err(|_| e)?;
-                if !win.status.success() {
-                    let stderr = String::from_utf8_lossy(&win.stderr);
-                    return Err(io::Error::other(format!("npm config set failed: {stderr}")));
-                }
-                win
-            } else {
-                return Err(e);
-            }
-        }
-    };
-    let _ = output;
+        })
+        .ok_or_else(|| io::Error::other("npm config set failed"))?;
+    let _ = result;
     Ok(setting)
 }
 

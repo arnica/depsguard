@@ -59,7 +59,12 @@ fn parse_date_to_days(date_str: &str) -> Option<u64> {
     let yoe = adj_y - era * 400;
     let doy = (153 * adj_m + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    Some(era * 146097 + doe - 719468)
+    let total = era * 146097 + doe;
+    // Guard against underflow for dates before Unix epoch (~1970)
+    if total < 719468 {
+        return None;
+    }
+    Some(total - 719468)
 }
 
 fn current_epoch_days() -> u64 {

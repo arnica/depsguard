@@ -907,8 +907,8 @@ mod tests {
         let recs = uv::scan(Path::new("/nonexistent"), UV_OLD);
         if let CheckStatus::Unsupported(msg) = &recs[0].status {
             assert!(
-                msg.contains("0.9") && msg.contains(UV_OLD),
-                "unsupported message should mention min version and current: {msg}"
+                msg.contains("0.9.17") && msg.contains(UV_OLD),
+                "unsupported message should mention full min version and current: {msg}"
             );
         } else {
             panic!("expected Unsupported, got: {:?}", recs[0].status);

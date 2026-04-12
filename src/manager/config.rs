@@ -20,7 +20,13 @@ pub fn read_flat_config(path: &Path) -> HashMap<String, String> {
             continue;
         }
         if let Some((k, v)) = line.split_once('=') {
-            let v = v.split('#').next().unwrap_or(v);
+            // Only strip comments where # is preceded by whitespace, to preserve
+            // URL fragments and other values containing #.
+            let v = if let Some(pos) = v.find(" #").or_else(|| v.find("\t#")) {
+                &v[..pos]
+            } else {
+                v
+            };
             map.insert(k.trim().to_string(), v.trim().to_string());
         }
     }
@@ -96,8 +102,14 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
         }
         if let Some((k, v)) = line.split_once('=') {
             let k = k.trim();
-            let v = v.split('#').next().unwrap_or(v).trim();
-            let v = v.trim_matches('"').trim_matches('\'');
+            // Only strip comments where # is preceded by whitespace, to preserve
+            // URL fragments and other values containing #.
+            let v = if let Some(pos) = v.find(" #").or_else(|| v.find("\t#")) {
+                &v[..pos]
+            } else {
+                v
+            };
+            let v = v.trim().trim_matches('"').trim_matches('\'');
             if current_section == target_section && k == target_key {
                 return Some(v.to_string());
             }
@@ -122,8 +134,14 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
         if let Some((k, v)) = trimmed.split_once(':') {
             let k = k.trim();
             if k == key {
-                let v = v.split('#').next().unwrap_or(v).trim();
-                let v = v.trim_matches('"').trim_matches('\'');
+                // Only strip comments where # is preceded by whitespace, to preserve
+                // URL fragments and other values containing #.
+                let v = if let Some(pos) = v.find(" #").or_else(|| v.find("\t#")) {
+                    &v[..pos]
+                } else {
+                    v
+                };
+                let v = v.trim().trim_matches('"').trim_matches('\'');
                 return Some(v.to_string());
             }
         }
