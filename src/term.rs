@@ -198,7 +198,7 @@ impl Drop for ScreenGuard {
 }
 
 /// Discard any bytes already queued in the stdin buffer (e.g. trailing mouse events).
-#[cfg(unix)]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn flush_stdin() {
     #[cfg(target_os = "linux")]
     const TCIFLUSH: i32 = 0;
@@ -214,6 +214,9 @@ pub fn flush_stdin() {
         tcflush(0, TCIFLUSH);
     }
 }
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+pub fn flush_stdin() {}
 
 #[cfg(windows)]
 pub fn flush_stdin() {
@@ -256,7 +259,8 @@ pub fn terminal_size() -> Option<(u16, u16)> {
         _ws_xpixel: 0,
         _ws_ypixel: 0,
     };
-    // TIOCGWINSZ = 0x5413 on Linux, 0x40087468 on macOS
+    // TIOCGWINSZ: 0x5413 on Linux x86/x86_64/arm64, 0x40087468 on macOS.
+    // Other Linux architectures (MIPS, PowerPC, SPARC) use different values.
     #[cfg(target_os = "linux")]
     const TIOCGWINSZ: std::ffi::c_ulong = 0x5413;
     #[cfg(target_os = "macos")]
@@ -541,10 +545,11 @@ pub fn read_key() -> io::Result<Key> {
         return Ok(match first[0] {
             b' ' => Key::Space,
             13 | 10 => Key::Enter,
-            2 => Key::PageUp,   // Ctrl+B
-            6 => Key::PageDown, // Ctrl+F
-            4 => Key::PageDown, // Ctrl+D
-            21 => Key::PageUp,  // Ctrl+U
+            2 => Key::PageUp,    // Ctrl+B
+            3 => Key::Char('q'), // Ctrl+C — quit (ISIG is cleared in raw mode)
+            6 => Key::PageDown,  // Ctrl+F
+            4 => Key::PageDown,  // Ctrl+D
+            21 => Key::PageUp,   // Ctrl+U
             c => Key::Char(c as char),
         });
     }
