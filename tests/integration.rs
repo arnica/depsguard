@@ -875,8 +875,7 @@ fn uv_scan_checks_both_user_configs_when_both_exist() {
         "expected home uv path:\n{stdout}"
     );
     assert!(
-        stdout.contains("✓ exclude-newer — 7 days")
-            || stdout.contains("\u{2713} exclude-newer — 7 days"),
+        stdout.contains("✓ exclude-newer —") || stdout.contains("\u{2713} exclude-newer —"),
         "expected configured uv entry:\n{stdout}"
     );
     assert!(

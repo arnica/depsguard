@@ -25,7 +25,7 @@ pub fn date_days_ago(days: u64) -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let target = now.saturating_sub(days.checked_mul(86400).unwrap_or(u64::MAX));
+    let target = now.saturating_sub(days.saturating_mul(86400));
     epoch_to_date(target)
 }
 

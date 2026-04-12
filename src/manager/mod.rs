@@ -90,7 +90,7 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::Pnpm => pnpm::scan_project(path, version),
         ManagerKind::PnpmGlobal => pnpm::scan_global(path, version),
         ManagerKind::Bun => bun::scan(path),
-        ManagerKind::Uv => uv::scan(path),
+        ManagerKind::Uv => uv::scan(path, version),
         ManagerKind::Yarn => yarn::scan(path, version),
         ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
@@ -833,24 +833,27 @@ mod tests {
 
     // ── uv tests ────────────────────────────────────────────────────
 
+    const UV_NEW: &str = "0.9.17";
+    const UV_OLD: &str = "0.8.24";
+
     #[test]
     fn scan_uv_relative_days() {
         let f = tmp_file("exclude-newer = \"7 days\"\n");
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(recs[0].status.is_ok());
     }
 
     #[test]
     fn scan_uv_relative_weeks() {
         let f = tmp_file("exclude-newer = \"2 weeks\"\n");
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(recs[0].status.is_ok());
     }
 
     #[test]
     fn scan_uv_relative_too_short() {
         let f = tmp_file("exclude-newer = \"3 days\"\n");
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
@@ -859,7 +862,7 @@ mod tests {
         let old_date = date::date_days_ago(30);
         let content = format!("exclude-newer = \"{old_date}\"\n");
         let f = tmp_file(&content);
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(recs[0].status.is_ok());
     }
 
@@ -867,25 +870,91 @@ mod tests {
     fn scan_uv_too_recent() {
         let content = "exclude-newer = \"2099-01-01\"\n";
         let f = tmp_file(content);
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(recs[0].needs_fix());
     }
 
     #[test]
     fn scan_uv_missing() {
         let f = tmp_file("");
-        let recs = uv::scan(f.path());
+        let recs = uv::scan(f.path(), UV_NEW);
         assert!(matches!(recs[0].status, CheckStatus::Missing));
     }
 
     #[test]
     fn scan_uv_missing_file_is_not_same_as_empty_file() {
-        let missing = uv::scan(Path::new("/definitely/not/a/file"));
+        let missing = uv::scan(Path::new("/definitely/not/a/file"), UV_NEW);
         assert_eq!(missing[0].status.to_string(), "file missing");
 
         let empty = tmp_file("");
-        let empty_recs = uv::scan(empty.path());
+        let empty_recs = uv::scan(empty.path(), UV_NEW);
         assert_eq!(empty_recs[0].status.to_string(), "Not set");
+    }
+
+    #[test]
+    fn scan_uv_old_version_is_unsupported() {
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = uv::scan(f.path(), UV_OLD);
+        assert!(
+            recs[0].status.is_unsupported(),
+            "old uv should be unsupported, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_uv_old_version_unsupported_message() {
+        let recs = uv::scan(Path::new("/nonexistent"), UV_OLD);
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("0.9") && msg.contains(UV_OLD),
+                "unsupported message should mention min version and current: {msg}"
+            );
+        } else {
+            panic!("expected Unsupported, got: {:?}", recs[0].status);
+        }
+    }
+
+    #[test]
+    fn scan_uv_new_version_expected_is_relative() {
+        let f = tmp_file("");
+        let recs = uv::scan(f.path(), UV_NEW);
+        assert_eq!(recs[0].expected, "7 days");
+    }
+
+    #[test]
+    fn extract_uv_version_realistic_string() {
+        let recs = uv::scan(
+            Path::new("/nonexistent"),
+            "uv 0.11.6 (65950801c 2026-04-09 aarch64-apple-darwin)",
+        );
+        assert_eq!(
+            recs[0].expected, "7 days",
+            "should parse realistic uv version and use relative format"
+        );
+    }
+
+    #[test]
+    fn extract_uv_version_bare_semver() {
+        let recs = uv::scan(Path::new("/nonexistent"), "0.9.17");
+        assert_eq!(recs[0].expected, "7 days");
+    }
+
+    #[test]
+    fn uv_version_boundary_0_9_16_is_unsupported() {
+        let recs = uv::scan(Path::new("/nonexistent"), "0.9.16");
+        assert!(
+            recs[0].status.is_unsupported(),
+            "0.9.16 should be unsupported, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn uv_version_boundary_0_9_17_is_new() {
+        let f = tmp_file("");
+        let recs = uv::scan(f.path(), "0.9.17");
+        assert_eq!(recs[0].expected, "7 days");
     }
 
     // ── yarn tests ──────────────────────────────────────────────────
