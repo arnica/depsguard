@@ -8,6 +8,89 @@ use std::time::SystemTime;
 
 use crate::manager::{self, ManagerKind, Recommendation};
 
+// ── Random token for unpredictable temp paths ─────────────────────────
+
+/// Return a short hex-encoded random token suitable for temp filenames.
+/// Combined with `O_EXCL`/`create_new` this prevents an attacker from
+/// pre-planting a symlink at our temp path to redirect writes.
+pub(crate) fn random_token() -> String {
+    let mut bytes = [0u8; 16];
+    if !try_fill_os_random(&mut bytes) {
+        // Best-effort fallback that still mixes several independent
+        // entropy sources; the O_EXCL guard in the caller makes the
+        // exact value non-security-critical.
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default();
+        let nanos = now.as_nanos();
+        let pid = std::process::id() as u128;
+        let ctr = FALLBACK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as u128;
+        let addr = (&bytes as *const u8 as usize) as u128;
+        let mixed = nanos
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15_9E37_79B9_7F4A_7C15)
+            .wrapping_add(pid.wrapping_mul(0xBF58_476D_1CE4_E5B9))
+            .wrapping_add(ctr.wrapping_mul(0x94D0_49BB_1331_11EB))
+            .wrapping_add(addr);
+        let mixed_bytes = mixed.to_le_bytes();
+        for (dst, src) in bytes.iter_mut().zip(mixed_bytes.iter().cycle()) {
+            *dst ^= *src;
+        }
+    }
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in &bytes {
+        out.push(hex_nibble(b >> 4));
+        out.push(hex_nibble(b & 0x0F));
+    }
+    out
+}
+
+static FALLBACK_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn hex_nibble(n: u8) -> char {
+    match n {
+        0..=9 => (b'0' + n) as char,
+        _ => (b'a' + (n - 10)) as char,
+    }
+}
+
+#[cfg(unix)]
+fn try_fill_os_random(buf: &mut [u8]) -> bool {
+    use std::io::Read;
+    let Ok(mut f) = fs::File::open("/dev/urandom") else {
+        return false;
+    };
+    f.read_exact(buf).is_ok()
+}
+
+#[cfg(windows)]
+fn try_fill_os_random(buf: &mut [u8]) -> bool {
+    // SAFETY: BCryptGenRandom is a standard Win32 API. We pass a valid
+    // `&mut [u8]` pointer/length pair and check the return value.
+    extern "system" {
+        fn BCryptGenRandom(
+            hAlgorithm: *mut std::ffi::c_void,
+            pbBuffer: *mut u8,
+            cbBuffer: u32,
+            dwFlags: u32,
+        ) -> i32;
+    }
+    const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+    let status = unsafe {
+        BCryptGenRandom(
+            std::ptr::null_mut(),
+            buf.as_mut_ptr(),
+            buf.len() as u32,
+            BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+        )
+    };
+    status == 0
+}
+
+#[cfg(not(any(unix, windows)))]
+fn try_fill_os_random(_buf: &mut [u8]) -> bool {
+    false
+}
+
 // ── Backup / Restore ─────────────────────────────────────────────────
 
 /// Generate an ISO-8601–style timestamp from SystemTime, without chrono.
@@ -99,6 +182,11 @@ fn hex_val(b: u8) -> Option<u8> {
 
 /// Backup a config file before modifying it. Only backs up once per path per session.
 /// Backups are stored in `~/.depsguard/backups/` with the original path encoded in the filename.
+///
+/// The destination filename is salted with a random token and opened
+/// with `create_new`, so a pre-planted symlink at the predictable
+/// `<encoded>.<ts>.bak` path can't redirect the copy into an unrelated
+/// user-writable file.
 pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<()> {
     if backed_up.contains(path) {
         return Ok(());
@@ -111,11 +199,38 @@ pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<
     fs::create_dir_all(&dir)?;
     let ts = iso_timestamp();
     let encoded = encode_path(path);
-    let name = format!("{encoded}.{ts}.bak");
-    let dest = dir.join(name);
-    fs::copy(path, &dest)?;
-    backed_up.insert(path.to_path_buf());
-    Ok(())
+
+    // Read source first; a subsequent O_EXCL create + write cannot be
+    // redirected through a symlink to clobber an arbitrary file.
+    let data = fs::read(path)?;
+
+    // Salt the destination name with a fresh random token so collisions
+    // (and pre-planting attempts) cannot succeed deterministically.
+    let mut last_err: Option<io::Error> = None;
+    for _ in 0..8 {
+        let salt = random_token();
+        let name = format!("{encoded}.{ts}-{salt}.bak");
+        let dest = dir.join(name);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&dest)
+        {
+            Ok(mut f) => {
+                use std::io::Write;
+                f.write_all(&data)?;
+                f.flush()?;
+                backed_up.insert(path.to_path_buf());
+                return Ok(());
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                last_err = Some(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| io::Error::other("failed to allocate backup filename")))
 }
 
 /// List all backup files in `~/.depsguard/backups/`.
@@ -385,8 +500,19 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
 
 /// Try running `npm config set` with the given command name.
 /// Returns `Ok(output)` if the process ran (even if it failed), `Err` if it couldn't start.
+///
+/// `cmd` is resolved via the safe exec helper so that an attacker-
+/// controlled `npm`/`npm.cmd` in the current working directory (or any
+/// relative `PATH` entry) cannot be picked up instead of the real
+/// package manager.
 fn try_npm_config_set(cmd: &str, args: &[&str]) -> io::Result<std::process::Output> {
-    std::process::Command::new(cmd).args(args).output()
+    match crate::exec::safe_command(cmd) {
+        Some(mut c) => c.args(args).output(),
+        None => Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("{cmd} not found on PATH"),
+        )),
+    }
 }
 
 /// Set a user-level npm config value via `npm config set --location=user`.
@@ -565,13 +691,75 @@ fn apply_dependabot_fix(path: &Path, _key: &str, value: &str) -> io::Result<Stri
 }
 
 /// Write content to a temp file then rename into place (atomic on same filesystem).
+///
+/// Hardening:
+/// - The temp file is created with `O_EXCL` (via `create_new`) and an
+///   unpredictable random suffix, so an attacker with write access to
+///   the parent directory cannot pre-plant a symlink at the temp path
+///   to redirect the write into another user-writable file.
+/// - On Unix, the temp file is created with mode `0o600` and, when the
+///   target already exists, its original permissions and
+///   owner/group-equivalent mode bits are re-applied before rename so
+///   tightened perms (e.g. `chmod 600 ~/.npmrc` for files containing
+///   auth tokens) are preserved across fixes.
 fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().unwrap_or(Path::new("."));
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp = parent.join(format!(".depsguard-tmp-{}-{n}", std::process::id()));
-    fs::write(&tmp, content)?;
+
+    // Pick a fresh unpredictable name and create with O_EXCL. Retry on
+    // the extraordinarily unlikely collision so a hostile directory
+    // can't cause a single failure to leak as an error.
+    let mut last_err: Option<io::Error> = None;
+    let mut tmp: PathBuf;
+    let mut file: fs::File;
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        if attempts > 8 {
+            return Err(
+                last_err.unwrap_or_else(|| io::Error::other("failed to allocate temp filename"))
+            );
+        }
+        let salt = random_token();
+        tmp = parent.join(format!(".depsguard-tmp-{}-{salt}", std::process::id()));
+        match open_exclusive_tmp(&tmp) {
+            Ok(f) => {
+                file = f;
+                break;
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                last_err = Some(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Write payload; on any failure, clean up the temp file before
+    // returning so we don't leak dotfiles into the user's directory.
+    use std::io::Write;
+    if let Err(e) = file
+        .write_all(content.as_bytes())
+        .and_then(|_| file.flush())
+    {
+        drop(file);
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    drop(file);
+
+    // Preserve the original file's permissions on Unix so we don't
+    // silently relax e.g. a `chmod 600 ~/.npmrc` that holds an auth
+    // token.
+    #[cfg(unix)]
+    {
+        if let Ok(meta) = fs::metadata(path) {
+            if let Err(e) = fs::set_permissions(&tmp, meta.permissions()) {
+                let _ = fs::remove_file(&tmp);
+                return Err(e);
+            }
+        }
+    }
+
     match fs::rename(&tmp, path) {
         Ok(()) => Ok(()),
         #[cfg(windows)]
@@ -596,6 +784,24 @@ fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
             Err(e)
         }
     }
+}
+
+#[cfg(unix)]
+pub(crate) fn open_exclusive_tmp(tmp: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(tmp)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn open_exclusive_tmp(tmp: &Path) -> io::Result<fs::File> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tmp)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -1077,5 +1283,149 @@ mod tests {
         assert!(!encoded.contains('\\'));
         let decoded = super::decode_path(&encoded);
         assert_eq!(decoded, path);
+    }
+
+    // ── Security hardening tests ────────────────────────────────────
+
+    #[test]
+    fn random_token_is_unpredictable_and_hex() {
+        let a = super::random_token();
+        let b = super::random_token();
+        assert_eq!(a.len(), 32, "token is 16 bytes hex-encoded = 32 chars");
+        assert_ne!(a, b, "consecutive tokens must not collide");
+        assert!(
+            a.chars().all(|c| c.is_ascii_hexdigit()),
+            "token must be hex-encoded: {a}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_preserves_original_unix_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!(
+            "depsguard_atomic_perm_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join(".npmrc");
+        fs::write(&target, "//registry.npmjs.org/:_authToken=secret\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+
+        // Apply a fix through the normal flat path (which calls atomic_write).
+        apply_flat_fix(&target, "ignore-scripts", "true").unwrap();
+
+        let meta = fs::metadata(&target).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "atomic_write must preserve the original 0o600 permissions, got {mode:o}"
+        );
+        let content = fs::read_to_string(&target).unwrap();
+        assert!(content.contains("ignore-scripts=true"));
+        assert!(content.contains("_authToken=secret"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_does_not_follow_preplanted_symlink() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join(format!(
+            "depsguard_atomic_symlink_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+
+        // Target file being written.
+        let target = dir.join("config");
+        fs::write(&target, "existing=yes\n").unwrap();
+
+        // Victim we pretend an attacker wants to clobber.
+        let victim = dir.join("victim");
+        fs::write(&victim, "ORIGINAL\n").unwrap();
+
+        // Plant a symlink at every plausible old-style temp name
+        // (`.depsguard-tmp-<pid>-<n>` for small n). If atomic_write
+        // still used a predictable name, this would redirect the
+        // write through the symlink into the victim file.
+        let pid = std::process::id();
+        for n in 0..32 {
+            let planted = dir.join(format!(".depsguard-tmp-{pid}-{n}"));
+            let _ = symlink(&victim, &planted);
+        }
+
+        apply_flat_fix(&target, "ignore-scripts", "true").unwrap();
+
+        let victim_content = fs::read_to_string(&victim).unwrap();
+        assert_eq!(
+            victim_content, "ORIGINAL\n",
+            "victim file must not be modified via symlink redirection"
+        );
+        let target_content = fs::read_to_string(&target).unwrap();
+        assert!(target_content.contains("ignore-scripts=true"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_file_is_not_redirected_by_symlink() {
+        use std::os::unix::fs::symlink;
+        static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Point HOME at a fresh directory so the real backup dir is
+        // isolated to this test.
+        let sandbox = std::env::temp_dir().join(format!(
+            "depsguard_backup_sandbox_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&sandbox).unwrap();
+
+        let source = sandbox.join("src");
+        fs::write(&source, "SOURCE_CONTENT\n").unwrap();
+
+        let victim = sandbox.join("victim");
+        fs::write(&victim, "ORIGINAL_VICTIM\n").unwrap();
+
+        // Create the backup dir and plant a symlink at the old-style
+        // predictable name. Because the filename is salted with a
+        // random token and opened with O_EXCL, the backup must NOT
+        // clobber the victim.
+        let backup_dir_path = sandbox.join(".depsguard").join("backups");
+        fs::create_dir_all(&backup_dir_path).unwrap();
+        let encoded = super::encode_path(&source);
+        let ts = super::iso_timestamp();
+        let guess = backup_dir_path.join(format!("{encoded}.{ts}.bak"));
+        let _ = symlink(&victim, &guess);
+
+        let prev_home = std::env::var_os("HOME");
+        unsafe { std::env::set_var("HOME", &sandbox) };
+        let mut seen: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
+        let _ = super::backup_file(&source, &mut seen);
+        match prev_home {
+            Some(v) => unsafe { std::env::set_var("HOME", v) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+
+        let victim_content = fs::read_to_string(&victim).unwrap();
+        assert_eq!(
+            victim_content, "ORIGINAL_VICTIM\n",
+            "planted symlink at predictable backup path must not redirect the copy"
+        );
+        let _ = fs::remove_dir_all(&sandbox);
     }
 }
