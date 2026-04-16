@@ -958,13 +958,32 @@ pub fn print_diff_preview(
         let original = std::fs::read_to_string(path).unwrap_or_default();
         let mgr = &managers[fixes[0].0.manager_idx];
 
-        // Apply all fixes for this path to a temp copy with unpredictable name
+        // Apply all fixes for this path to a temp copy with unpredictable name.
+        //
+        // We open the temp file with `create_new` (O_EXCL) and a random
+        // token in the name so a local attacker cannot pre-plant a
+        // symlink in the shared temp directory that would redirect the
+        // write into another user-writable file.
         let tmp_dir = std::env::temp_dir();
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let tmp_path = tmp_dir.join(format!(".depsguard-preview-{}-{nonce}", std::process::id()));
+        let mut tmp_path = std::path::PathBuf::new();
+        let mut file_opt: Option<std::fs::File> = None;
+        for _ in 0..8 {
+            let salt = crate::fix::random_token();
+            let candidate =
+                tmp_dir.join(format!(".depsguard-preview-{}-{salt}", std::process::id()));
+            match crate::fix::open_exclusive_tmp(&candidate) {
+                Ok(f) => {
+                    tmp_path = candidate;
+                    file_opt = Some(f);
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        let Some(mut file) = file_opt else {
+            return Err(std::io::Error::other("failed to create preview temp file"));
+        };
 
         // RAII guard to ensure the temp file is cleaned up on all exit paths.
         struct TmpCleanup(std::path::PathBuf);
@@ -974,7 +993,9 @@ pub fn print_diff_preview(
             }
         }
 
-        std::fs::write(&tmp_path, &original)?;
+        file.write_all(original.as_bytes())?;
+        file.flush()?;
+        drop(file);
         let _guard = TmpCleanup(tmp_path.clone());
         for (_item, rec) in fixes {
             if let Err(e) = crate::fix::apply_fix(mgr.kind, &tmp_path, rec) {

@@ -2,10 +2,10 @@
 
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use super::types::{ManagerKind, TargetOs};
 use super::version::version_at_least;
+use crate::exec::safe_command;
 
 /// Return the user's home directory (`$HOME` on Unix, `%USERPROFILE%` on Windows).
 pub fn home_dir() -> PathBuf {
@@ -184,16 +184,12 @@ pub fn pnpm_global_rc_from_cli(version: &str) -> Option<PathBuf> {
         return None;
     }
     let args = ["config", "get", "globalconfig"];
-    let result = Command::new("pnpm").args(args).output();
-    let output = match result {
-        Ok(o) if o.status.success() => o,
-        _ if cfg!(target_os = "windows") => Command::new("pnpm.cmd")
-            .args(args)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())?,
-        _ => return None,
-    };
+    let mut cmd = safe_command("pnpm")?;
+    let output = cmd
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
     parse_command_path(&output.stdout)
 }
 
