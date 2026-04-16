@@ -66,6 +66,7 @@ fn try_fill_os_random(buf: &mut [u8]) -> bool {
 fn try_fill_os_random(buf: &mut [u8]) -> bool {
     // SAFETY: BCryptGenRandom is a standard Win32 API. We pass a valid
     // `&mut [u8]` pointer/length pair and check the return value.
+    #[link(name = "bcrypt")]
     extern "system" {
         fn BCryptGenRandom(
             hAlgorithm: *mut std::ffi::c_void,
