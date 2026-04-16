@@ -1,10 +1,10 @@
 // Version detection and global settings (skip-search, delay-days, exclusions).
 
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use super::types::ManagerKind;
+use crate::exec::safe_command;
 
 static SKIP_SEARCH: AtomicBool = AtomicBool::new(false);
 static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
@@ -50,15 +50,15 @@ pub fn is_excluded(kind: ManagerKind) -> bool {
 }
 
 /// Detect the installed version of a package manager by running `<name> --version`.
+///
+/// Resolves `name` via an explicit `PATH` walk that rejects the current
+/// working directory and any relative `PATH` entries, so a repo
+/// containing e.g. `npm.cmd` cannot hijack execution.
 pub fn detect_version(name: &str) -> Option<String> {
-    let result = Command::new(name).arg("--version").output();
+    let mut cmd = safe_command(name)?;
+    let result = cmd.arg("--version").output();
     let output = match result {
         Ok(o) if o.status.success() => o,
-        _ if cfg!(target_os = "windows") => Command::new(format!("{name}.cmd"))
-            .arg("--version")
-            .output()
-            .ok()
-            .filter(|o| o.status.success())?,
         _ => return None,
     };
     String::from_utf8(output.stdout)

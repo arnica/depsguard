@@ -1,3 +1,4 @@
+mod exec;
 mod fix;
 mod manager;
 mod term;
