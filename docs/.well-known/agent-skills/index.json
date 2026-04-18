@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agentskills.io/schemas/v0.2.0/index.schema.json",
+  "version": "0.2.0",
+  "publisher": {
+    "name": "Arnica",
+    "url": "https://depsguard.com/",
+    "repository": "https://github.com/arnica/depsguard"
+  },
+  "skills": [
+    {
+      "name": "depsguard",
+      "type": "skill",
+      "description": "Install and run DepsGuard, a zero-dependency CLI that scans and fixes package manager configs (npm, pnpm, yarn, bun, uv) for supply chain security best practices.",
+      "url": "https://depsguard.com/.well-known/agent-skills/depsguard/SKILL.md",
+      "sha256": "4a94db9ef3d12f6f6b3240aa14f7985a6cfe6c98d15245bd112a38c976f9e1dc"
+    }
+  ]
+}
