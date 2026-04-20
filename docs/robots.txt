@@ -5,25 +5,23 @@
 # Default policy: allow general and AI crawlers to index the public
 # marketing site and APT repository. DepsGuard is an open-source project
 # and we want agents to find documentation and install instructions.
+# Third-party assets under /vendor/ (asciinema player CSS/JS) are
+# intentionally allowed so crawlers can render the homepage correctly.
 
 User-agent: *
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 # --- Major search / indexing bots ---
 
 User-agent: Googlebot
 Allow: /
-Disallow: /vendor/
 
 User-agent: Bingbot
 Allow: /
-Disallow: /vendor/
 
 User-agent: DuckDuckBot
 Allow: /
-Disallow: /vendor/
 
 # --- AI crawlers (Anthropic / OpenAI / Google / Meta / Perplexity / etc.) ---
 # Explicit entries per the AI Crawl Control guidance:
@@ -31,96 +29,76 @@ Disallow: /vendor/
 
 User-agent: GPTBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: OAI-SearchBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: ChatGPT-User
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: ClaudeBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Claude-Web
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Claude-SearchBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: anthropic-ai
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Google-Extended
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: PerplexityBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Perplexity-User
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Applebot
 Allow: /
-Disallow: /vendor/
 
 User-agent: Applebot-Extended
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Meta-ExternalAgent
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: FacebookBot
 Allow: /
-Disallow: /vendor/
 
 User-agent: Amazonbot
 Allow: /
-Disallow: /vendor/
 
 User-agent: Bytespider
 Allow: /
-Disallow: /vendor/
 
 User-agent: CCBot
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: cohere-ai
 Allow: /
-Disallow: /vendor/
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 User-agent: Diffbot
 Allow: /
-Disallow: /vendor/
 
 User-agent: YandexBot
 Allow: /
-Disallow: /vendor/
 
 Sitemap: https://depsguard.com/sitemap.xml

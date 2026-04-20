@@ -1,7 +1,10 @@
 ---
 name: depsguard
-description: Install and run DepsGuard, a zero-dependency CLI that scans and fixes package manager configs (npm, pnpm, bun, uv) for supply chain security best practices.
-version: 0.1.0
+description: Install and run DepsGuard, a zero-dependency CLI that scans and fixes package manager configs (npm, pnpm, yarn, bun, uv) for supply chain security best practices.
+# Schema version for this skill document (see https://agentskills.io/ v0.2.0).
+# The DepsGuard tool itself is versioned independently; see
+# https://github.com/arnica/depsguard/releases for the current release.
+schema_version: "0.2.0"
 license: MIT
 homepage: https://depsguard.com/
 repository: https://github.com/arnica/depsguard

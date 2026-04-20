@@ -12,7 +12,7 @@
       "type": "skill",
       "description": "Install and run DepsGuard, a zero-dependency CLI that scans and fixes package manager configs (npm, pnpm, yarn, bun, uv) for supply chain security best practices.",
       "url": "https://depsguard.com/.well-known/agent-skills/depsguard/SKILL.md",
-      "sha256": "4a94db9ef3d12f6f6b3240aa14f7985a6cfe6c98d15245bd112a38c976f9e1dc"
+      "sha256": "163e48ac009dd2604237e316040697290b84ce0db472da33e8cc9940864eb770"
     }
   ]
 }
