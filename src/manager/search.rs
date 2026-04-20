@@ -114,15 +114,15 @@ fn search_downward(
             Err(_) => continue,
         };
         let path = entry.path();
+        if file_type.is_symlink() {
+            continue;
+        }
         if !file_type.is_dir() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if let Some(kind) = classify_file(name, dir, home) {
                     results.push((path, kind));
                 }
             }
-            continue;
-        }
-        if file_type.is_symlink() {
             continue;
         }
         let name = match path.file_name().and_then(|n| n.to_str()) {

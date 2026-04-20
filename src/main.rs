@@ -333,11 +333,8 @@ fn selection_loop(
 
         match term::read_key()? {
             Key::Up => vis_cursor = vis_cursor.saturating_sub(1),
-            Key::Down => {
-                if vis_len > 0 && vis_cursor + 1 < vis_len {
-                    vis_cursor += 1;
-                }
-            }
+            Key::Down if vis_len > 0 && vis_cursor + 1 < vis_len => vis_cursor += 1,
+            Key::Down => {}
             Key::PageUp => {
                 vis_page_start = ui::prev_page_start(&view, vis_page_start, max_lines);
                 vis_cursor = vis_page_start;
@@ -355,18 +352,16 @@ fn selection_loop(
                 vis_page_start = 0;
                 vis_cursor = 0;
             }
-            Key::End => {
-                if vis_len > 0 {
-                    vis_cursor = vis_len - 1;
-                    vis_page_start = ui::last_page_start(&view, max_lines);
-                }
+            Key::End if vis_len > 0 => {
+                vis_cursor = vis_len - 1;
+                vis_page_start = ui::last_page_start(&view, max_lines);
             }
-            Key::Space => {
-                if vis_len > 0 {
-                    let real_idx = visible[vis_cursor];
-                    items[real_idx].selected = !items[real_idx].selected;
-                }
+            Key::End => {}
+            Key::Space if vis_len > 0 => {
+                let real_idx = visible[vis_cursor];
+                items[real_idx].selected = !items[real_idx].selected;
             }
+            Key::Space => {}
             Key::Enter => {
                 let results = apply_selected(items, managers);
                 let errors: Vec<_> = results
