@@ -26,6 +26,7 @@ By **[[arnica](https://arnica.io)]**
 - [Usage](#usage)
 - [What gets checked](#what-gets-checked)
 - [Config file locations](#config-file-locations)
+- [Urgent security fix](#urgent-security-fix)
 - [Backups and restore](#backups-and-restore)
 - [How it works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
@@ -202,6 +203,28 @@ depsguard --help       # CLI help
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
 User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. If multiple user-level uv or bun config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately instead of merging them. When `~/.npmrc` is missing, DepsGuard uses pnpm's global config path so fixes can create the config file directly.
+
+## Urgent security fix
+
+If the patched version is newer than your cooldown window, add a narrow exception, install the fix, and then remove the exception.
+
+Prefer a package-specific exception over lowering the global cooldown. That keeps the delay in place for every other dependency.
+
+| Manager | How to bypass the cooldown |
+|---------|-----------------------------|
+| npm | `npm install <pkg>@<ver> --min-release-age=0` |
+| pnpm | Add an entry to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, run `pnpm add <pkg>@<ver>`, then remove the entry. Pin to `<pkg>@<ver>` on pnpm 10.19+, or exclude by package name on 10.16–10.18. pnpm has no documented CLI override for `minimumReleaseAge`. |
+| yarn | Add `<pkg>` (or a glob) to `npmPreapprovedPackages` in `.yarnrc.yml`, or run `YARN_NPM_MINIMAL_AGE_GATE=0s yarn up <pkg>@<ver>` for one command. `npmPreapprovedPackages` exempts matches from all Yarn package gates, not only the age gate. |
+| bun | Add `<pkg>` to `install.minimumReleaseAgeExcludes` in `bunfig.toml`, or run `bun add <pkg>@<ver> --minimum-release-age 0`. |
+| uv | Add `"<pkg>" = false` to `exclude-newer-package` in `uv.toml` or `pyproject.toml`, run `uv add <pkg>==<ver>`, then remove the entry. uv's CLI accepts `--exclude-newer-package PACKAGE=DATE` but not `PACKAGE=false`. |
+| Renovate | Security updates already bypass `minimumReleaseAge`. For a version update, add a `packageRules` entry with `matchPackageNames: ["<pkg>"]` and `minimumReleaseAge: null`. |
+| Dependabot | Security updates already bypass `cooldown`. For a version update, add `<pkg>` to `cooldown.exclude`. |
+
+Before you bypass the cooldown:
+
+1. Check whether the CVE actually affects your usage.
+2. Check whether a known-good older version is already available. A rollback may be safer.
+3. Remove temporary exceptions after the upgrade.
 
 ## Backups and restore
 
