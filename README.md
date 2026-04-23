@@ -30,6 +30,7 @@ By **[[arnica](https://arnica.io)]**
 - [How it works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
 - [Help & feedback](#help--feedback)
+- [See also](#see-also)
 - [License](#license)
 
 ## Overview
@@ -237,6 +238,10 @@ src/
 - [Report a bug or request a feature](https://github.com/arnica/depsguard/issues)
 - [Report a security vulnerability](https://github.com/arnica/depsguard/security/advisories/new) (see [`SECURITY.md`](SECURITY.md))
 - Development workflow for contributors lives in [`AGENTS.md`](AGENTS.md).
+
+## See also
+
+- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/uv plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
 
 ## License
 
