@@ -215,8 +215,8 @@ Prefer a package-specific exception over lowering the global cooldown. That keep
 | npm | `npm install <pkg>@<ver> --min-release-age=0` |
 | pnpm | Add an entry to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, run `pnpm add <pkg>@<ver>`, then remove the entry. Pin to `<pkg>@<ver>` on pnpm 10.19+, or exclude by package name on 10.16–10.18. pnpm has no documented CLI override for `minimumReleaseAge`. |
 | yarn | Add `<pkg>` (or a glob) to `npmPreapprovedPackages` in `.yarnrc.yml`, or run `YARN_NPM_MINIMAL_AGE_GATE=0s yarn up <pkg>@<ver>` for one command. `npmPreapprovedPackages` exempts matches from all Yarn package gates, not only the age gate. |
-| bun | Add `<pkg>` to `install.minimumReleaseAgeExcludes` in `bunfig.toml`, or run `bun add <pkg>@<ver> --minimum-release-age 0`. |
-| uv | Add `"<pkg>" = false` to `exclude-newer-package` in `uv.toml` or `pyproject.toml`, run `uv add <pkg>==<ver>`, then remove the entry. uv's CLI accepts `--exclude-newer-package PACKAGE=DATE` but not `PACKAGE=false`. |
+| bun | Add `<pkg>` to `install.minimumReleaseAgeExcludes` in a repo-level `bunfig.toml` or user-level `~/.bunfig.toml`, or run `bun add <pkg>@<ver> --minimum-release-age 0`. |
+| uv | Add `"<pkg>" = false` to `exclude-newer-package` in `uv.toml` or `pyproject.toml`, run `uv add <pkg>==<ver>`, then remove the entry. `exclude-newer-package` is a separate per-package override of the global `exclude-newer` cutoff. uv's CLI accepts `--exclude-newer-package PACKAGE=DATE` but not `PACKAGE=false`. |
 | Renovate | Security updates already bypass `minimumReleaseAge`. For a version update, add a `packageRules` entry with `matchPackageNames: ["<pkg>"]` and `minimumReleaseAge: null`. |
 | Dependabot | Security updates already bypass `cooldown`. For a version update, add `<pkg>` to `cooldown.exclude`. |
 

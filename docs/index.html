@@ -1816,8 +1816,9 @@ scoop install depsguard</code></pre>
                     d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625" />
                 </svg> bun</td>
               <td>
-                Add <code>&lt;pkg&gt;</code> to <code>install.minimumReleaseAgeExcludes</code> in
-                <code>bunfig.toml</code>, or run <code>bun add &lt;pkg&gt;@&lt;ver&gt; --minimum-release-age 0</code>.
+                Add <code>&lt;pkg&gt;</code> to <code>install.minimumReleaseAgeExcludes</code> in a repo-level
+                <code>bunfig.toml</code> or user-level <code>~/.bunfig.toml</code>, or run
+                <code>bun add &lt;pkg&gt;@&lt;ver&gt; --minimum-release-age 0</code>.
               </td>
             </tr>
             <tr>
@@ -1828,7 +1829,8 @@ scoop install depsguard</code></pre>
                 Add <code>"&lt;pkg&gt;" = false</code> to <code>exclude-newer-package</code> in
                 <code>uv.toml</code> or <code>pyproject.toml</code>, run
                 <code>uv add &lt;pkg&gt;==&lt;ver&gt;</code>, then remove the entry.<br>
-                <span style="color:var(--text-mute); font-size:.75rem;">uv's CLI accepts
+                <span style="color:var(--text-mute); font-size:.75rem;"><code>exclude-newer-package</code> is a separate
+                  per-package override of the global <code>exclude-newer</code> cutoff. uv's CLI accepts
                   <code>--exclude-newer-package PACKAGE=DATE</code> but not <code>PACKAGE=false</code>.</span>
               </td>
             </tr>
