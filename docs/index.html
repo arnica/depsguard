@@ -1751,6 +1751,122 @@ scoop install depsguard</code></pre>
       </div>
     </section>
 
+    <!-- Urgent security fix -->
+    <section class="section section-border scroll-mt" id="urgent-cve">
+      <h2>Urgent security fix</h2>
+      <p style="color:var(--text-dim); margin-bottom:1rem; line-height:1.75;">
+        If the patched version is newer than your cooldown window, add a narrow exception, install the fix, and then
+        remove the exception.
+      </p>
+      <p style="color:var(--text-dim); margin-bottom:1.5rem; line-height:1.75;">
+        Prefer a package-specific exception over lowering the global cooldown. That keeps the delay in place for every
+        other dependency.
+      </p>
+
+      <div class="install-card" style="text-align:left;">
+        <table class="checks-table">
+          <thead>
+            <tr>
+              <th>Manager</th>
+              <th>How to bypass the cooldown</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 128 128">
+                  <path fill="#cb3837"
+                    d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z" />
+                  <path fill="#fff"
+                    d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z" />
+                </svg> npm</td>
+              <td><code>npm install &lt;pkg&gt;@&lt;ver&gt; --min-release-age=0</code></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 32 32">
+                  <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
+                  <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
+                </svg> pnpm</td>
+              <td>
+                Add an entry to <code>minimumReleaseAgeExclude</code> in <code>pnpm-workspace.yaml</code>, run
+                <code>pnpm add &lt;pkg&gt;@&lt;ver&gt;</code>, then remove the entry.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;">Pin to <code>&lt;pkg&gt;@&lt;ver&gt;</code> on
+                  pnpm 10.19+, or exclude by package name on 10.16&ndash;10.18. pnpm has no documented CLI override
+                  for <code>minimumReleaseAge</code>.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><img class="mgr-icon-sm"
+                  src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='%230288d1'%20d='M27.575%2023.967a9.9%209.9%200%200%200-3.751%201.726a22.6%2022.6%200%200%201-5.537%202.504a1.55%201.55%200%200%201-.931.52a59%2059%200%200%201-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49%201.49%200%200%201%20.82-1.965a3.6%203.6%200%200%201-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324%201.794-.897%202.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69%200%200%201-.94-.324a4.6%204.6%200%200%201-.632-2.794a5.2%205.2%200%200%201%201.674-2.76a8.84%208.84%200%200%201%20.624-4.17a9.9%209.9%200%200%201%203-3.469S7.136%2011.015%207.82%209.177c.444-1.196.623-1.187.769-1.239a3.44%203.44%200%200%200%201.375-.811a4.99%204.99%200%200%201%204.178-1.607s1.094-3.357%202.12-2.7a17.4%2017.4%200%200%201%201.452%202.735s1.213-.71%201.35-.445a10.74%2010.74%200%200%201%20.495%205.81a13.3%2013.3%200%200%201-2.46%205.127c-.129.214%201.47.889%202.477%203.683c.932%202.554.103%204.699.248%204.938c.026.043.034.06.034.06s1.068.085%203.213-1.24a8.05%208.05%200%200%201%204.05-1.52a1.026%201.026%200%200%201%20.453%202Z'/%3E%3C/svg%3E"
+                  alt=""> Yarn</td>
+              <td>
+                Add <code>&lt;pkg&gt;</code> (or a glob) to <code>npmPreapprovedPackages</code> in
+                <code>.yarnrc.yml</code>, or run
+                <code>YARN_NPM_MINIMAL_AGE_GATE=0s yarn up &lt;pkg&gt;@&lt;ver&gt;</code> for one command.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;"><code>npmPreapprovedPackages</code> exempts
+                  matches from all Yarn package gates, not only the age gate.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 256 225">
+                  <path
+                    d="M228.747 65.588a38 38 0 0 0-1.62-1.62c-.55-.519-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.102-1.62-1.62c-.551-.52-1.07-1.103-1.62-1.621c-.552-.519-1.07-1.102-1.62-1.62c-.552-.519-1.07-1.102-1.621-1.62c-.551-.52-1.07-1.102-1.62-1.62a85.74 85.74 0 0 1 25.632 59.819c0 53.695-54.505 97.377-121.519 97.377c-37.525 0-71.097-13.707-93.424-35.192l1.62 1.62l1.62 1.62l1.62 1.62l1.621 1.621l1.62 1.62l1.62 1.62l1.621 1.62c22.295 22.393 56.612 36.813 95.044 36.813c67.014 0 121.519-43.682 121.519-97.215c0-22.878-9.851-44.557-27.253-61.602" />
+                  <path fill="#fbf0df"
+                    d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56" />
+                  <path fill="#b71422"
+                    d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625" />
+                </svg> bun</td>
+              <td>
+                Add <code>&lt;pkg&gt;</code> to <code>install.minimumReleaseAgeExcludes</code> in a repo-level
+                <code>bunfig.toml</code> or user-level <code>~/.bunfig.toml</code>, or run
+                <code>bun add &lt;pkg&gt;@&lt;ver&gt; --minimum-release-age 0</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 16 16">
+                  <path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z" />
+                </svg> uv</td>
+              <td>
+                Add <code>"&lt;pkg&gt;" = false</code> to <code>exclude-newer-package</code> in
+                <code>uv.toml</code> or <code>pyproject.toml</code>, run
+                <code>uv add &lt;pkg&gt;==&lt;ver&gt;</code>, then remove the entry.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;"><code>exclude-newer-package</code> is a separate
+                  per-package override of the global <code>exclude-newer</code> cutoff. uv's CLI accepts
+                  <code>--exclude-newer-package PACKAGE=DATE</code> but not <code>PACKAGE=false</code>.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 32 32">
+                  <circle cx="16" cy="16" r="14" fill="#007fa0" />
+                  <path fill="#fff" d="m21.052 21.433l-2.889-2.889a1.293 1.293 0 0 1 0-1.829l4.28-4.28a.375.375 0 0 0 0-.53l-1.577-1.577a.374.374 0 0 0-.53 0l-.963.963l-.65-.649l.963-.963a1.293 1.293 0 0 1 1.829 0l1.577 1.577a1.3 1.3 0 0 1 0 1.829l-4.28 4.279a.377.377 0 0 0 0 .53l2.89 2.889z" />
+                </svg> Renovate</td>
+              <td>
+                Security updates already bypass <code>minimumReleaseAge</code>. For a version update, add a
+                <code>packageRules</code> entry with <code>matchPackageNames: ["&lt;pkg&gt;"]</code> and
+                <code>minimumReleaseAge: null</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:#0969da">
+                  <path
+                    d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg> Dependabot</td>
+              <td>
+                Security updates already bypass <code>cooldown</code>. For a version update, add <code>&lt;pkg&gt;</code>
+                to <code>cooldown.exclude</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:2rem;">Before you bypass the cooldown</h3>
+      <ol style="color:var(--text-dim); line-height:1.85; padding-left:1.25rem; margin-bottom:1rem;">
+        <li>Check whether the CVE actually affects your usage.</li>
+        <li>Check whether a known-good older version is already available. A rollback may be safer.</li>
+        <li>Remove temporary exceptions after the upgrade.</li>
+      </ol>
+    </section>
+
     <!-- FAQ -->
     <section class="section section-border scroll-mt" id="faq">
       <h2>FAQ</h2>
