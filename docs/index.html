@@ -1789,9 +1789,9 @@ scoop install depsguard</code></pre>
               <td>
                 Add an entry to <code>minimumReleaseAgeExclude</code> in <code>pnpm-workspace.yaml</code>, run
                 <code>pnpm add &lt;pkg&gt;@&lt;ver&gt;</code>, then remove the entry.<br>
-                <span style="color:var(--text-mute); font-size:.75rem;">Pin to <code>&lt;pkg&gt;@&lt;ver&gt;</code> on
-                  pnpm 10.19+, or exclude by package name on 10.16&ndash;10.18. pnpm has no documented CLI override
-                  for <code>minimumReleaseAge</code>.</span>
+                <span style="color:var(--text-mute); font-size:.75rem;">Excluding by package name works on
+                  pnpm 10.16+; pinning a specific version (<code>&lt;pkg&gt;@&lt;ver&gt;</code>) additionally requires
+                  pnpm 10.19+. pnpm has no documented CLI override for <code>minimumReleaseAge</code>.</span>
               </td>
             </tr>
             <tr>
