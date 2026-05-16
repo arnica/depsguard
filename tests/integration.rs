@@ -417,7 +417,10 @@ fn pnpm_config_fix_and_rescan() {
 #[test]
 #[ignore] // requires network access + pnpm 10.16..<11
 fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
-    if !has_command("pnpm") {
+    if !has_command("pnpm") || !pnpm_at_least(10, 16) {
+        // `minimum-release-age` was introduced in pnpm 10.16; older
+        // versions silently ignore it and the install would succeed,
+        // causing a false test failure.
         return;
     }
     if pnpm_at_least(11, 0) {
