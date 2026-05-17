@@ -49,7 +49,19 @@ fn has_command(name: &str) -> bool {
 
 /// Check that `npm` is at least `major.minor` (e.g. 11.10 for min-release-age).
 fn npm_at_least(major: u32, minor: u32) -> bool {
-    Command::new("npm")
+    tool_at_least("npm", major, minor)
+}
+
+/// Check that `pnpm` is at least `major.minor`.
+///
+/// pnpm 10.16 introduced `minimumReleaseAge`; pnpm 11 stopped reading
+/// non-auth settings from `.npmrc` (moved to `pnpm-workspace.yaml`).
+fn pnpm_at_least(major: u32, minor: u32) -> bool {
+    tool_at_least("pnpm", major, minor)
+}
+
+fn tool_at_least(cmd: &str, major: u32, minor: u32) -> bool {
+    Command::new(cmd)
         .arg("--version")
         .output()
         .ok()
@@ -389,7 +401,7 @@ fn pnpm_config_fix_and_rescan() {
     assert!(stdout.contains("pnpm"), "pnpm not detected");
 }
 
-/// Prove that pnpm READS `minimum-release-age` from `.npmrc`.
+/// Prove that pnpm READS `minimum-release-age` from `.npmrc` (pnpm 10.16..<11).
 ///
 /// Strategy:
 ///   1. Set minimum-release-age to an impossibly high value (999_999_999 min ~ 1902 years).
@@ -398,10 +410,22 @@ fn pnpm_config_fix_and_rescan() {
 ///   4. Then set minimum-release-age=0 and re-run: pnpm must SUCCEED.
 ///
 /// This proves that pnpm reads the setting from `.npmrc` and uses it.
+///
+/// pnpm 11 removed support for non-auth settings in `.npmrc`; the
+/// equivalent regression for pnpm 11+ lives in
+/// `pnpm_minimum_release_age_from_workspace_blocks_install` below.
 #[test]
-#[ignore] // requires network access + pnpm >= 10.16
+#[ignore] // requires network access + pnpm 10.16..<11
 fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
-    if !has_command("pnpm") {
+    if !has_command("pnpm") || !pnpm_at_least(10, 16) {
+        // `minimum-release-age` was introduced in pnpm 10.16; older
+        // versions silently ignore it and the install would succeed,
+        // causing a false test failure.
+        return;
+    }
+    if pnpm_at_least(11, 0) {
+        // pnpm 11+ only reads auth/registry settings from .npmrc.
+        // See pnpm_minimum_release_age_from_workspace_blocks_install.
         return;
     }
     let home = TmpHome::new("pnpm_mra_block");
@@ -456,6 +480,81 @@ fn pnpm_minimum_release_age_from_npmrc_blocks_install() {
     assert!(
         out_ok.status.success(),
         "pnpm install should SUCCEED with minimum-release-age=0.\n\
+         stderr: {}",
+        String::from_utf8_lossy(&out_ok.stderr)
+    );
+}
+
+/// Prove that pnpm READS `minimumReleaseAge` from `pnpm-workspace.yaml`.
+///
+/// pnpm 10.16 introduced `minimumReleaseAge` in `pnpm-workspace.yaml`; pnpm 11
+/// removed non-auth settings from `.npmrc`, making `pnpm-workspace.yaml` the
+/// canonical location for this setting. This test runs on pnpm 10.16+ and
+/// 11+ alike, since `pnpm-workspace.yaml` works for both.
+///
+/// Strategy (mirrors the `.npmrc` variant above):
+///   1. Set `minimumReleaseAge: 999999999` -> install must FAIL.
+///   2. Set `minimumReleaseAge: 0` -> install must SUCCEED.
+#[test]
+#[ignore] // requires network access + pnpm >= 10.16
+fn pnpm_minimum_release_age_from_workspace_blocks_install() {
+    if !has_command("pnpm") || !pnpm_at_least(10, 16) {
+        return;
+    }
+    let home = TmpHome::new("pnpm_mra_ws_block");
+    let project = home.path().join("testproject");
+    fs::create_dir_all(&project).unwrap();
+
+    fs::write(
+        project.join("package.json"),
+        r#"{"name":"test","version":"1.0.0","dependencies":{"picocolors":"1.1.1"}}"#,
+    )
+    .unwrap();
+
+    // Step 1: impossibly high minimumReleaseAge -> install should FAIL.
+    // `ignore-scripts: true` keeps the install hermetic.
+    let workspace_yaml = project.join("pnpm-workspace.yaml");
+    fs::write(
+        &workspace_yaml,
+        "minimumReleaseAge: 999999999\nignoreScripts: true\n",
+    )
+    .unwrap();
+
+    let out_blocked = Command::new("pnpm")
+        .args(["install", "--no-frozen-lockfile"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    let stderr_blocked = String::from_utf8_lossy(&out_blocked.stderr);
+    assert!(
+        !out_blocked.status.success(),
+        "pnpm install should FAIL with minimumReleaseAge=999999999 in pnpm-workspace.yaml \
+         but succeeded.\nstderr: {stderr_blocked}"
+    );
+
+    // Clean up any partial lockfile / node_modules from the failed attempt.
+    let _ = fs::remove_file(project.join("pnpm-lock.yaml"));
+    let _ = fs::remove_dir_all(project.join("node_modules"));
+
+    // Step 2: minimumReleaseAge=0 -> install should SUCCEED.
+    fs::write(
+        &workspace_yaml,
+        "minimumReleaseAge: 0\nignoreScripts: true\n",
+    )
+    .unwrap();
+
+    let out_ok = Command::new("pnpm")
+        .args(["install", "--no-frozen-lockfile"])
+        .current_dir(&project)
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        out_ok.status.success(),
+        "pnpm install should SUCCEED with minimumReleaseAge=0 in pnpm-workspace.yaml.\n\
          stderr: {}",
         String::from_utf8_lossy(&out_ok.stderr)
     );
