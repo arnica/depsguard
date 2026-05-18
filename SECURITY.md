@@ -9,7 +9,7 @@ We release fixes for the **latest tagged version** and the **default branch** (`
 Please **do not** open a public GitHub issue for undisclosed security problems.
 
 1. Use [GitHub Security Advisories](https://github.com/arnica/depsguard/security/advisories/new) to report privately (preferred), or
-2. Contact Arnica engineering at the address published on [arnica.io](https://arnica.io/?utm_source=depsguard&utm_medium=referral&utm_campaign=community) if you cannot use GitHub.
+2. Contact Arnica engineering at the address published on [arnica.io](https://arnica.io) if you cannot use GitHub.
 
 Include steps to reproduce, affected version or commit, and impact. We aim to acknowledge within a few business days.
 
