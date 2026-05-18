@@ -17,7 +17,7 @@
 
 Guard your dependencies against supply chain attacks. **Single static binary, zero Rust crate dependencies.**
 
-By **[[arnica](https://arnica.io)]**
+By **[[arnica](https://arnica.io/?utm_source=depsguard&utm_medium=referral&utm_campaign=community)]**
 
 ## Table of contents
 
