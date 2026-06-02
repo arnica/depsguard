@@ -1226,7 +1226,8 @@ brew install depsguard</code></pre>
 curl -fsSL https://depsguard.com/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
 echo "deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
   | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
-sudo apt update && sudo apt install depsguard</code></pre>
+sudo apt update
+sudo apt install depsguard</code></pre>
           </div>
           <p class="code-note">Debian/Ubuntu via APT. Also available via <a
               href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
