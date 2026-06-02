@@ -41,7 +41,7 @@ brew install depsguard
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://depsguard.com/apt/gpg.key \
   | sudo gpg --dearmor -o /etc/apt/keyrings/depsguard.gpg
-echo "deb [signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
+echo "deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/depsguard.gpg] https://depsguard.com/apt stable main" \
   | sudo tee /etc/apt/sources.list.d/depsguard.list >/dev/null
 sudo apt update
 sudo apt install depsguard
