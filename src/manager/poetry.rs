@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::read_toml_value;
 use super::detect::get_delay_days;
-use super::types::{missing_status_for_path, CheckStatus, Recommendation};
+use super::types::{missing_status_for_path, unsupported_rec, CheckStatus, Recommendation};
 use super::version::{extract_version_str, version_at_least};
 
 /// Minimum poetry version that supports `solver.min-release-age` (added in 2.4.0).
@@ -21,14 +21,15 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let description = format!("Delay new versions by {days} days");
 
     if !version_at_least(ver, POETRY_MIN_MAJOR, POETRY_MIN_MINOR) {
-        return vec![Recommendation {
-            key: POETRY_KEY.into(),
-            description,
-            expected,
-            status: CheckStatus::Unsupported(format!(
-                "requires poetry \u{2265} {POETRY_MIN_MAJOR}.{POETRY_MIN_MINOR} (have {ver})"
-            )),
-        }];
+        return vec![unsupported_rec(
+            POETRY_KEY,
+            &description,
+            &expected,
+            "poetry",
+            POETRY_MIN_MAJOR,
+            POETRY_MIN_MINOR,
+            ver,
+        )];
     }
 
     let val = read_toml_value(path, POETRY_KEY);
