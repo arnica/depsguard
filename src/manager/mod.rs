@@ -1403,6 +1403,13 @@ mod tests {
     }
 
     #[test]
+    fn scan_aube_invalid_value_is_wrong_value() {
+        let f = tmp_file("minimumReleaseAge=soon\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
     fn scan_aube_missing() {
         let f = tmp_file("ignore-scripts=true\n");
         let recs = aube::scan(f.path());

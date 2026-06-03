@@ -21,17 +21,28 @@ pub fn scan(path: &Path) -> Vec<Recommendation> {
     let required_minutes = days.saturating_mul(24).saturating_mul(60);
     let cfg = read_flat_config(path);
 
-    // aube accepts either spelling; treat the largest configured value as effective.
+    // aube accepts either spelling; treat the largest configured numeric value
+    // as effective. If keys are present but none are valid integers, report the
+    // raw value as misconfigured rather than "not set".
+    let mut invalid_value = None;
     let configured = [AUBE_KEY, AUBE_KEY_KEBAB]
         .iter()
         .filter_map(|k| cfg.get(*k))
-        .filter_map(|v| v.parse::<u64>().ok().map(|n| (v.clone(), n)))
+        .filter_map(|v| match v.parse::<u64>() {
+            Ok(n) => Some((v.clone(), n)),
+            Err(_) => {
+                invalid_value.get_or_insert_with(|| v.clone());
+                None
+            }
+        })
         .max_by_key(|(_, n)| *n);
 
     let status = match configured {
         Some((_, minutes)) if minutes >= required_minutes => CheckStatus::Ok,
         Some((raw, _)) => CheckStatus::WrongValue(raw),
-        None => missing_status_for_path(path),
+        None => {
+            invalid_value.map_or_else(|| missing_status_for_path(path), CheckStatus::WrongValue)
+        }
     };
 
     vec![Recommendation {

@@ -6,8 +6,6 @@ use std::path::Path;
 use crate::manager::{self, CheckStatus, ManagerInfo};
 use crate::term::{BG_GREEN, BG_RED, BOLD, CYAN, DIM, GREEN, RED, RESET, WHITE, YELLOW};
 
-const BLUE: &str = "\x1b[34m";
-
 /// Return "1 config" or "3 configs" — simple singular/plural.
 fn plural(n: usize, singular: &str, plural_form: &str) -> String {
     if n == 1 {
@@ -261,9 +259,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                     CheckStatus::WrongValue(v) => {
                         format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
                     }
-                    CheckStatus::Unsupported(v) => {
-                        format!("{BLUE}{v}{RESET}")
-                    }
+                    CheckStatus::Unsupported(v) => format!("{YELLOW}{v}{RESET}"),
                 };
                 let prefix = if show_prefix {
                     format!("{DIM}({}){RESET} ", mgr.kind.name())
