@@ -23,3 +23,19 @@ pub fn version_at_least(version: &str, min_major: u64, min_minor: u64) -> bool {
         None => false,
     }
 }
+
+/// Extract the leading semantic-version substring from a tool's `--version` output.
+///
+/// Many tools prefix or wrap their version (e.g. `"pip 26.1 from ..."` or
+/// `"Poetry (version 2.4.0)"`); this returns just the `MAJOR.MINOR.PATCH` portion
+/// (`"26.1"`, `"2.4.0"`). If no digits are present, the trimmed input is returned.
+pub fn extract_version_str(version: &str) -> &str {
+    let s = version.trim();
+    let Some(numeric_start) = s.find(|c: char| c.is_ascii_digit()) else {
+        return s;
+    };
+    let rest = &s[numeric_start..];
+    rest.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .next()
+        .unwrap_or(rest)
+}

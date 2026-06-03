@@ -380,22 +380,25 @@ pub struct ToggleKey {
 fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
     use crate::manager::ManagerKind;
     match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => ".npmrc",
+        // npm, pnpm, and aube all read `.npmrc`.
+        ManagerKind::Npm | ManagerKind::Pnpm | ManagerKind::Aube => ".npmrc",
         ManagerKind::PnpmGlobal => "pnpm-global",
         ManagerKind::PnpmWorkspace => "pnpm-workspace",
         ManagerKind::Bun => ".bunfig.toml",
         ManagerKind::Uv => "uv.toml",
+        ManagerKind::Pip => "pip.conf",
+        ManagerKind::Poetry => "poetry",
         ManagerKind::Yarn => ".yarnrc.yml",
         ManagerKind::Renovate => "renovate",
         ManagerKind::Dependabot => "dependabot",
     }
 }
 
-/// Canonical kind for toggle grouping (npm + pnpm share `.npmrc`).
+/// Canonical kind for toggle grouping (npm, pnpm, and aube share `.npmrc`).
 fn toggle_canonical(kind: crate::manager::ManagerKind) -> crate::manager::ManagerKind {
     use crate::manager::ManagerKind;
-    if kind == ManagerKind::Pnpm {
-        ManagerKind::Npm // group .npmrc pnpm with npm
+    if kind == ManagerKind::Pnpm || kind == ManagerKind::Aube {
+        ManagerKind::Npm // group `.npmrc` consumers under npm
     } else {
         kind
     }

@@ -4,6 +4,7 @@
 // Shared infrastructure lives in `types`, `config`, `version`, `date`, `paths`,
 // `detect`, and `search`.
 
+pub mod aube;
 pub mod bun;
 pub mod config;
 pub mod date;
@@ -11,7 +12,9 @@ pub mod dependabot;
 pub mod detect;
 pub mod npm;
 pub mod paths;
+pub mod pip;
 pub mod pnpm;
+pub mod poetry;
 pub mod renovate;
 pub mod search;
 pub mod types;
@@ -68,13 +71,18 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
         }
     };
 
+    // Scanners receive the raw `--version` string (they extract internally), but
+    // for display we store just the version number so tools that prefix or wrap
+    // their version (uv, pip, poetry) don't show noise like the full pip path.
+    let display_version = version::extract_version_str(&version).to_string();
+
     scan_paths
         .into_iter()
         .map(|path| {
             let recommendations = scan_kind(kind, &path, &version);
             ManagerInfo {
                 kind,
-                version: version.clone(),
+                version: display_version.clone(),
                 config_path: path,
                 recommendations,
                 discovered: false,
@@ -91,6 +99,9 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::PnpmGlobal => pnpm::scan_global(path, version),
         ManagerKind::Bun => bun::scan(path),
         ManagerKind::Uv => uv::scan(path, version),
+        ManagerKind::Pip => pip::scan(path, version),
+        ManagerKind::Poetry => poetry::scan(path, version),
+        ManagerKind::Aube => aube::scan(path),
         ManagerKind::Yarn => yarn::scan(path, version),
         ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
@@ -148,6 +159,17 @@ fn scan_repo_configs_with_progress(
                             version: ver.clone(),
                             config_path: path.clone(),
                             recommendations: pnpm::scan_project(&path, ver),
+                            discovered: true,
+                        });
+                    }
+                }
+                if !is_excluded(ManagerKind::Aube) {
+                    if let Some(ver) = detected_versions.get("aube") {
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::Aube,
+                            version: ver.clone(),
+                            config_path: path.clone(),
+                            recommendations: aube::scan(&path),
                             discovered: true,
                         });
                     }
@@ -955,6 +977,265 @@ mod tests {
         let f = tmp_file("");
         let recs = uv::scan(f.path(), "0.9.17");
         assert_eq!(recs[0].expected, "7 days");
+    }
+
+    // ── pip tests ───────────────────────────────────────────────────
+
+    const PIP_NEW: &str = "26.1";
+    // 26.0 added --uploaded-prior-to with absolute datetimes only; relative
+    // durations (P7D) require 26.1, so 26.0 is treated as unsupported.
+    const PIP_OLD: &str = "26.0";
+
+    #[test]
+    fn scan_pip_relative_days_ok() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pip_relative_weeks_ok() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P2W\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pip_relative_too_short() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P3D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pip_absolute_date_ok() {
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pip_too_recent() {
+        let f = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_pip_missing() {
+        let f = tmp_file("[install]\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_pip_old_version_unsupported() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(
+            recs[0].status.is_unsupported(),
+            "pip 26.0 should be unsupported (relative durations need 26.1), got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_pip_old_version_message_mentions_versions() {
+        let recs = pip::scan(Path::new("/nonexistent"), PIP_OLD);
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("26.1") && msg.contains(PIP_OLD),
+                "message should mention min and current version: {msg}"
+            );
+        } else {
+            panic!("expected Unsupported, got: {:?}", recs[0].status);
+        }
+    }
+
+    #[test]
+    fn scan_pip_expected_is_iso_duration() {
+        let recs = pip::scan(Path::new("/nonexistent"), PIP_NEW);
+        assert_eq!(recs[0].expected, "P7D");
+        assert_eq!(recs[0].key, "install.uploaded-prior-to");
+    }
+
+    #[test]
+    fn extract_pip_version_realistic_string() {
+        let recs = pip::scan(
+            Path::new("/nonexistent"),
+            "pip 26.1 from /usr/lib/python3/dist-packages/pip (python 3.12)",
+        );
+        assert!(
+            !recs[0].status.is_unsupported(),
+            "realistic pip 26.1 string should be supported"
+        );
+    }
+
+    #[test]
+    fn pip_version_boundary_26_0_unsupported_26_1_supported() {
+        assert!(pip::scan(Path::new("/nonexistent"), "26.0.5")[0]
+            .status
+            .is_unsupported());
+        assert!(!pip::scan(Path::new("/nonexistent"), "26.1.0")[0]
+            .status
+            .is_unsupported());
+    }
+
+    // ── poetry tests ────────────────────────────────────────────────
+
+    const POETRY_NEW: &str = "2.4.0";
+    const POETRY_OLD: &str = "2.3.1";
+
+    #[test]
+    fn scan_poetry_ok() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_poetry_higher_value_ok() {
+        let f = tmp_file("[solver]\nmin-release-age = 14\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_poetry_too_low() {
+        let f = tmp_file("[solver]\nmin-release-age = 3\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_poetry_missing() {
+        let f = tmp_file("[solver]\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_poetry_old_version_unsupported() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
+        assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_poetry_old_version_message_mentions_versions() {
+        let recs = poetry::scan(Path::new("/nonexistent"), POETRY_OLD);
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("2.4") && msg.contains(POETRY_OLD),
+                "message should mention min and current version: {msg}"
+            );
+        } else {
+            panic!("expected Unsupported, got: {:?}", recs[0].status);
+        }
+    }
+
+    #[test]
+    fn scan_poetry_expected_is_days() {
+        let recs = poetry::scan(Path::new("/nonexistent"), POETRY_NEW);
+        assert_eq!(recs[0].expected, "7");
+        assert_eq!(recs[0].key, "solver.min-release-age");
+    }
+
+    #[test]
+    fn extract_poetry_version_realistic_string() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), "Poetry (version 2.4.0)");
+        assert!(
+            recs[0].status.is_ok(),
+            "realistic poetry version string should parse and pass"
+        );
+    }
+
+    #[test]
+    fn poetry_version_boundary_2_3_unsupported_2_4_supported() {
+        assert!(poetry::scan(Path::new("/nonexistent"), "2.3.9")[0]
+            .status
+            .is_unsupported());
+        assert!(!poetry::scan(Path::new("/nonexistent"), "2.4.0")[0]
+            .status
+            .is_unsupported());
+    }
+
+    // ── aube tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn scan_aube_ok_camel_case() {
+        let f = tmp_file("minimumReleaseAge=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_aube_ok_kebab_case_shared_with_pnpm() {
+        // aube also honours pnpm's kebab key in the same .npmrc.
+        let f = tmp_file("minimum-release-age=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_aube_too_low() {
+        // 1440 minutes = 24h, aube's default, below the 7-day target.
+        let f = tmp_file("minimumReleaseAge=1440\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_aube_missing() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_aube_expected_is_minutes() {
+        let recs = aube::scan(Path::new("/nonexistent"));
+        assert_eq!(recs[0].expected, "10080");
+        assert_eq!(recs[0].key, "minimumReleaseAge");
+        assert_eq!(recs[0].status.to_string(), "file missing");
+    }
+
+    #[test]
+    fn scan_aube_uses_larger_of_two_keys() {
+        let f = tmp_file("minimumReleaseAge=1440\nminimum-release-age=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok(), "should accept the larger value");
+    }
+
+    // ── helper tests: iso 8601 durations and version extraction ─────
+
+    #[test]
+    fn parse_iso8601_days_handles_days_and_weeks() {
+        use date::parse_iso8601_days;
+        assert_eq!(parse_iso8601_days("P7D"), Some(7));
+        assert_eq!(parse_iso8601_days("P14D"), Some(14));
+        assert_eq!(parse_iso8601_days("P2W"), Some(14));
+        assert_eq!(parse_iso8601_days("P0D"), Some(0));
+        assert_eq!(
+            parse_iso8601_days("P1DT12H"),
+            None,
+            "time component unsupported"
+        );
+        assert_eq!(parse_iso8601_days("7D"), None, "missing P prefix");
+        assert_eq!(parse_iso8601_days("PD"), None);
+    }
+
+    #[test]
+    fn extract_version_str_strips_tool_prefixes() {
+        use version::extract_version_str;
+        assert_eq!(
+            extract_version_str("pip 26.1 from /x (python 3.12)"),
+            "26.1"
+        );
+        assert_eq!(extract_version_str("Poetry (version 2.4.0)"), "2.4.0");
+        assert_eq!(extract_version_str("0.9.17"), "0.9.17");
     }
 
     // ── yarn tests ──────────────────────────────────────────────────

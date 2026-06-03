@@ -101,6 +101,26 @@ pub fn parse_relative_days(s: &str) -> Option<u64> {
     }
 }
 
+/// Parse a simple ISO 8601 duration like "P7D" (7 days) or "P2W" (2 weeks) into days.
+///
+/// pip's `--uploaded-prior-to` accepts these relative durations (e.g. `P3D`).
+/// Only whole-day and whole-week periods are supported; durations with a time
+/// component (e.g. `P1DT12H`) return `None`.
+pub fn parse_iso8601_days(s: &str) -> Option<u64> {
+    let s = s.trim().trim_matches('"').trim_matches('\'');
+    let rest = s.strip_prefix(['P', 'p'])?;
+    if rest.len() < 2 {
+        return None;
+    }
+    let (num_part, unit) = rest.split_at(rest.len() - 1);
+    let n: u64 = num_part.parse().ok()?;
+    match unit {
+        "D" | "d" => Some(n),
+        "W" | "w" => n.checked_mul(7),
+        _ => None,
+    }
+}
+
 /// Parse a compact duration string like "7d", "3d", "1440m", "24h" into minutes.
 pub fn parse_duration_minutes(s: &str) -> Option<u64> {
     let s = s.trim().trim_matches('"').trim_matches('\'');

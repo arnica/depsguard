@@ -66,7 +66,8 @@ pub fn user_config_candidates(
     os: TargetOs,
 ) -> (Vec<PathBuf>, usize) {
     match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => (vec![home.join(".npmrc")], 0),
+        // aube reads the same `.npmrc` as npm/pnpm (minimumReleaseAge key).
+        ManagerKind::Npm | ManagerKind::Pnpm | ManagerKind::Aube => (vec![home.join(".npmrc")], 0),
         ManagerKind::Yarn => (vec![home.join(".yarnrc.yml")], 0),
         ManagerKind::PnpmGlobal
         | ManagerKind::PnpmWorkspace
@@ -99,6 +100,50 @@ pub fn user_config_candidates(
                     default_idx = 0;
                 }
                 (cands, default_idx)
+            }
+        },
+        // pip user config: pip.conf (Unix/macOS) / pip.ini (Windows).
+        // The `uploaded-prior-to` cooldown lives in the `[install]` section.
+        ManagerKind::Pip => match os {
+            TargetOs::Windows => (vec![appdata.join("pip/pip.ini")], 0),
+            TargetOs::MacOs => {
+                let mut cands = Vec::new();
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("pip/pip.conf"));
+                }
+                cands.push(home.join(".config/pip/pip.conf"));
+                cands.push(home.join("Library/Application Support/pip/pip.conf"));
+                cands.push(home.join(".pip/pip.conf")); // legacy
+                (cands, 0)
+            }
+            TargetOs::Linux => {
+                let mut cands = Vec::new();
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("pip/pip.conf"));
+                }
+                cands.push(home.join(".config/pip/pip.conf"));
+                cands.push(home.join(".pip/pip.conf")); // legacy
+                (cands, 0)
+            }
+        },
+        // poetry global config: config.toml (`solver.min-release-age`).
+        ManagerKind::Poetry => match os {
+            TargetOs::Windows => (vec![appdata.join("pypoetry/config.toml")], 0),
+            TargetOs::MacOs => {
+                let mut cands = Vec::new();
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("pypoetry/config.toml"));
+                }
+                cands.push(home.join("Library/Application Support/pypoetry/config.toml"));
+                (cands, 0)
+            }
+            TargetOs::Linux => {
+                let mut cands = Vec::new();
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("pypoetry/config.toml"));
+                }
+                cands.push(home.join(".config/pypoetry/config.toml"));
+                (cands, 0)
             }
         },
     }

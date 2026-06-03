@@ -218,6 +218,13 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
         }
         ManagerKind::Bun => apply_toml_fix(path, &rec.key, &rec.expected, false),
         ManagerKind::Uv => apply_toml_fix(path, &rec.key, &rec.expected, true),
+        // pip.conf (INI) `[install] uploaded-prior-to = P7D` and poetry's
+        // config.toml `[solver] min-release-age = 7` both take bare, unquoted values.
+        ManagerKind::Pip | ManagerKind::Poetry => {
+            apply_toml_fix(path, &rec.key, &rec.expected, false)
+        }
+        // aube reads minimumReleaseAge from flat `.npmrc`.
+        ManagerKind::Aube => apply_flat_fix(path, &rec.key, &rec.expected),
         ManagerKind::PnpmWorkspace => {
             let quote = matches!(rec.key.as_str(), "trustPolicy");
             apply_yaml_fix(path, &rec.key, &rec.expected, quote)
@@ -784,6 +791,60 @@ mod tests {
         };
         apply_fix(ManagerKind::Uv, f.path(), &rec).unwrap();
         assert!(f.read().contains("exclude-newer = \"7 days\""));
+    }
+
+    #[test]
+    fn apply_fix_pip_creates_install_section() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "install.uploaded-prior-to".into(),
+            description: "test".into(),
+            expected: "P7D".into(),
+            status: crate::manager::CheckStatus::FileMissing,
+        };
+        apply_fix(ManagerKind::Pip, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(content.contains("[install]"), "got: {content}");
+        assert!(
+            content.contains("uploaded-prior-to = P7D"),
+            "got: {content}"
+        );
+    }
+
+    #[test]
+    fn apply_fix_poetry_creates_solver_section() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "solver.min-release-age".into(),
+            description: "test".into(),
+            expected: "7".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::Poetry, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(content.contains("[solver]"), "got: {content}");
+        assert!(content.contains("min-release-age = 7"), "got: {content}");
+    }
+
+    #[test]
+    fn apply_fix_aube_writes_flat_npmrc_key() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let rec = Recommendation {
+            key: "minimumReleaseAge".into(),
+            description: "test".into(),
+            expected: "10080".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::Aube, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(
+            content.contains("minimumReleaseAge=10080"),
+            "got: {content}"
+        );
+        assert!(
+            content.contains("ignore-scripts=true"),
+            "preserves existing"
+        );
     }
 
     // ── YAML fix tests ──────────────────────────────────────────────

@@ -837,6 +837,55 @@ fn uv_scan_detects_missing_config() {
     assert!(stdout.contains("uv"), "uv not detected");
 }
 
+// ── pip / poetry / aube detection ────────────────────────────────────
+
+#[test]
+fn pip_scan_detects_manager() {
+    if !has_command("pip") {
+        return;
+    }
+    let home = TmpHome::new("pip_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // pip is detected regardless of version (a recent pip shows the missing
+    // `uploaded-prior-to`; an older pip shows the version requirement).
+    assert!(stdout.contains("pip"), "pip not detected:\n{stdout}");
+    assert!(
+        stdout.contains("uploaded-prior-to"),
+        "expected pip cooldown setting in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn poetry_scan_detects_manager() {
+    if !has_command("poetry") {
+        return;
+    }
+    let home = TmpHome::new("poetry_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("poetry"), "poetry not detected:\n{stdout}");
+    assert!(
+        stdout.contains("min-release-age"),
+        "expected poetry cooldown setting in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn aube_scan_detects_manager() {
+    if !has_command("aube") {
+        return;
+    }
+    let home = TmpHome::new("aube_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("aube"), "aube not detected:\n{stdout}");
+    assert!(
+        stdout.contains("minimumReleaseAge"),
+        "expected aube cooldown setting in output:\n{stdout}"
+    );
+}
+
 #[test]
 fn uv_config_fix_and_rescan() {
     if !has_command("uv") {
