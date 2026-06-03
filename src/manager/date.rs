@@ -109,14 +109,18 @@ pub fn parse_relative_days(s: &str) -> Option<u64> {
 pub fn parse_iso8601_days(s: &str) -> Option<u64> {
     let s = s.trim().trim_matches('"').trim_matches('\'');
     let rest = s.strip_prefix(['P', 'p'])?;
-    if rest.len() < 2 {
+    // Split off the trailing unit character safely. A byte-index split would
+    // panic on multibyte input (e.g. "P7é").
+    let mut chars = rest.chars();
+    let unit = chars.next_back()?;
+    let num_part = chars.as_str();
+    if num_part.is_empty() {
         return None;
     }
-    let (num_part, unit) = rest.split_at(rest.len() - 1);
     let n: u64 = num_part.parse().ok()?;
     match unit {
-        "D" | "d" => Some(n),
-        "W" | "w" => n.checked_mul(7),
+        'D' | 'd' => Some(n),
+        'W' | 'w' => n.checked_mul(7),
         _ => None,
     }
 }
@@ -124,15 +128,19 @@ pub fn parse_iso8601_days(s: &str) -> Option<u64> {
 /// Parse a compact duration string like "7d", "3d", "1440m", "24h" into minutes.
 pub fn parse_duration_minutes(s: &str) -> Option<u64> {
     let s = s.trim().trim_matches('"').trim_matches('\'');
-    if s.is_empty() {
+    // Split off the trailing unit character safely (avoid a byte-index split,
+    // which panics on multibyte input).
+    let mut chars = s.chars();
+    let unit = chars.next_back()?;
+    let num_part = chars.as_str();
+    if num_part.is_empty() {
         return None;
     }
-    let (num_part, unit) = s.split_at(s.len().saturating_sub(1));
     let n: u64 = num_part.parse().ok()?;
     match unit {
-        "d" => Some(n.saturating_mul(24 * 60)),
-        "h" => Some(n.saturating_mul(60)),
-        "m" => Some(n),
+        'd' => Some(n.saturating_mul(24 * 60)),
+        'h' => Some(n.saturating_mul(60)),
+        'm' => Some(n),
         _ => None,
     }
 }

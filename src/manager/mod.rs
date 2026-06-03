@@ -1238,6 +1238,22 @@ mod tests {
         assert_eq!(extract_version_str("0.9.17"), "0.9.17");
     }
 
+    #[test]
+    fn duration_parsers_do_not_panic_on_multibyte_input() {
+        // A config value ending in a multibyte char must not crash the scan
+        // (regression: a byte-index split_at would panic mid-codepoint).
+        use date::{parse_duration_minutes, parse_iso8601_days};
+        assert_eq!(parse_iso8601_days("P7é"), None);
+        assert_eq!(parse_iso8601_days("P7\u{1f389}"), None); // emoji
+        assert_eq!(parse_iso8601_days("Pé"), None);
+        assert_eq!(parse_duration_minutes("7é"), None);
+        assert_eq!(parse_duration_minutes("\u{1f389}"), None);
+        // A malformed pip.conf value must yield WrongValue, not a panic.
+        let f = tmp_file("[install]\nuploaded-prior-to = P7é\n");
+        let recs = pip::scan(f.path(), "26.1");
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
     // ── yarn tests ──────────────────────────────────────────────────
 
     #[test]
