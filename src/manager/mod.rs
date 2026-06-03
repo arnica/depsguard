@@ -1439,6 +1439,27 @@ mod tests {
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
+    #[test]
+    fn date_parser_does_not_panic_on_multibyte_input() {
+        // Regression: parse_date_to_days sliced date_str[8..10] by byte index
+        // after a byte-length guard, so a date-shaped value whose 10th byte
+        // landed mid-codepoint panicked and aborted the whole scan.
+        // Reaches the date path via pip/uv when it isn't a relative duration.
+        let pip_f = tmp_file("[install]\nuploaded-prior-to = 2024-01-0é\n");
+        let pip_recs = pip::scan(pip_f.path(), "26.1");
+        assert!(matches!(pip_recs[0].status, CheckStatus::WrongValue(_)));
+
+        let uv_f = tmp_file("exclude-newer = \"2024-01-0é\"\n");
+        let uv_recs = uv::scan(uv_f.path(), "0.9.17");
+        assert!(matches!(uv_recs[0].status, CheckStatus::WrongValue(_)));
+
+        // Multibyte char straddling each guarded boundary must be rejected, not panic.
+        use date::is_date_old_enough;
+        assert!(!is_date_old_enough("2024-01-0é", 7));
+        assert!(!is_date_old_enough("2024-01-\u{1f389}", 7));
+        assert!(!is_date_old_enough("20é4-01-01", 7));
+    }
+
     // ── yarn tests ──────────────────────────────────────────────────
 
     #[test]

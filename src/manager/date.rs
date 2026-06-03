@@ -45,6 +45,12 @@ fn parse_date_to_days(date_str: &str) -> Option<u64> {
     if b[4] != b'-' || b[7] != b'-' {
         return None;
     }
+    // The ASCII '-' checks at b[4]/b[7] make indices 0,4,5,7,8 char boundaries,
+    // but index 10 is unguarded: a multibyte char straddling it would make the
+    // `date_str[8..10]` slice panic. Reject such input instead of crashing.
+    if !date_str.is_char_boundary(10) {
+        return None;
+    }
     let y: u64 = date_str[0..4].parse().ok()?;
     let m: u64 = date_str[5..7].parse().ok()?;
     let d: u64 = date_str[8..10].parse().ok()?;
