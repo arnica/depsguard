@@ -5,8 +5,13 @@ use std::path::Path;
 use super::config::read_toml_value;
 use super::date::{is_date_old_enough, parse_relative_days};
 use super::detect::get_delay_days;
-use super::types::{missing_status_for_path, CheckStatus, Recommendation};
+use super::types::{
+    missing_status_for_path, unsupported_with_message_if_configured, CheckStatus, Recommendation,
+};
 use super::version::{extract_version_str, parse_semver};
+
+/// uv stores the cooldown as the top-level `exclude-newer` key.
+pub(crate) const UV_KEY: &str = "exclude-newer";
 
 /// Minimum uv version that supports relative durations for `exclude-newer`.
 const UV_MIN_MAJOR: u64 = 0;
@@ -24,18 +29,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let ver = extract_version_str(version);
 
-    if !supports_relative_duration(version) {
-        return vec![Recommendation {
-            key: "exclude-newer".into(),
-            description: format!("Delay new versions by {days} days"),
-            expected: format!("{days} days"),
-            status: CheckStatus::Unsupported(format!(
-                "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
-            )),
-        }];
-    }
-
-    let val = read_toml_value(path, "exclude-newer");
+    let val = read_toml_value(path, UV_KEY);
     let status = match &val {
         Some(v) => {
             if let Some(d) = parse_relative_days(v) {
@@ -53,10 +47,23 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         None => missing_status_for_path(path),
     };
 
-    vec![Recommendation {
-        key: "exclude-newer".into(),
+    let rec = Recommendation {
+        key: UV_KEY.into(),
         description: format!("Delay new versions by {days} days"),
         expected: format!("{days} days"),
         status,
-    }]
+    };
+
+    let rec = if supports_relative_duration(version) {
+        rec
+    } else {
+        unsupported_with_message_if_configured(
+            rec,
+            format!(
+                "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
+            ),
+        )
+    };
+
+    vec![rec]
 }

@@ -146,7 +146,7 @@ fn status_color(s: &CheckStatus) -> &'static str {
         CheckStatus::Ok => GREEN,
         CheckStatus::Missing | CheckStatus::FileMissing => RED,
         CheckStatus::WrongValue(_) => YELLOW,
-        CheckStatus::Unsupported(_) => BLUE,
+        CheckStatus::Unsupported(_) => YELLOW,
     }
 }
 
@@ -185,7 +185,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             }
         }
     }
-    let total_issues = missing_count + file_missing_count + wrong_count;
+    let total_errors = missing_count + file_missing_count + wrong_count;
     let unique_configs = {
         let s: std::collections::HashSet<_> = managers.iter().map(|m| &m.config_path).collect();
         s.len()
@@ -216,11 +216,24 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         let group_managers: Vec<&ManagerInfo> = group.iter().map(|&idx| &managers[idx]).collect();
         let header = format_manager_header(&group_managers);
 
-        let all_ok = group.iter().all(|&idx| managers[idx].all_ok());
-        let badge = if all_ok {
-            format!("{BG_GREEN}{BOLD} SECURE {RESET}")
-        } else {
+        let has_errors = group.iter().any(|&idx| {
+            managers[idx]
+                .recommendations
+                .iter()
+                .any(|rec| rec.status.is_error())
+        });
+        let has_warnings = group.iter().any(|&idx| {
+            managers[idx]
+                .recommendations
+                .iter()
+                .any(|rec| rec.status.is_unsupported())
+        });
+        let badge = if has_errors {
             format!("{BG_RED}{BOLD} ACTION NEEDED {RESET}")
+        } else if has_warnings {
+            format!("{YELLOW}{BOLD} WARNING {RESET}")
+        } else {
+            format!("{BG_GREEN}{BOLD} SECURE {RESET}")
         };
 
         writeln!(w, "  {header}  {badge}")?;
@@ -267,7 +280,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         writeln!(w)?;
     }
 
-    if total_issues == 0 {
+    if total_errors == 0 && unsupported_count == 0 {
         writeln!(
             w,
             "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
@@ -289,7 +302,11 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
         }
         if unsupported_count > 0 {
-            write!(w, "{BLUE}{unsupported_count} unsupported{RESET}  ")?;
+            write!(
+                w,
+                "{YELLOW}{BOLD}{}{RESET}  ",
+                plural(unsupported_count, "warning", "warnings")
+            )?;
         }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
         let total = ok_count + file_missing_count + missing_count + wrong_count + unsupported_count;
@@ -1100,6 +1117,20 @@ mod tests {
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("bad"));
         assert!(s.contains("expected"));
+    }
+
+    #[test]
+    fn scan_results_unsupported_is_warning_not_all_clear() {
+        let mgr = make_manager(vec![make_rec(
+            "key",
+            CheckStatus::Unsupported("requires npm ≥ 11.10 (have 10.8.0)".into()),
+        )]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("WARNING"));
+        assert!(s.contains("1 warning"));
+        assert!(!s.contains("All 0 checks passed"));
     }
 
     #[test]

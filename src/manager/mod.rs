@@ -65,6 +65,13 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
                 vec![pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc)]
             }
         }
+        // These tools merge several config files by precedence into one effective
+        // configuration, so we resolve a single effective file rather than scanning
+        // each candidate independently (which would mis-report shadowed files).
+        ManagerKind::Pip | ManagerKind::Uv | ManagerKind::Poetry => {
+            let (cands, _) = user_config_candidates(kind, &home, &appdata, os);
+            vec![resolve_effective_config(&cands, effective_config_key(kind))]
+        }
         _ => {
             let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
             select_scan_paths(&cands, default_idx)
@@ -89,6 +96,39 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
             }
         })
         .collect()
+}
+
+/// Resolve the single effective user-level config path for tools that MERGE
+/// multiple config files by precedence (pip, uv, poetry).
+///
+/// `candidates` are ordered highest-precedence first. The effective value for
+/// `key` comes from the highest-precedence file that actually sets it; if no
+/// candidate sets it, the preferred (highest-precedence) path is returned as the
+/// write/report target.
+pub(crate) fn resolve_effective_config(
+    candidates: &[std::path::PathBuf],
+    key: &str,
+) -> std::path::PathBuf {
+    // The highest-precedence file that actually sets the key wins (matching how
+    // these tools merge per-key across their config hierarchy).
+    for cand in candidates {
+        if config::read_toml_value(cand, key).is_some() {
+            return cand.clone();
+        }
+    }
+    // No file sets it: report/write at the preferred (highest-precedence) path.
+    candidates.first().cloned().unwrap_or_default()
+}
+
+/// The dotted config key whose value determines the effective config file for a
+/// precedence-merging manager.
+fn effective_config_key(kind: ManagerKind) -> &'static str {
+    match kind {
+        ManagerKind::Pip => pip::PIP_KEY,
+        ManagerKind::Uv => uv::UV_KEY,
+        ManagerKind::Poetry => poetry::POETRY_KEY,
+        _ => unreachable!("effective_config_key is only for precedence-merging managers"),
+    }
 }
 
 /// Dispatch to the correct scanner for a given manager kind.
@@ -379,6 +419,126 @@ mod tests {
             paths,
             vec![xdg],
             "should use XDG as default when it's index 0"
+        );
+    }
+
+    // ── effective-config resolution (precedence-aware) ──────────────
+    //
+    // pip/uv/poetry MERGE config files by precedence; the highest-precedence
+    // file that sets the key determines the effective value. Scanning each file
+    // independently produces false positives/negatives, so we resolve one
+    // effective file per tool.
+
+    #[test]
+    fn resolve_effective_prefers_highest_that_sets_key() {
+        let current = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let legacy = tmp_file("[install]\n"); // exists but does not set the key
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        assert_eq!(effective, current.path());
+    }
+
+    #[test]
+    fn resolve_effective_falls_through_when_higher_omits_key() {
+        let current = tmp_file("[install]\n"); // exists but key not set
+        let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        assert_eq!(
+            effective,
+            legacy.path(),
+            "lower-precedence value applies when the higher file omits the key"
+        );
+    }
+
+    #[test]
+    fn resolve_effective_higher_value_wins_even_if_insecure() {
+        // A higher-precedence file that SETS the key overrides a lower one, even
+        // with a bad value — so the scanner correctly flags it.
+        let current = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
+        let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        assert_eq!(effective, current.path());
+    }
+
+    #[test]
+    fn resolve_effective_missing_everywhere_returns_preferred() {
+        let current = PathBuf::from("/tmp/depsguard-not-exist-current/pip.conf");
+        let legacy = PathBuf::from("/tmp/depsguard-not-exist-legacy/pip.conf");
+        let cands = vec![current.clone(), legacy];
+        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        assert_eq!(
+            effective, current,
+            "missing everywhere → preferred (highest-precedence) write target"
+        );
+    }
+
+    #[test]
+    fn pip_candidates_linux_current_precedes_legacy() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/home/testuser");
+        let (cands, idx) = user_config_candidates(ManagerKind::Pip, home, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(idx, 0);
+        assert_eq!(
+            cands[0],
+            PathBuf::from("/home/testuser/.config/pip/pip.conf"),
+            "current user config must be highest precedence"
+        );
+        let cur = cands
+            .iter()
+            .position(|p| p.ends_with(".config/pip/pip.conf"))
+            .expect("current present");
+        let leg = cands
+            .iter()
+            .position(|p| p.ends_with(".pip/pip.conf"))
+            .expect("legacy present");
+        assert!(cur < leg, "current must precede legacy: {cands:?}");
+    }
+
+    #[test]
+    fn pip_candidates_macos_uses_library_when_dir_exists() {
+        // Build a temp home that contains ~/Library/Application Support/pip/.
+        let base = std::env::temp_dir().join(format!(
+            "depsguard_pip_home_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let lib_dir = base.join("Library/Application Support/pip");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        let (cands, _) = user_config_candidates(ManagerKind::Pip, &base, &base, TargetOs::MacOs);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(
+            cands[0],
+            lib_dir.join("pip.conf"),
+            "when the Library pip dir exists, it is the current user config"
+        );
+    }
+
+    #[test]
+    fn uv_candidates_xdg_is_single_user_file() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-uv-test") };
+        let home = Path::new("/home/testuser");
+        let (cands, _) = user_config_candidates(ManagerKind::Uv, home, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(
+            cands,
+            vec![PathBuf::from("/tmp/xdg-uv-test/uv/uv.toml")],
+            "uv reads only the XDG user file, not ~/.config as well"
         );
     }
 
@@ -677,23 +837,6 @@ mod tests {
         assert_eq!(classify_file("Cargo.toml", dir, home), None);
     }
 
-    #[test]
-    fn manager_info_all_ok() {
-        let info = ManagerInfo {
-            kind: ManagerKind::Npm,
-            version: "1.0".into(),
-            config_path: PathBuf::from("/tmp"),
-            recommendations: vec![Recommendation {
-                key: "k".into(),
-                description: "d".into(),
-                expected: "v".into(),
-                status: CheckStatus::Ok,
-            }],
-            discovered: false,
-        };
-        assert!(info.all_ok());
-    }
-
     // ── npm tests ───────────────────────────────────────────────────
 
     #[test]
@@ -722,10 +865,18 @@ mod tests {
 
     #[test]
     fn scan_npm_old_version_unsupported() {
-        let f = tmp_file("ignore-scripts=true\n");
+        let f = tmp_file("min-release-age=7\nignore-scripts=true\n");
         let recs = npm::scan(f.path(), "10.8.0");
         assert!(recs[0].status.is_unsupported());
         assert!(recs[1].status.is_ok());
+    }
+
+    #[test]
+    fn scan_npm_old_version_missing_release_age_is_fixable() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = npm::scan(f.path(), "10.8.0");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -789,6 +940,14 @@ mod tests {
             "pnpm 10.15 should be Unsupported for minimum-release-age"
         );
         assert!(recs[1].status.is_ok(), "ignore-scripts has no version gate");
+    }
+
+    #[test]
+    fn scan_pnpm_old_version_missing_release_age_is_fixable() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = pnpm::scan_project(f.path(), "10.15.0");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -926,7 +1085,8 @@ mod tests {
 
     #[test]
     fn scan_uv_old_version_unsupported_message() {
-        let recs = uv::scan(Path::new("/nonexistent"), UV_OLD);
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = uv::scan(f.path(), UV_OLD);
         if let CheckStatus::Unsupported(msg) = &recs[0].status {
             assert!(
                 msg.contains("0.9.17") && msg.contains(UV_OLD),
@@ -935,6 +1095,14 @@ mod tests {
         } else {
             panic!("expected Unsupported, got: {:?}", recs[0].status);
         }
+    }
+
+    #[test]
+    fn scan_uv_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("");
+        let recs = uv::scan(f.path(), UV_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -964,7 +1132,8 @@ mod tests {
 
     #[test]
     fn uv_version_boundary_0_9_16_is_unsupported() {
-        let recs = uv::scan(Path::new("/nonexistent"), "0.9.16");
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = uv::scan(f.path(), "0.9.16");
         assert!(
             recs[0].status.is_unsupported(),
             "0.9.16 should be unsupported, got: {:?}",
@@ -1042,7 +1211,8 @@ mod tests {
 
     #[test]
     fn scan_pip_old_version_message_mentions_versions() {
-        let recs = pip::scan(Path::new("/nonexistent"), PIP_OLD);
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
         if let CheckStatus::Unsupported(msg) = &recs[0].status {
             assert!(
                 msg.contains("26.1") && msg.contains(PIP_OLD),
@@ -1051,6 +1221,14 @@ mod tests {
         } else {
             panic!("expected Unsupported, got: {:?}", recs[0].status);
         }
+    }
+
+    #[test]
+    fn scan_pip_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("[install]\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -1074,9 +1252,8 @@ mod tests {
 
     #[test]
     fn pip_version_boundary_26_0_unsupported_26_1_supported() {
-        assert!(pip::scan(Path::new("/nonexistent"), "26.0.5")[0]
-            .status
-            .is_unsupported());
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        assert!(pip::scan(f.path(), "26.0.5")[0].status.is_unsupported());
         assert!(!pip::scan(Path::new("/nonexistent"), "26.1.0")[0]
             .status
             .is_unsupported());
@@ -1124,7 +1301,8 @@ mod tests {
 
     #[test]
     fn scan_poetry_old_version_message_mentions_versions() {
-        let recs = poetry::scan(Path::new("/nonexistent"), POETRY_OLD);
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
         if let CheckStatus::Unsupported(msg) = &recs[0].status {
             assert!(
                 msg.contains("2.4") && msg.contains(POETRY_OLD),
@@ -1133,6 +1311,14 @@ mod tests {
         } else {
             panic!("expected Unsupported, got: {:?}", recs[0].status);
         }
+    }
+
+    #[test]
+    fn scan_poetry_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("[solver]\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -1154,9 +1340,8 @@ mod tests {
 
     #[test]
     fn poetry_version_boundary_2_3_unsupported_2_4_supported() {
-        assert!(poetry::scan(Path::new("/nonexistent"), "2.3.9")[0]
-            .status
-            .is_unsupported());
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        assert!(poetry::scan(f.path(), "2.3.9")[0].status.is_unsupported());
         assert!(!poetry::scan(Path::new("/nonexistent"), "2.4.0")[0]
             .status
             .is_unsupported());
@@ -1280,9 +1465,17 @@ mod tests {
 
     #[test]
     fn scan_yarn_old_version_unsupported() {
-        let f = tmp_file("");
+        let f = tmp_file("npmMinimalAgeGate: \"7d\"\n");
         let recs = yarn::scan(f.path(), "4.9.2");
         assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_yarn_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("");
+        let recs = yarn::scan(f.path(), "4.9.2");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -1753,7 +1946,7 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_old_version_block_exotic_unsupported() {
         let f = tmp_file(
-            "minimumReleaseAge: 10080\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
         );
         let recs = pnpm::scan_workspace(f.path(), "10.25.0");
         let exotic = recs.iter().find(|r| r.key == "blockExoticSubdeps").unwrap();
@@ -1763,20 +1956,22 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_workspace_very_old_version_all_unsupported() {
+    fn scan_pnpm_workspace_very_old_version_missing_settings_are_fixable() {
         let f = tmp_file("");
         let recs = pnpm::scan_workspace(f.path(), "10.2.0");
         assert!(
             recs.iter()
-                .all(|r| matches!(r.status, CheckStatus::Unsupported(_))),
-            "all settings should be unsupported on pnpm 10.2: {:?}",
+                .all(|r| matches!(r.status, CheckStatus::Missing)),
+            "all missing settings should remain fixable on pnpm 10.2: {:?}",
             recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
         );
     }
 
     #[test]
     fn scan_pnpm_workspace_version_10_16_partial_support() {
-        let f = tmp_file("minimumReleaseAge: 10080\nstrictDepBuilds: true\n");
+        let f = tmp_file(
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+        );
         let recs = pnpm::scan_workspace(f.path(), "10.16.0");
         let age = recs.iter().find(|r| r.key == "minimumReleaseAge").unwrap();
         assert!(age.status.is_ok());
@@ -1994,7 +2189,9 @@ mod tests {
 
     #[test]
     fn scan_pnpm_global_v10_old_version_partial() {
-        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let f = tmp_file(
+            "minimum-release-age=10080\nblock-exotic-subdeps=true\ntrust-policy=no-downgrade\nignore-scripts=true\n",
+        );
         let recs = pnpm::scan_global(f.path(), "10.16.0");
         let age = recs
             .iter()
@@ -2010,6 +2207,21 @@ mod tests {
             .find(|r| r.key == "block-exotic-subdeps")
             .unwrap();
         assert!(exotic.status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_old_version_missing_gated_settings_are_fixable() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = pnpm::scan_global(f.path(), "10.16.0");
+        let trust = recs.iter().find(|r| r.key == "trust-policy").unwrap();
+        assert!(matches!(trust.status, CheckStatus::Missing));
+        assert!(trust.needs_fix());
+        let exotic = recs
+            .iter()
+            .find(|r| r.key == "block-exotic-subdeps")
+            .unwrap();
+        assert!(matches!(exotic.status, CheckStatus::Missing));
+        assert!(exotic.needs_fix());
     }
 
     // ── pnpm global scan tests (v11 config.yaml format) ────────────

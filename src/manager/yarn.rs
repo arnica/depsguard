@@ -5,22 +5,13 @@ use std::path::Path;
 use super::config::read_yaml_value;
 use super::date::parse_duration_minutes;
 use super::detect::get_delay_days;
-use super::types::{missing_status_for_path, unsupported_rec, CheckStatus, Recommendation};
+use super::types::{
+    missing_status_for_path, unsupported_if_configured, CheckStatus, Recommendation,
+};
 use super::version::version_at_least;
 
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
-    if !version_at_least(version, 4, 10) {
-        return vec![unsupported_rec(
-            "npmMinimalAgeGate",
-            &format!("Delay new versions by {days} days"),
-            &format!("{days}d"),
-            "yarn",
-            4,
-            10,
-            version,
-        )];
-    }
     let val = read_yaml_value(path, "npmMinimalAgeGate");
     let required_minutes = days.saturating_mul(24).saturating_mul(60);
     let status = match &val {
@@ -43,10 +34,18 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         }
         None => missing_status_for_path(path),
     };
-    vec![Recommendation {
+    let rec = Recommendation {
         key: "npmMinimalAgeGate".into(),
         description: format!("Delay new versions by {days} days"),
         expected: format!("{days}d"),
         status,
-    }]
+    };
+
+    let rec = if version_at_least(version, 4, 10) {
+        rec
+    } else {
+        unsupported_if_configured(rec, "yarn", 4, 10, version)
+    };
+
+    vec![rec]
 }

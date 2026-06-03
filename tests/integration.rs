@@ -856,6 +856,46 @@ fn pip_scan_detects_manager() {
     );
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn pip_scan_resolves_effective_config_across_legacy_and_current() {
+    if !has_command("pip") {
+        return;
+    }
+    // Reproduces the reported false positive: the current ~/.config/pip/pip.conf is
+    // secure while the legacy ~/.pip/pip.conf lacks the key. pip's current file
+    // overrides the legacy one, so the effective posture is secure — and DepsGuard
+    // must report a single entry, not flag the shadowed legacy file.
+    let home = TmpHome::new("pip_effective");
+    let current = home.path().join(".config/pip/pip.conf");
+    let legacy = home.path().join(".pip/pip.conf");
+    fs::create_dir_all(current.parent().unwrap()).unwrap();
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&current, "[install]\nuploaded-prior-to = P7D\n").unwrap();
+    fs::write(&legacy, "[install]\n").unwrap(); // exists but no cooldown key
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/.config/pip/pip.conf"),
+        "expected the effective current pip config:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("~/.pip/pip.conf"),
+        "shadowed legacy ~/.pip/pip.conf must not be a separate finding:\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("pip/pip.conf").count(),
+        1,
+        "expected exactly one pip config entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("uploaded-prior-to"),
+        "expected the pip cooldown setting in output:\n{stdout}"
+    );
+}
+
 #[test]
 fn poetry_scan_detects_manager() {
     if !has_command("poetry") {
@@ -994,11 +1034,14 @@ fn uv_config_fix_and_rescan_from_xdg() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
-fn uv_scan_checks_both_user_configs_when_both_exist() {
+fn uv_scan_uses_xdg_user_config_and_ignores_dotconfig() {
     if !has_command("uv") {
         return;
     }
-    let home = TmpHome::new("uv_both_configs");
+    // uv reads a single user-level config: `$XDG_CONFIG_HOME/uv/uv.toml` when XDG
+    // is set, which *replaces* `~/.config/uv/uv.toml` (uv does not merge both). So
+    // a shadowed ~/.config/uv must not be reported as a separate finding.
+    let home = TmpHome::new("uv_xdg_config");
     let xdg = home.path().join("xdg");
     let xdg_uv = xdg.join("uv/uv.toml");
     let home_uv = home.path().join(".config/uv/uv.toml");
@@ -1016,29 +1059,17 @@ fn uv_scan_checks_both_user_configs_when_both_exist() {
 
     assert!(
         stdout.contains("~/xdg/uv/uv.toml"),
-        "expected XDG uv path:\n{stdout}"
+        "expected the effective XDG uv path:\n{stdout}"
     );
     assert!(
-        stdout.contains("~/.config/uv/uv.toml"),
-        "expected home uv path:\n{stdout}"
+        !stdout.contains("~/.config/uv/uv.toml"),
+        "shadowed ~/.config/uv must not be reported when XDG is set:\n{stdout}"
     );
-    let is_unsupported =
-        stdout.contains("ℹ exclude-newer") || stdout.contains("\u{2139} exclude-newer");
-    if is_unsupported {
-        assert!(
-            stdout.contains("requires uv"),
-            "unsupported uv should explain version requirement:\n{stdout}"
-        );
-    } else {
-        assert!(
-            stdout.contains("✓ exclude-newer —") || stdout.contains("\u{2713} exclude-newer —"),
-            "expected configured uv entry:\n{stdout}"
-        );
-        assert!(
-            stdout.contains("exclude-newer — not set"),
-            "expected missing uv entry for the second config:\n{stdout}"
-        );
-    }
+    assert_eq!(
+        stdout.matches("uv/uv.toml").count(),
+        1,
+        "expected exactly one uv config entry:\n{stdout}"
+    );
 }
 
 #[test]

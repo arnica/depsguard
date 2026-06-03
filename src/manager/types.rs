@@ -27,6 +27,14 @@ impl CheckStatus {
     pub fn is_unsupported(&self) -> bool {
         matches!(self, CheckStatus::Unsupported(_))
     }
+
+    #[must_use]
+    pub fn is_error(&self) -> bool {
+        matches!(
+            self,
+            CheckStatus::Missing | CheckStatus::FileMissing | CheckStatus::WrongValue(_)
+        )
+    }
 }
 
 impl std::fmt::Display for CheckStatus {
@@ -164,13 +172,6 @@ pub struct ManagerInfo {
     pub discovered: bool,
 }
 
-impl ManagerInfo {
-    #[must_use]
-    pub fn all_ok(&self) -> bool {
-        self.recommendations.iter().all(|r| r.status.is_ok())
-    }
-}
-
 /// Target OS for config path resolution. Allows testing all platforms from any host.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TargetOs {
@@ -202,24 +203,31 @@ pub enum RepoConfigKind {
     Dependabot,
 }
 
-/// Build an `Unsupported` recommendation for features gated behind a minimum version.
-pub fn unsupported_rec(
-    key: &str,
-    desc: &str,
-    expected: &str,
+/// Mark an already-correct setting as `Unsupported`; keep missing/wrong config fixable.
+pub fn unsupported_if_configured(
+    mut rec: Recommendation,
     manager_name: &str,
     min_major: u64,
     min_minor: u64,
     have_version: &str,
 ) -> Recommendation {
-    Recommendation {
-        key: key.into(),
-        description: desc.into(),
-        expected: expected.into(),
-        status: CheckStatus::Unsupported(format!(
+    if rec.status.is_ok() {
+        rec.status = CheckStatus::Unsupported(format!(
             "requires {manager_name} \u{2265} {min_major}.{min_minor} (have {have_version})"
-        )),
+        ));
     }
+    rec
+}
+
+/// Mark an already-correct setting as `Unsupported` using a custom version message.
+pub fn unsupported_with_message_if_configured(
+    mut rec: Recommendation,
+    message: String,
+) -> Recommendation {
+    if rec.status.is_ok() {
+        rec.status = CheckStatus::Unsupported(message);
+    }
+    rec
 }
 
 /// Return `Missing` or `FileMissing` based on whether the config file exists on disk.

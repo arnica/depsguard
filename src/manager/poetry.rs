@@ -4,7 +4,9 @@ use std::path::Path;
 
 use super::config::read_toml_value;
 use super::detect::get_delay_days;
-use super::types::{missing_status_for_path, unsupported_rec, CheckStatus, Recommendation};
+use super::types::{
+    missing_status_for_path, unsupported_if_configured, CheckStatus, Recommendation,
+};
 use super::version::{extract_version_str, version_at_least};
 
 /// Minimum poetry version that supports `solver.min-release-age` (added in 2.4.0).
@@ -12,25 +14,13 @@ const POETRY_MIN_MAJOR: u64 = 2;
 const POETRY_MIN_MINOR: u64 = 4;
 
 /// poetry stores the cooldown under `[solver]` as `min-release-age` (integer days).
-const POETRY_KEY: &str = "solver.min-release-age";
+pub(crate) const POETRY_KEY: &str = "solver.min-release-age";
 
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let ver = extract_version_str(version);
     let expected = days.to_string();
     let description = format!("Delay new versions by {days} days");
-
-    if !version_at_least(ver, POETRY_MIN_MAJOR, POETRY_MIN_MINOR) {
-        return vec![unsupported_rec(
-            POETRY_KEY,
-            &description,
-            &expected,
-            "poetry",
-            POETRY_MIN_MAJOR,
-            POETRY_MIN_MINOR,
-            ver,
-        )];
-    }
 
     let val = read_toml_value(path, POETRY_KEY);
     let status = match &val {
@@ -41,10 +31,18 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         None => missing_status_for_path(path),
     };
 
-    vec![Recommendation {
+    let rec = Recommendation {
         key: POETRY_KEY.into(),
         description,
         expected,
         status,
-    }]
+    };
+
+    let rec = if version_at_least(ver, POETRY_MIN_MAJOR, POETRY_MIN_MINOR) {
+        rec
+    } else {
+        unsupported_if_configured(rec, "poetry", POETRY_MIN_MAJOR, POETRY_MIN_MINOR, ver)
+    };
+
+    vec![rec]
 }
