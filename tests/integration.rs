@@ -76,11 +76,7 @@ fn tool_at_least(cmd: &str, major: u32, minor: u32) -> bool {
 }
 
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_depsguard"))
-        .args(args)
-        .env("HOME", home)
-        .output()
-        .expect("failed to run depsguard")
+    run_depsguard_with_env(args, home, &[])
 }
 
 fn run_depsguard_with_env(
@@ -90,6 +86,12 @@ fn run_depsguard_with_env(
 ) -> std::process::Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_depsguard"));
     cmd.args(args).env("HOME", home);
+    // Keep config resolution hermetic: don't inherit the runner's
+    // XDG_CONFIG_HOME, which would redirect pip/uv/poetry lookups outside the
+    // temp HOME (Linux CI sets it; macOS usually doesn't, which is why this only
+    // surfaced in CI). Tests that need XDG set it explicitly via `envs`, applied
+    // after the removal below so they still win.
+    cmd.env_remove("XDG_CONFIG_HOME");
     for (key, val) in envs {
         cmd.env(key, val);
     }
@@ -107,6 +109,10 @@ fn pnpm_globalconfig_path(home: &Path, envs: &[(&str, &std::ffi::OsStr)]) -> Opt
     let mut cmd = Command::new("pnpm");
     cmd.args(["config", "get", "globalconfig"])
         .env("HOME", home);
+    // Match `run_depsguard`'s hermetic environment: strip the inherited
+    // XDG_CONFIG_HOME so this oracle computes the same path depsguard will.
+    // Explicit `envs` (applied after) still win for the XDG-specific test.
+    cmd.env_remove("XDG_CONFIG_HOME");
     for (key, val) in envs {
         cmd.env(key, val);
     }
