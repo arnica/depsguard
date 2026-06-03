@@ -51,11 +51,16 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         status,
     };
 
-    let rec = if version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
-        rec
-    } else {
-        unsupported_if_configured(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver)
-    };
+    // Only relative ISO-8601 durations (e.g. `P7D`) require pip >= 26.1; absolute
+    // datetimes are supported on 26.0, so don't relabel a valid absolute-date
+    // config as needing an upgrade.
+    let configured_relative_duration = val.as_deref().and_then(parse_iso8601_days).is_some();
+    let rec =
+        if configured_relative_duration && !version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
+            unsupported_if_configured(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver)
+        } else {
+            rec
+        };
 
     vec![rec]
 }

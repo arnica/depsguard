@@ -1084,6 +1084,21 @@ mod tests {
     }
 
     #[test]
+    fn scan_uv_old_version_absolute_date_stays_ok() {
+        // Only relative durations need uv >= 0.9.17; an absolute RFC-3339 date is
+        // supported on older uv, so a valid old-enough date must NOT be relabeled
+        // as requiring an upgrade.
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("exclude-newer = \"{old_date}\"\n"));
+        let recs = uv::scan(f.path(), UV_OLD);
+        assert!(
+            recs[0].status.is_ok(),
+            "absolute date on old uv should stay Ok, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
     fn scan_uv_old_version_unsupported_message() {
         let f = tmp_file("exclude-newer = \"7 days\"\n");
         let recs = uv::scan(f.path(), UV_OLD);
@@ -1196,6 +1211,21 @@ mod tests {
         let f = tmp_file("[install]\n");
         let recs = pip::scan(f.path(), PIP_NEW);
         assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_pip_old_version_absolute_date_stays_ok() {
+        // pip 26.0 supports absolute datetimes; only relative ISO-8601 durations
+        // need 26.1. A valid old-enough absolute date must stay Ok, not be
+        // relabeled "requires pip >= 26.1".
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(
+            recs[0].status.is_ok(),
+            "absolute date on pip 26.0 should stay Ok, got: {:?}",
+            recs[0].status
+        );
     }
 
     #[test]
