@@ -18,13 +18,13 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         Some(v) => {
             if let Some(configured_minutes) = parse_duration_minutes(v) {
                 if configured_minutes >= required_minutes {
-                    CheckStatus::Ok
+                    CheckStatus::Ok(v.clone())
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }
             } else if let Ok(raw_minutes) = v.parse::<u64>() {
                 if raw_minutes >= required_minutes {
-                    CheckStatus::Ok
+                    CheckStatus::Ok(v.clone())
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }

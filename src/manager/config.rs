@@ -42,7 +42,7 @@ pub fn check_flat(
     desc: &str,
 ) -> Recommendation {
     let status = match cfg.get(key) {
-        Some(v) if v == expected => CheckStatus::Ok,
+        Some(v) if v == expected => CheckStatus::Ok(v.clone()),
         Some(v) => CheckStatus::WrongValue(v.clone()),
         None => missing_status_for_path(path),
     };
@@ -64,7 +64,7 @@ pub fn check_flat_min_int(
 ) -> Recommendation {
     let status = match cfg.get(key) {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= min => CheckStatus::Ok,
+            Ok(n) if n >= min => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         None => missing_status_for_path(path),
@@ -166,9 +166,9 @@ pub fn check_yaml(
     let val = read_yaml_value(path, key);
     let status = match (&val, &check) {
         (None, _) => missing_status_for_path(path),
-        (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok,
+        (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok(v.clone()),
         (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
-            Ok(n) if n >= *min => CheckStatus::Ok,
+            Ok(n) if n >= *min => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         (Some(v), _) => CheckStatus::WrongValue(v.clone()),

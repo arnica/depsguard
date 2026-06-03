@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 /// Result of checking a single security setting against its expected value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckStatus {
-    /// The setting matches the expected value.
-    Ok,
+    /// The setting satisfies the policy. Carries the actual configured value so
+    /// the report shows what the user really has, not the target.
+    Ok(String),
     /// The setting is not configured at all.
     Missing,
     /// The config file itself does not exist yet.
@@ -20,7 +21,7 @@ pub enum CheckStatus {
 impl CheckStatus {
     #[must_use]
     pub fn is_ok(&self) -> bool {
-        matches!(self, CheckStatus::Ok)
+        matches!(self, CheckStatus::Ok(_))
     }
 
     #[must_use]
@@ -40,7 +41,7 @@ impl CheckStatus {
 impl std::fmt::Display for CheckStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CheckStatus::Ok => write!(f, "OK"),
+            CheckStatus::Ok(_) => write!(f, "OK"),
             CheckStatus::Missing => write!(f, "Not set"),
             CheckStatus::FileMissing => write!(f, "file missing"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),

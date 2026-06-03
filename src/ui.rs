@@ -132,7 +132,7 @@ fn format_manager_header(managers: &[&ManagerInfo]) -> String {
 
 fn status_icon(s: &CheckStatus) -> &'static str {
     match s {
-        CheckStatus::Ok => "✓",
+        CheckStatus::Ok(_) => "✓",
         CheckStatus::Missing | CheckStatus::FileMissing => "✗",
         CheckStatus::WrongValue(_) => "~",
         CheckStatus::Unsupported(_) => "ℹ",
@@ -141,7 +141,7 @@ fn status_icon(s: &CheckStatus) -> &'static str {
 
 fn status_color(s: &CheckStatus) -> &'static str {
     match s {
-        CheckStatus::Ok => GREEN,
+        CheckStatus::Ok(_) => GREEN,
         CheckStatus::Missing | CheckStatus::FileMissing => RED,
         CheckStatus::WrongValue(_) => YELLOW,
         CheckStatus::Unsupported(_) => YELLOW,
@@ -175,7 +175,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 continue;
             }
             match &rec.status {
-                CheckStatus::Ok => ok_count += 1,
+                CheckStatus::Ok(_) => ok_count += 1,
                 CheckStatus::Missing => missing_count += 1,
                 CheckStatus::FileMissing => file_missing_count += 1,
                 CheckStatus::WrongValue(_) => wrong_count += 1,
@@ -253,7 +253,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 let icon = status_icon(&rec.status);
                 let color = status_color(&rec.status);
                 let detail = match &rec.status {
-                    CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
+                    CheckStatus::Ok(v) => format!("{GREEN}{v}{RESET}"),
                     CheckStatus::Missing => format!("{RED}not set{RESET}"),
                     CheckStatus::FileMissing => format!("{RED}file missing{RESET}"),
                     CheckStatus::WrongValue(v) => {
@@ -1076,8 +1076,32 @@ mod tests {
     }
 
     #[test]
+    fn scan_results_ok_shows_actual_configured_value_not_target() {
+        // Regression: an OK check must display the ACTUAL configured value, not
+        // the target. A value stricter than the target (e.g. 20160 >= 10080) is
+        // OK and must be shown as 20160, never relabeled as the 10080 target.
+        let mgr = make_manager(vec![Recommendation {
+            key: "minimum-release-age".into(),
+            description: "Delay new versions by 7 days".into(),
+            expected: "10080".into(),
+            status: CheckStatus::Ok("20160".into()),
+        }]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(
+            s.contains("20160"),
+            "OK row must show the actual configured value:\n{s}"
+        );
+        assert!(
+            !s.contains("10080"),
+            "OK row must not show the target as if it were the current value:\n{s}"
+        );
+    }
+
+    #[test]
     fn scan_results_all_ok() {
-        let mgr = make_manager(vec![make_rec("key", CheckStatus::Ok)]);
+        let mgr = make_manager(vec![make_rec("key", CheckStatus::Ok("ok_val".into()))]);
         let mut buf = Vec::new();
         print_scan_results(&mut buf, &[mgr]).unwrap();
         let s = String::from_utf8(buf).unwrap();
@@ -1132,7 +1156,7 @@ mod tests {
     #[test]
     fn build_fix_items_skips_ok() {
         let mgr = make_manager(vec![
-            make_rec("ok_key", CheckStatus::Ok),
+            make_rec("ok_key", CheckStatus::Ok("ok_val".into())),
             make_rec("bad_key", CheckStatus::Missing),
         ]);
         let items = build_fix_items(&[mgr]);
@@ -1143,7 +1167,7 @@ mod tests {
 
     #[test]
     fn build_fix_items_empty_when_all_ok() {
-        let mgr = make_manager(vec![make_rec("ok", CheckStatus::Ok)]);
+        let mgr = make_manager(vec![make_rec("ok", CheckStatus::Ok("ok_val".into()))]);
         let items = build_fix_items(&[mgr]);
         assert!(items.is_empty());
     }

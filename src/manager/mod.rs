@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn check_status_display() {
-        assert_eq!(format!("{}", CheckStatus::Ok), "OK");
+        assert_eq!(format!("{}", CheckStatus::Ok("7".into())), "OK");
         assert_eq!(format!("{}", CheckStatus::Missing), "Not set");
         assert_eq!(format!("{}", CheckStatus::FileMissing), "file missing");
         assert_eq!(
@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn check_status_is_ok() {
-        assert!(CheckStatus::Ok.is_ok());
+        assert!(CheckStatus::Ok("7".into()).is_ok());
         assert!(!CheckStatus::Missing.is_ok());
         assert!(!CheckStatus::FileMissing.is_ok());
         assert!(!CheckStatus::WrongValue("x".into()).is_ok());
@@ -623,7 +623,7 @@ mod tests {
             key: "k".into(),
             description: "d".into(),
             expected: "v".into(),
-            status: CheckStatus::Ok,
+            status: CheckStatus::Ok("v".into()),
         };
         assert!(!ok.needs_fix());
         let bad = Recommendation {
@@ -861,6 +861,21 @@ mod tests {
         let recs = npm::scan(f.path(), "11.10.0");
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
         assert!(matches!(recs[1].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_npm_higher_release_age_is_ok() {
+        // npm's min-release-age means "at least N days"; a value higher than the
+        // target satisfies the policy (>= comparison, not an exact match).
+        // Default target is 7 days, so 14 must be OK — not flagged for "fixing"
+        // (which would wrongly lower it to 7).
+        let f = tmp_file("min-release-age=14\nignore-scripts=true\n");
+        let recs = npm::scan(f.path(), "11.10.0");
+        assert!(
+            recs[0].status.is_ok(),
+            "14-day min-release-age should satisfy a 7-day policy, got: {:?}",
+            recs[0].status
+        );
     }
 
     #[test]

@@ -25,7 +25,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let val = read_toml_value(path, POETRY_KEY);
     let status = match &val {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= days => CheckStatus::Ok,
+            Ok(n) if n >= days => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         None => missing_status_for_path(path),

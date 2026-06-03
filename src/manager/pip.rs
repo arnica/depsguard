@@ -31,12 +31,12 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         Some(v) => {
             if let Some(d) = parse_iso8601_days(v) {
                 if d >= days {
-                    CheckStatus::Ok
+                    CheckStatus::Ok(v.clone())
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }
             } else if is_date_old_enough(v, days) {
-                CheckStatus::Ok
+                CheckStatus::Ok(v.clone())
             } else {
                 CheckStatus::WrongValue(v.clone())
             }
