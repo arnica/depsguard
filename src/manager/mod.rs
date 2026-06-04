@@ -65,9 +65,11 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
                 vec![pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc)]
             }
         }
-        // These tools merge several config files by precedence into one effective
-        // configuration, so we resolve a single effective file rather than scanning
-        // each candidate independently (which would mis-report shadowed files).
+        // These tools resolve to a single effective user-level config: pip/poetry
+        // merge candidate files by precedence, and uv selects one file (XDG
+        // replaces ~/.config). Either way we report one effective file rather than
+        // scanning each candidate independently (which would mis-report shadowed
+        // files).
         ManagerKind::Pip | ManagerKind::Uv | ManagerKind::Poetry => {
             let (cands, _) = user_config_candidates(kind, &home, &appdata, os);
             vec![resolve_effective_config(&cands, effective_config_key(kind))]
@@ -98,13 +100,14 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
         .collect()
 }
 
-/// Resolve the single effective user-level config path for tools that MERGE
-/// multiple config files by precedence (pip, uv, poetry).
+/// Resolve the single effective user-level config path for tools that read one
+/// effective configuration (pip, uv, poetry).
 ///
 /// `candidates` are ordered highest-precedence first. The effective value for
 /// `key` comes from the highest-precedence file that actually sets it; if no
 /// candidate sets it, the preferred (highest-precedence) path is returned as the
-/// write/report target.
+/// write/report target. (pip/poetry merge by precedence; uv has a single
+/// candidate since XDG replaces `~/.config` rather than stacking with it.)
 pub(crate) fn resolve_effective_config(
     candidates: &[std::path::PathBuf],
     key: &str,

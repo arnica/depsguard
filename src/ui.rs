@@ -663,6 +663,9 @@ pub fn print_selector(
          {YELLOW}q{RESET} {DIM}quit{RESET}",
         filter.next_action()
     )?;
+    // Always emit exactly one status line so the rendered footer matches the rows
+    // reserved by `selector_chrome_lines` (when not paginated and the filter is
+    // All, this is an intentionally blank line rather than a dropped row).
     if paginated {
         writeln!(
             w,
@@ -673,7 +676,7 @@ pub fn print_selector(
             current_page,
             total_pages,
         )?;
-    } else if filter != SelectFilter::All {
+    } else {
         writeln!(w, "{filter_label}")?;
     }
     if !toggle_keys.is_empty() {
