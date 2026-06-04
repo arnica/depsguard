@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::config::read_toml_value;
+use super::config::read_ini_value;
 use super::date::parse_iso8601_days;
 use super::detect::get_delay_days;
 use super::types::{
@@ -26,7 +26,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let expected = format!("P{days}D");
     let description = format!("Delay new versions by {days} days");
 
-    let val = read_toml_value(path, PIP_KEY);
+    let val = read_ini_value(path, PIP_KEY);
     let status = match &val {
         Some(v) => {
             // Exact policy: only the requested rolling duration is OK. An absolute

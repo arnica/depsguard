@@ -306,7 +306,10 @@ fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io
 
         if in_target && trimmed.starts_with(key) {
             let rest = trimmed[key.len()..].trim_start();
-            if rest.starts_with('=') {
+            // Replace the existing assignment regardless of delimiter. pip.conf
+            // (configparser) accepts `:` as well as `=`; matching both avoids
+            // appending a duplicate option that would break the file.
+            if rest.starts_with('=') || rest.starts_with(':') {
                 lines.push(target_line.clone());
                 found = true;
                 continue;
@@ -808,6 +811,31 @@ mod tests {
         assert!(
             content.contains("uploaded-prior-to = P7D"),
             "got: {content}"
+        );
+    }
+
+    #[test]
+    fn apply_fix_pip_replaces_colon_delimited_key() {
+        // pip.conf may use `key: value`; the fix must replace that line in place,
+        // not append a `key = value` duplicate (configparser would then error on a
+        // duplicate option and break pip).
+        let f = tmp_file("[install]\nuploaded-prior-to : P1D\n");
+        let rec = Recommendation {
+            key: "install.uploaded-prior-to".into(),
+            description: "test".into(),
+            expected: "P7D".into(),
+            status: crate::manager::CheckStatus::WrongValue("P1D".into()),
+        };
+        apply_fix(ManagerKind::Pip, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(
+            content.contains("uploaded-prior-to = P7D"),
+            "got: {content}"
+        );
+        assert_eq!(
+            content.matches("uploaded-prior-to").count(),
+            1,
+            "must not create a duplicate option: {content}"
         );
     }
 

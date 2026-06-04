@@ -72,7 +72,16 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
         // files).
         ManagerKind::Pip | ManagerKind::Uv | ManagerKind::Poetry => {
             let (cands, _) = user_config_candidates(kind, &home, &appdata, os);
-            vec![resolve_effective_config(&cands, effective_config_key(kind))]
+            // pip.conf is INI (configparser); uv.toml / poetry config.toml are TOML.
+            let read: fn(&std::path::Path, &str) -> Option<String> = match kind {
+                ManagerKind::Pip => config::read_ini_value,
+                _ => config::read_toml_value,
+            };
+            vec![resolve_effective_config(
+                &cands,
+                effective_config_key(kind),
+                read,
+            )]
         }
         _ => {
             let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
@@ -111,11 +120,13 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
 pub(crate) fn resolve_effective_config(
     candidates: &[std::path::PathBuf],
     key: &str,
+    read: fn(&std::path::Path, &str) -> Option<String>,
 ) -> std::path::PathBuf {
     // The highest-precedence file that actually sets the key wins (matching how
-    // these tools merge per-key across their config hierarchy).
+    // these tools merge per-key across their config hierarchy). `read` is the
+    // format-appropriate value reader (INI for pip, TOML for uv/poetry).
     for cand in candidates {
-        if config::read_toml_value(cand, key).is_some() {
+        if read(cand, key).is_some() {
             return cand.clone();
         }
     }
@@ -297,8 +308,8 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 #[cfg(test)]
 mod tests {
     use super::config::{
-        read_dependabot_entries, read_flat_config, read_json_string_value, read_toml_value,
-        read_yaml_value,
+        read_dependabot_entries, read_flat_config, read_ini_value, read_json_string_value,
+        read_toml_value, read_yaml_value,
     };
     use super::detect::{
         get_delay_days, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
@@ -437,7 +448,8 @@ mod tests {
         let current = tmp_file("[install]\nuploaded-prior-to = P7D\n");
         let legacy = tmp_file("[install]\n"); // exists but does not set the key
         let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
-        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
         assert_eq!(effective, current.path());
     }
 
@@ -446,7 +458,8 @@ mod tests {
         let current = tmp_file("[install]\n"); // exists but key not set
         let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
         let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
-        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
         assert_eq!(
             effective,
             legacy.path(),
@@ -461,7 +474,8 @@ mod tests {
         let current = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
         let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
         let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
-        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
         assert_eq!(effective, current.path());
     }
 
@@ -470,7 +484,8 @@ mod tests {
         let current = PathBuf::from("/tmp/depsguard-not-exist-current/pip.conf");
         let legacy = PathBuf::from("/tmp/depsguard-not-exist-legacy/pip.conf");
         let cands = vec![current.clone(), legacy];
-        let effective = resolve_effective_config(&cands, "install.uploaded-prior-to");
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
         assert_eq!(
             effective, current,
             "missing everywhere → preferred (highest-precedence) write target"
@@ -567,6 +582,44 @@ mod tests {
     fn read_toml_value_inline_comment() {
         let f = tmp_file("key = 42 # a comment\n");
         assert_eq!(read_toml_value(f.path(), "key"), Some("42".into()));
+    }
+
+    #[test]
+    fn read_ini_value_accepts_equals_and_colon() {
+        let eq = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        assert_eq!(
+            read_ini_value(eq.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
+        let colon = tmp_file("[install]\nuploaded-prior-to: P7D\n");
+        assert_eq!(
+            read_ini_value(colon.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
+    }
+
+    #[test]
+    fn read_ini_value_keeps_inline_comments() {
+        // configparser does not strip inline `#`/`;`; the value is the full line.
+        let hash = tmp_file("[install]\nuploaded-prior-to = P7D # note\n");
+        assert_eq!(
+            read_ini_value(hash.path(), "install.uploaded-prior-to"),
+            Some("P7D # note".into())
+        );
+        let semi = tmp_file("[install]\nuploaded-prior-to = P7D ; note\n");
+        assert_eq!(
+            read_ini_value(semi.path(), "install.uploaded-prior-to"),
+            Some("P7D ; note".into())
+        );
+    }
+
+    #[test]
+    fn read_ini_value_skips_full_line_comments() {
+        let f = tmp_file("[install]\n; a comment\n# another\nuploaded-prior-to = P7D\n");
+        assert_eq!(
+            read_ini_value(f.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
     }
 
     // ── Date tests ──────────────────────────────────────────────────
@@ -1232,6 +1285,32 @@ mod tests {
         let f = tmp_file("[install]\n");
         let recs = pip::scan(f.path(), PIP_NEW);
         assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_pip_colon_delimiter_is_read() {
+        // pip.conf (configparser) accepts `key: value`, not just `key = value`.
+        let f = tmp_file("[install]\nuploaded-prior-to: P7D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(
+            recs[0].status.is_ok(),
+            "colon-delimited pip value should be read, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_pip_inline_comment_is_not_stripped() {
+        // configparser does NOT strip inline comments, so the value is literally
+        // `P7D # note` (invalid) — must be flagged, never treated as a clean P7D
+        // (which would be a false SECURE).
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D # note\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "inline-commented pip value must be flagged, got: {:?}",
+            recs[0].status
+        );
     }
 
     #[test]
