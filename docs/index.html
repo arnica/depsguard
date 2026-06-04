@@ -1825,8 +1825,8 @@ scoop install depsguard</code></pre>
           </tbody>
         </table>
         <p style="margin:.65rem .85rem .65rem; color:var(--text-mute); font-size:.75rem; line-height:1.55;">
-          <sup>*</sup> When <code>$XDG_CONFIG_HOME</code> is set, DepsGuard checks both the XDG path and the default path; whichever files exist on disk are each scanned independently.
-          If neither exists, the XDG path is used as the default for new fixes.
+          <sup>*</sup> When <code>$XDG_CONFIG_HOME</code> is set, DepsGuard prefers the XDG path. For bun, each existing config file is scanned independently. For pip, uv, and poetry it resolves a single effective config &mdash; pip/poetry use the highest-precedence file that sets the value, and uv reads the XDG file in place of <code>~/.config</code> (it does not merge both).
+          If no config exists, the XDG path is used as the default for new fixes.
         </p>
         </div>
       </div>
