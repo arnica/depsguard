@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use super::config::{check_flat, check_flat_min_int, check_yaml, read_flat_config, YamlCheck};
+use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{unsupported_rec, Recommendation};
+use super::types::{unsupported_if_configured, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -13,24 +13,17 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
     let minutes = days.saturating_mul(24).saturating_mul(60);
     let cfg = read_flat_config(path);
 
+    let release_age = check_flat_exact_int(
+        path,
+        &cfg,
+        "minimum-release-age",
+        minutes,
+        &format!("Delay new versions by {days} days"),
+    );
     let release_age = if version_at_least(version, 10, 16) {
-        check_flat_min_int(
-            path,
-            &cfg,
-            "minimum-release-age",
-            minutes,
-            &format!("Delay new versions by {days} days"),
-        )
+        release_age
     } else {
-        unsupported_rec(
-            "minimum-release-age",
-            &format!("Delay new versions by {days} days"),
-            &minutes.to_string(),
-            "pnpm",
-            10,
-            16,
-            version,
-        )
+        unsupported_if_configured(release_age, "pnpm", 10, 16, version)
     };
 
     vec![
@@ -77,7 +70,7 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "minimumReleaseAge",
             &minutes.to_string(),
             &format!("Delay new versions by {days} days"),
-            YamlCheck::MinInt(minutes),
+            YamlCheck::ExactInt(minutes),
         ),
         g((10, 26)).yaml(
             "blockExoticSubdeps",
@@ -96,7 +89,7 @@ fn scan_global_rc(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<Re
         min_ver,
     };
     vec![
-        g((10, 16)).flat_min_int(
+        g((10, 16)).flat_exact_int(
             &cfg,
             "minimum-release-age",
             minutes,
@@ -145,7 +138,7 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "minimumReleaseAge",
             &minutes.to_string(),
             &format!("Delay new versions by {days} days"),
-            YamlCheck::MinInt(minutes),
+            YamlCheck::ExactInt(minutes),
         ),
         g((10, 26)).yaml(
             "blockExoticSubdeps",
@@ -179,18 +172,11 @@ struct VersionGate<'a> {
 
 impl VersionGate<'_> {
     fn yaml(&self, key: &str, expected: &str, desc: &str, mode: YamlCheck) -> Recommendation {
+        let rec = check_yaml(self.path, key, expected, desc, mode);
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            check_yaml(self.path, key, expected, desc, mode)
+            rec
         } else {
-            unsupported_rec(
-                key,
-                desc,
-                expected,
-                "pnpm",
-                self.min_ver.0,
-                self.min_ver.1,
-                self.version,
-            )
+            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 
@@ -201,40 +187,26 @@ impl VersionGate<'_> {
         expected: &str,
         desc: &str,
     ) -> Recommendation {
+        let rec = check_flat(self.path, cfg, key, expected, desc);
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            check_flat(self.path, cfg, key, expected, desc)
+            rec
         } else {
-            unsupported_rec(
-                key,
-                desc,
-                expected,
-                "pnpm",
-                self.min_ver.0,
-                self.min_ver.1,
-                self.version,
-            )
+            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 
-    fn flat_min_int(
+    fn flat_exact_int(
         &self,
         cfg: &std::collections::HashMap<String, String>,
         key: &str,
-        min: u64,
+        expected: u64,
         desc: &str,
     ) -> Recommendation {
+        let rec = check_flat_exact_int(self.path, cfg, key, expected, desc);
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            check_flat_min_int(self.path, cfg, key, min, desc)
+            rec
         } else {
-            unsupported_rec(
-                key,
-                desc,
-                &min.to_string(),
-                "pnpm",
-                self.min_ver.0,
-                self.min_ver.1,
-                self.version,
-            )
+            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 }

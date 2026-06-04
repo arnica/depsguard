@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 /// Result of checking a single security setting against its expected value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckStatus {
-    /// The setting matches the expected value.
-    Ok,
+    /// The setting satisfies the policy. Carries the actual configured value so
+    /// the report shows what the user really has, not the target.
+    Ok(String),
     /// The setting is not configured at all.
     Missing,
     /// The config file itself does not exist yet.
@@ -20,19 +21,27 @@ pub enum CheckStatus {
 impl CheckStatus {
     #[must_use]
     pub fn is_ok(&self) -> bool {
-        matches!(self, CheckStatus::Ok)
+        matches!(self, CheckStatus::Ok(_))
     }
 
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(self, CheckStatus::Unsupported(_))
     }
+
+    #[must_use]
+    pub fn is_error(&self) -> bool {
+        matches!(
+            self,
+            CheckStatus::Missing | CheckStatus::FileMissing | CheckStatus::WrongValue(_)
+        )
+    }
 }
 
 impl std::fmt::Display for CheckStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CheckStatus::Ok => write!(f, "OK"),
+            CheckStatus::Ok(_) => write!(f, "OK"),
             CheckStatus::Missing => write!(f, "Not set"),
             CheckStatus::FileMissing => write!(f, "file missing"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),
@@ -66,6 +75,9 @@ pub enum ManagerKind {
     PnpmWorkspace,
     Bun,
     Uv,
+    Pip,
+    Poetry,
+    Aube,
     Yarn,
     Renovate,
     Dependabot,
@@ -79,6 +91,9 @@ impl ManagerKind {
         ManagerKind::PnpmGlobal,
         ManagerKind::Bun,
         ManagerKind::Uv,
+        ManagerKind::Pip,
+        ManagerKind::Poetry,
+        ManagerKind::Aube,
         ManagerKind::Yarn,
     ];
 
@@ -89,6 +104,9 @@ impl ManagerKind {
         ManagerKind::PnpmWorkspace,
         ManagerKind::Bun,
         ManagerKind::Uv,
+        ManagerKind::Pip,
+        ManagerKind::Poetry,
+        ManagerKind::Aube,
         ManagerKind::Yarn,
         ManagerKind::Renovate,
         ManagerKind::Dependabot,
@@ -101,6 +119,9 @@ impl ManagerKind {
             ManagerKind::PnpmWorkspace => "pnpm-workspace",
             ManagerKind::Bun => "bun",
             ManagerKind::Uv => "uv",
+            ManagerKind::Pip => "pip",
+            ManagerKind::Poetry => "poetry",
+            ManagerKind::Aube => "aube",
             ManagerKind::Yarn => "yarn",
             ManagerKind::Renovate => "renovate",
             ManagerKind::Dependabot => "dependabot",
@@ -112,7 +133,8 @@ impl ManagerKind {
             ManagerKind::Npm => "📦",
             ManagerKind::Pnpm | ManagerKind::PnpmGlobal | ManagerKind::PnpmWorkspace => "⚡",
             ManagerKind::Bun => "🥟",
-            ManagerKind::Uv => "🐍",
+            ManagerKind::Uv | ManagerKind::Pip | ManagerKind::Poetry => "🐍",
+            ManagerKind::Aube => "🌅",
             ManagerKind::Yarn => "🧶",
             ManagerKind::Renovate => "🔄",
             ManagerKind::Dependabot => "🤖",
@@ -151,13 +173,6 @@ pub struct ManagerInfo {
     pub discovered: bool,
 }
 
-impl ManagerInfo {
-    #[must_use]
-    pub fn all_ok(&self) -> bool {
-        self.recommendations.iter().all(|r| r.status.is_ok())
-    }
-}
-
 /// Target OS for config path resolution. Allows testing all platforms from any host.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TargetOs {
@@ -189,24 +204,31 @@ pub enum RepoConfigKind {
     Dependabot,
 }
 
-/// Build an `Unsupported` recommendation for features gated behind a minimum version.
-pub fn unsupported_rec(
-    key: &str,
-    desc: &str,
-    expected: &str,
+/// Mark an already-correct setting as `Unsupported`; keep missing/wrong config fixable.
+pub fn unsupported_if_configured(
+    mut rec: Recommendation,
     manager_name: &str,
     min_major: u64,
     min_minor: u64,
     have_version: &str,
 ) -> Recommendation {
-    Recommendation {
-        key: key.into(),
-        description: desc.into(),
-        expected: expected.into(),
-        status: CheckStatus::Unsupported(format!(
+    if rec.status.is_ok() {
+        rec.status = CheckStatus::Unsupported(format!(
             "requires {manager_name} \u{2265} {min_major}.{min_minor} (have {have_version})"
-        )),
+        ));
     }
+    rec
+}
+
+/// Mark an already-correct setting as `Unsupported` using a custom version message.
+pub fn unsupported_with_message_if_configured(
+    mut rec: Recommendation,
+    message: String,
+) -> Recommendation {
+    if rec.status.is_ok() {
+        rec.status = CheckStatus::Unsupported(message);
+    }
+    rec
 }
 
 /// Return `Missing` or `FileMissing` based on whether the config file exists on disk.

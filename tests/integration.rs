@@ -76,11 +76,7 @@ fn tool_at_least(cmd: &str, major: u32, minor: u32) -> bool {
 }
 
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_depsguard"))
-        .args(args)
-        .env("HOME", home)
-        .output()
-        .expect("failed to run depsguard")
+    run_depsguard_with_env(args, home, &[])
 }
 
 fn run_depsguard_with_env(
@@ -90,6 +86,12 @@ fn run_depsguard_with_env(
 ) -> std::process::Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_depsguard"));
     cmd.args(args).env("HOME", home);
+    // Keep config resolution hermetic: don't inherit the runner's
+    // XDG_CONFIG_HOME, which would redirect pip/uv/poetry lookups outside the
+    // temp HOME (Linux CI sets it; macOS usually doesn't, which is why this only
+    // surfaced in CI). Tests that need XDG set it explicitly via `envs`, applied
+    // after the removal below so they still win.
+    cmd.env_remove("XDG_CONFIG_HOME");
     for (key, val) in envs {
         cmd.env(key, val);
     }
@@ -107,6 +109,10 @@ fn pnpm_globalconfig_path(home: &Path, envs: &[(&str, &std::ffi::OsStr)]) -> Opt
     let mut cmd = Command::new("pnpm");
     cmd.args(["config", "get", "globalconfig"])
         .env("HOME", home);
+    // Match `run_depsguard`'s hermetic environment: strip the inherited
+    // XDG_CONFIG_HOME so this oracle computes the same path depsguard will.
+    // Explicit `envs` (applied after) still win for the XDG-specific test.
+    cmd.env_remove("XDG_CONFIG_HOME");
     for (key, val) in envs {
         cmd.env(key, val);
     }
@@ -837,6 +843,95 @@ fn uv_scan_detects_missing_config() {
     assert!(stdout.contains("uv"), "uv not detected");
 }
 
+// ── pip / poetry / aube detection ────────────────────────────────────
+
+#[test]
+fn pip_scan_detects_manager() {
+    if !has_command("pip") {
+        return;
+    }
+    let home = TmpHome::new("pip_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // pip is detected regardless of version (a recent pip shows the missing
+    // `uploaded-prior-to`; an older pip shows the version requirement).
+    assert!(stdout.contains("pip"), "pip not detected:\n{stdout}");
+    assert!(
+        stdout.contains("uploaded-prior-to"),
+        "expected pip cooldown setting in output:\n{stdout}"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn pip_scan_resolves_effective_config_across_legacy_and_current() {
+    if !has_command("pip") {
+        return;
+    }
+    // Reproduces the reported false positive: the current ~/.config/pip/pip.conf is
+    // secure while the legacy ~/.pip/pip.conf lacks the key. pip's current file
+    // overrides the legacy one, so the effective posture is secure — and DepsGuard
+    // must report a single entry, not flag the shadowed legacy file.
+    let home = TmpHome::new("pip_effective");
+    let current = home.path().join(".config/pip/pip.conf");
+    let legacy = home.path().join(".pip/pip.conf");
+    fs::create_dir_all(current.parent().unwrap()).unwrap();
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&current, "[install]\nuploaded-prior-to = P7D\n").unwrap();
+    fs::write(&legacy, "[install]\n").unwrap(); // exists but no cooldown key
+
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("~/.config/pip/pip.conf"),
+        "expected the effective current pip config:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("~/.pip/pip.conf"),
+        "shadowed legacy ~/.pip/pip.conf must not be a separate finding:\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("pip/pip.conf").count(),
+        1,
+        "expected exactly one pip config entry:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("uploaded-prior-to"),
+        "expected the pip cooldown setting in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn poetry_scan_detects_manager() {
+    if !has_command("poetry") {
+        return;
+    }
+    let home = TmpHome::new("poetry_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("poetry"), "poetry not detected:\n{stdout}");
+    assert!(
+        stdout.contains("min-release-age"),
+        "expected poetry cooldown setting in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn aube_scan_detects_manager() {
+    if !has_command("aube") {
+        return;
+    }
+    let home = TmpHome::new("aube_detect");
+    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("aube"), "aube not detected:\n{stdout}");
+    assert!(
+        stdout.contains("minimumReleaseAge"),
+        "expected aube cooldown setting in output:\n{stdout}"
+    );
+}
+
 #[test]
 fn uv_config_fix_and_rescan() {
     if !has_command("uv") {
@@ -853,7 +948,8 @@ fn uv_config_fix_and_rescan() {
     };
     fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
 
-    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    // Exact policy: the default target is 7 days, so write the matching rolling value.
+    fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -928,7 +1024,8 @@ fn uv_config_fix_and_rescan_from_xdg() {
     let xdg = home.path().join("xdg");
     let uv_config = xdg.join("uv/uv.toml");
     fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
-    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    // Exact policy: the default target is 7 days, so write the matching rolling value.
+    fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
     let out = run_depsguard_with_env(
         &["--scan", "--no-search"],
@@ -945,11 +1042,14 @@ fn uv_config_fix_and_rescan_from_xdg() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
-fn uv_scan_checks_both_user_configs_when_both_exist() {
+fn uv_scan_uses_xdg_user_config_and_ignores_dotconfig() {
     if !has_command("uv") {
         return;
     }
-    let home = TmpHome::new("uv_both_configs");
+    // uv reads a single user-level config: `$XDG_CONFIG_HOME/uv/uv.toml` when XDG
+    // is set, which *replaces* `~/.config/uv/uv.toml` (uv does not merge both). So
+    // a shadowed ~/.config/uv must not be reported as a separate finding.
+    let home = TmpHome::new("uv_xdg_config");
     let xdg = home.path().join("xdg");
     let xdg_uv = xdg.join("uv/uv.toml");
     let home_uv = home.path().join(".config/uv/uv.toml");
@@ -967,29 +1067,17 @@ fn uv_scan_checks_both_user_configs_when_both_exist() {
 
     assert!(
         stdout.contains("~/xdg/uv/uv.toml"),
-        "expected XDG uv path:\n{stdout}"
+        "expected the effective XDG uv path:\n{stdout}"
     );
     assert!(
-        stdout.contains("~/.config/uv/uv.toml"),
-        "expected home uv path:\n{stdout}"
+        !stdout.contains("~/.config/uv/uv.toml"),
+        "shadowed ~/.config/uv must not be reported when XDG is set:\n{stdout}"
     );
-    let is_unsupported =
-        stdout.contains("ℹ exclude-newer") || stdout.contains("\u{2139} exclude-newer");
-    if is_unsupported {
-        assert!(
-            stdout.contains("requires uv"),
-            "unsupported uv should explain version requirement:\n{stdout}"
-        );
-    } else {
-        assert!(
-            stdout.contains("✓ exclude-newer —") || stdout.contains("\u{2713} exclude-newer —"),
-            "expected configured uv entry:\n{stdout}"
-        );
-        assert!(
-            stdout.contains("exclude-newer — not set"),
-            "expected missing uv entry for the second config:\n{stdout}"
-        );
-    }
+    assert_eq!(
+        stdout.matches("uv/uv.toml").count(),
+        1,
+        "expected exactly one uv config entry:\n{stdout}"
+    );
 }
 
 #[test]

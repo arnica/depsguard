@@ -4,6 +4,7 @@
 // Shared infrastructure lives in `types`, `config`, `version`, `date`, `paths`,
 // `detect`, and `search`.
 
+pub mod aube;
 pub mod bun;
 pub mod config;
 pub mod date;
@@ -11,7 +12,9 @@ pub mod dependabot;
 pub mod detect;
 pub mod npm;
 pub mod paths;
+pub mod pip;
 pub mod pnpm;
+pub mod poetry;
 pub mod renovate;
 pub mod search;
 pub mod types;
@@ -62,11 +65,34 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
                 vec![pnpm_global_rc_from_cli(&version).unwrap_or_else(pnpm_global_rc)]
             }
         }
+        // These tools resolve to a single effective user-level config: pip/poetry
+        // merge candidate files by precedence, and uv selects one file (XDG
+        // replaces ~/.config). Either way we report one effective file rather than
+        // scanning each candidate independently (which would mis-report shadowed
+        // files).
+        ManagerKind::Pip | ManagerKind::Uv | ManagerKind::Poetry => {
+            let (cands, _) = user_config_candidates(kind, &home, &appdata, os);
+            // pip.conf is INI (configparser); uv.toml / poetry config.toml are TOML.
+            let read: fn(&std::path::Path, &str) -> Option<String> = match kind {
+                ManagerKind::Pip => config::read_ini_value,
+                _ => config::read_toml_value,
+            };
+            vec![resolve_effective_config(
+                &cands,
+                effective_config_key(kind),
+                read,
+            )]
+        }
         _ => {
             let (cands, default_idx) = user_config_candidates(kind, &home, &appdata, os);
             select_scan_paths(&cands, default_idx)
         }
     };
+
+    // Scanners receive the raw `--version` string (they extract internally), but
+    // for display we store just the version number so tools that prefix or wrap
+    // their version (uv, pip, poetry) don't show noise like the full pip path.
+    let display_version = version::extract_version_str(&version).to_string();
 
     scan_paths
         .into_iter()
@@ -74,13 +100,49 @@ pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
             let recommendations = scan_kind(kind, &path, &version);
             ManagerInfo {
                 kind,
-                version: version.clone(),
+                version: display_version.clone(),
                 config_path: path,
                 recommendations,
                 discovered: false,
             }
         })
         .collect()
+}
+
+/// Resolve the single effective user-level config path for tools that read one
+/// effective configuration (pip, uv, poetry).
+///
+/// `candidates` are ordered highest-precedence first. The effective value for
+/// `key` comes from the highest-precedence file that actually sets it; if no
+/// candidate sets it, the preferred (highest-precedence) path is returned as the
+/// write/report target. (pip/poetry merge by precedence; uv has a single
+/// candidate since XDG replaces `~/.config` rather than stacking with it.)
+pub(crate) fn resolve_effective_config(
+    candidates: &[std::path::PathBuf],
+    key: &str,
+    read: fn(&std::path::Path, &str) -> Option<String>,
+) -> std::path::PathBuf {
+    // The highest-precedence file that actually sets the key wins (matching how
+    // these tools merge per-key across their config hierarchy). `read` is the
+    // format-appropriate value reader (INI for pip, TOML for uv/poetry).
+    for cand in candidates {
+        if read(cand, key).is_some() {
+            return cand.clone();
+        }
+    }
+    // No file sets it: report/write at the preferred (highest-precedence) path.
+    candidates.first().cloned().unwrap_or_default()
+}
+
+/// The dotted config key whose value determines the effective config file for a
+/// precedence-merging manager.
+fn effective_config_key(kind: ManagerKind) -> &'static str {
+    match kind {
+        ManagerKind::Pip => pip::PIP_KEY,
+        ManagerKind::Uv => uv::UV_KEY,
+        ManagerKind::Poetry => poetry::POETRY_KEY,
+        _ => unreachable!("effective_config_key is only for precedence-merging managers"),
+    }
 }
 
 /// Dispatch to the correct scanner for a given manager kind.
@@ -91,6 +153,9 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::PnpmGlobal => pnpm::scan_global(path, version),
         ManagerKind::Bun => bun::scan(path),
         ManagerKind::Uv => uv::scan(path, version),
+        ManagerKind::Pip => pip::scan(path, version),
+        ManagerKind::Poetry => poetry::scan(path, version),
+        ManagerKind::Aube => aube::scan(path),
         ManagerKind::Yarn => yarn::scan(path, version),
         ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
@@ -148,6 +213,17 @@ fn scan_repo_configs_with_progress(
                             version: ver.clone(),
                             config_path: path.clone(),
                             recommendations: pnpm::scan_project(&path, ver),
+                            discovered: true,
+                        });
+                    }
+                }
+                if !is_excluded(ManagerKind::Aube) {
+                    if let Some(ver) = detected_versions.get("aube") {
+                        results.push(ManagerInfo {
+                            kind: ManagerKind::Aube,
+                            version: ver.clone(),
+                            config_path: path.clone(),
+                            recommendations: aube::scan(&path),
                             discovered: true,
                         });
                     }
@@ -232,8 +308,8 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 #[cfg(test)]
 mod tests {
     use super::config::{
-        read_dependabot_entries, read_flat_config, read_json_string_value, read_toml_value,
-        read_yaml_value,
+        read_dependabot_entries, read_flat_config, read_ini_value, read_json_string_value,
+        read_toml_value, read_yaml_value,
     };
     use super::detect::{
         get_delay_days, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
@@ -360,6 +436,130 @@ mod tests {
         );
     }
 
+    // ── effective-config resolution (precedence-aware) ──────────────
+    //
+    // pip/uv/poetry MERGE config files by precedence; the highest-precedence
+    // file that sets the key determines the effective value. Scanning each file
+    // independently produces false positives/negatives, so we resolve one
+    // effective file per tool.
+
+    #[test]
+    fn resolve_effective_prefers_highest_that_sets_key() {
+        let current = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let legacy = tmp_file("[install]\n"); // exists but does not set the key
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
+        assert_eq!(effective, current.path());
+    }
+
+    #[test]
+    fn resolve_effective_falls_through_when_higher_omits_key() {
+        let current = tmp_file("[install]\n"); // exists but key not set
+        let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
+        assert_eq!(
+            effective,
+            legacy.path(),
+            "lower-precedence value applies when the higher file omits the key"
+        );
+    }
+
+    #[test]
+    fn resolve_effective_higher_value_wins_even_if_insecure() {
+        // A higher-precedence file that SETS the key overrides a lower one, even
+        // with a bad value — so the scanner correctly flags it.
+        let current = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
+        let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
+        assert_eq!(effective, current.path());
+    }
+
+    #[test]
+    fn resolve_effective_missing_everywhere_returns_preferred() {
+        let current = PathBuf::from("/tmp/depsguard-not-exist-current/pip.conf");
+        let legacy = PathBuf::from("/tmp/depsguard-not-exist-legacy/pip.conf");
+        let cands = vec![current.clone(), legacy];
+        let effective =
+            resolve_effective_config(&cands, "install.uploaded-prior-to", read_ini_value);
+        assert_eq!(
+            effective, current,
+            "missing everywhere → preferred (highest-precedence) write target"
+        );
+    }
+
+    #[test]
+    fn pip_candidates_linux_current_precedes_legacy() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        let home = Path::new("/home/testuser");
+        let (cands, idx) = user_config_candidates(ManagerKind::Pip, home, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => {}
+        }
+        assert_eq!(idx, 0);
+        assert_eq!(
+            cands[0],
+            PathBuf::from("/home/testuser/.config/pip/pip.conf"),
+            "current user config must be highest precedence"
+        );
+        let cur = cands
+            .iter()
+            .position(|p| p.ends_with(".config/pip/pip.conf"))
+            .expect("current present");
+        let leg = cands
+            .iter()
+            .position(|p| p.ends_with(".pip/pip.conf"))
+            .expect("legacy present");
+        assert!(cur < leg, "current must precede legacy: {cands:?}");
+    }
+
+    #[test]
+    fn pip_candidates_macos_uses_library_when_dir_exists() {
+        // Build a temp home that contains ~/Library/Application Support/pip/.
+        let base = std::env::temp_dir().join(format!(
+            "depsguard_pip_home_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let lib_dir = base.join("Library/Application Support/pip");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        let (cands, _) = user_config_candidates(ManagerKind::Pip, &base, &base, TargetOs::MacOs);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(
+            cands[0],
+            lib_dir.join("pip.conf"),
+            "when the Library pip dir exists, it is the current user config"
+        );
+    }
+
+    #[test]
+    fn uv_candidates_xdg_is_single_user_file() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-uv-test") };
+        let home = Path::new("/home/testuser");
+        let (cands, _) = user_config_candidates(ManagerKind::Uv, home, home, TargetOs::Linux);
+        match prev {
+            Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert_eq!(
+            cands,
+            vec![PathBuf::from("/tmp/xdg-uv-test/uv/uv.toml")],
+            "uv reads only the XDG user file, not ~/.config as well"
+        );
+    }
+
     #[test]
     fn read_toml_value_basic() {
         let f = tmp_file("foo = \"bar\"\n\n[install]\nminimumReleaseAge = 604800\n");
@@ -384,6 +584,44 @@ mod tests {
         assert_eq!(read_toml_value(f.path(), "key"), Some("42".into()));
     }
 
+    #[test]
+    fn read_ini_value_accepts_equals_and_colon() {
+        let eq = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        assert_eq!(
+            read_ini_value(eq.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
+        let colon = tmp_file("[install]\nuploaded-prior-to: P7D\n");
+        assert_eq!(
+            read_ini_value(colon.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
+    }
+
+    #[test]
+    fn read_ini_value_keeps_inline_comments() {
+        // configparser does not strip inline `#`/`;`; the value is the full line.
+        let hash = tmp_file("[install]\nuploaded-prior-to = P7D # note\n");
+        assert_eq!(
+            read_ini_value(hash.path(), "install.uploaded-prior-to"),
+            Some("P7D # note".into())
+        );
+        let semi = tmp_file("[install]\nuploaded-prior-to = P7D ; note\n");
+        assert_eq!(
+            read_ini_value(semi.path(), "install.uploaded-prior-to"),
+            Some("P7D ; note".into())
+        );
+    }
+
+    #[test]
+    fn read_ini_value_skips_full_line_comments() {
+        let f = tmp_file("[install]\n; a comment\n# another\nuploaded-prior-to = P7D\n");
+        assert_eq!(
+            read_ini_value(f.path(), "install.uploaded-prior-to"),
+            Some("P7D".into())
+        );
+    }
+
     // ── Date tests ──────────────────────────────────────────────────
 
     #[test]
@@ -406,19 +644,11 @@ mod tests {
         assert_eq!(date::epoch_to_date(1704067200), "2024-01-01T00:00:00Z");
     }
 
-    #[test]
-    fn is_date_old_enough_works() {
-        let old = date::date_days_ago(30);
-        assert!(date::is_date_old_enough(&old, 7));
-        let recent = date::date_days_ago(1);
-        assert!(!date::is_date_old_enough(&recent, 7));
-    }
-
     // ── CheckStatus tests ───────────────────────────────────────────
 
     #[test]
     fn check_status_display() {
-        assert_eq!(format!("{}", CheckStatus::Ok), "OK");
+        assert_eq!(format!("{}", CheckStatus::Ok("7".into())), "OK");
         assert_eq!(format!("{}", CheckStatus::Missing), "Not set");
         assert_eq!(format!("{}", CheckStatus::FileMissing), "file missing");
         assert_eq!(
@@ -429,7 +659,7 @@ mod tests {
 
     #[test]
     fn check_status_is_ok() {
-        assert!(CheckStatus::Ok.is_ok());
+        assert!(CheckStatus::Ok("7".into()).is_ok());
         assert!(!CheckStatus::Missing.is_ok());
         assert!(!CheckStatus::FileMissing.is_ok());
         assert!(!CheckStatus::WrongValue("x".into()).is_ok());
@@ -441,7 +671,7 @@ mod tests {
             key: "k".into(),
             description: "d".into(),
             expected: "v".into(),
-            status: CheckStatus::Ok,
+            status: CheckStatus::Ok("v".into()),
         };
         assert!(!ok.needs_fix());
         let bad = Recommendation {
@@ -655,23 +885,6 @@ mod tests {
         assert_eq!(classify_file("Cargo.toml", dir, home), None);
     }
 
-    #[test]
-    fn manager_info_all_ok() {
-        let info = ManagerInfo {
-            kind: ManagerKind::Npm,
-            version: "1.0".into(),
-            config_path: PathBuf::from("/tmp"),
-            recommendations: vec![Recommendation {
-                key: "k".into(),
-                description: "d".into(),
-                expected: "v".into(),
-                status: CheckStatus::Ok,
-            }],
-            discovered: false,
-        };
-        assert!(info.all_ok());
-    }
-
     // ── npm tests ───────────────────────────────────────────────────
 
     #[test]
@@ -699,11 +912,33 @@ mod tests {
     }
 
     #[test]
+    fn scan_npm_higher_release_age_is_misconfigured() {
+        // DepsGuard enforces an EXACT policy: the configured delay must equal the
+        // requested value. The default target is 7 days, so 14 (different, even if
+        // stricter) is flagged so it can be normalized to exactly 7.
+        let f = tmp_file("min-release-age=14\nignore-scripts=true\n");
+        let recs = npm::scan(f.path(), "11.10.0");
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "14 must not satisfy an exact 7-day policy, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
     fn scan_npm_old_version_unsupported() {
-        let f = tmp_file("ignore-scripts=true\n");
+        let f = tmp_file("min-release-age=7\nignore-scripts=true\n");
         let recs = npm::scan(f.path(), "10.8.0");
         assert!(recs[0].status.is_unsupported());
         assert!(recs[1].status.is_ok());
+    }
+
+    #[test]
+    fn scan_npm_old_version_missing_release_age_is_fixable() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = npm::scan(f.path(), "10.8.0");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -730,10 +965,15 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_higher_release_age_ok() {
+    fn scan_pnpm_higher_release_age_is_misconfigured() {
+        // 20160 (14 days) differs from the default 10080-minute (7-day) policy;
+        // exact match flags it even though it is a longer delay.
         let f = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
         let recs = pnpm::scan_project(f.path(), "10.16.0");
-        assert!(recs[0].status.is_ok(), "20160 >= 10080 should be Ok");
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "20160 != 10080 should be WrongValue (exact match)"
+        );
     }
 
     #[test]
@@ -770,28 +1010,40 @@ mod tests {
     }
 
     #[test]
-    fn check_flat_min_int_basic() {
+    fn scan_pnpm_old_version_missing_release_age_is_fixable() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = pnpm::scan_project(f.path(), "10.15.0");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn check_flat_exact_int_basic() {
         let mut cfg = HashMap::new();
         cfg.insert("minimum-release-age".into(), "10080".into());
-        let r = config::check_flat_min_int(
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
             10080,
             "test",
         );
-        assert!(r.status.is_ok());
+        assert!(r.status.is_ok(), "exactly 10080 should be Ok");
 
-        let r = config::check_flat_min_int(
+        // A value higher than the target is NOT OK under exact-policy semantics.
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
             5000,
             "test",
         );
-        assert!(r.status.is_ok(), "10080 >= 5000 should be Ok");
+        assert!(
+            matches!(r.status, CheckStatus::WrongValue(_)),
+            "10080 != 5000 should be WrongValue (exact match)"
+        );
 
-        let r = config::check_flat_min_int(
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
@@ -844,10 +1096,12 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_relative_weeks() {
+    fn scan_uv_relative_weeks_differs_is_misconfigured() {
+        // "2 weeks" (14 days) differs from the default 7-day policy; exact match
+        // flags it even though it is a longer delay.
         let f = tmp_file("exclude-newer = \"2 weeks\"\n");
         let recs = uv::scan(f.path(), UV_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -858,12 +1112,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_absolute_date_ok() {
+    fn scan_uv_absolute_date_is_misconfigured() {
+        // Exact policy: a fixed absolute date is not the requested rolling N-day
+        // window, so it is flagged (even if it's an old date).
         let old_date = date::date_days_ago(30);
         let content = format!("exclude-newer = \"{old_date}\"\n");
         let f = tmp_file(&content);
         let recs = uv::scan(f.path(), UV_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -903,8 +1159,20 @@ mod tests {
     }
 
     #[test]
+    fn scan_uv_old_version_absolute_date_is_misconfigured() {
+        // An absolute date is never the exact rolling policy, so it is flagged
+        // regardless of uv version (the version gate only applies to relative
+        // durations that are otherwise correct).
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("exclude-newer = \"{old_date}\"\n"));
+        let recs = uv::scan(f.path(), UV_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
     fn scan_uv_old_version_unsupported_message() {
-        let recs = uv::scan(Path::new("/nonexistent"), UV_OLD);
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = uv::scan(f.path(), UV_OLD);
         if let CheckStatus::Unsupported(msg) = &recs[0].status {
             assert!(
                 msg.contains("0.9.17") && msg.contains(UV_OLD),
@@ -913,6 +1181,14 @@ mod tests {
         } else {
             panic!("expected Unsupported, got: {:?}", recs[0].status);
         }
+    }
+
+    #[test]
+    fn scan_uv_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("");
+        let recs = uv::scan(f.path(), UV_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -942,7 +1218,8 @@ mod tests {
 
     #[test]
     fn uv_version_boundary_0_9_16_is_unsupported() {
-        let recs = uv::scan(Path::new("/nonexistent"), "0.9.16");
+        let f = tmp_file("exclude-newer = \"7 days\"\n");
+        let recs = uv::scan(f.path(), "0.9.16");
         assert!(
             recs[0].status.is_unsupported(),
             "0.9.16 should be unsupported, got: {:?}",
@@ -955,6 +1232,358 @@ mod tests {
         let f = tmp_file("");
         let recs = uv::scan(f.path(), "0.9.17");
         assert_eq!(recs[0].expected, "7 days");
+    }
+
+    // ── pip tests ───────────────────────────────────────────────────
+
+    const PIP_NEW: &str = "26.1";
+    // 26.0 added --uploaded-prior-to with absolute datetimes only; relative
+    // durations (P7D) require 26.1, so 26.0 is treated as unsupported.
+    const PIP_OLD: &str = "26.0";
+
+    #[test]
+    fn scan_pip_relative_days_ok() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_pip_relative_weeks_differs_is_misconfigured() {
+        // P2W (14 days) differs from the default 7-day policy; exact match flags it.
+        let f = tmp_file("[install]\nuploaded-prior-to = P2W\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pip_relative_too_short() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P3D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pip_absolute_date_is_misconfigured() {
+        // Exact policy: a fixed absolute date is not the requested rolling N-day
+        // window, so it is flagged (even if it's an old date).
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pip_too_recent() {
+        let f = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_pip_missing() {
+        let f = tmp_file("[install]\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_pip_colon_delimiter_is_read() {
+        // pip.conf (configparser) accepts `key: value`, not just `key = value`.
+        let f = tmp_file("[install]\nuploaded-prior-to: P7D\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(
+            recs[0].status.is_ok(),
+            "colon-delimited pip value should be read, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_pip_inline_comment_is_not_stripped() {
+        // configparser does NOT strip inline comments, so the value is literally
+        // `P7D # note` (invalid) — must be flagged, never treated as a clean P7D
+        // (which would be a false SECURE).
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D # note\n");
+        let recs = pip::scan(f.path(), PIP_NEW);
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "inline-commented pip value must be flagged, got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_pip_old_version_absolute_date_is_misconfigured() {
+        // An absolute date is never the exact rolling policy, so it is flagged
+        // regardless of pip version (the version gate only applies to relative
+        // durations that are otherwise correct).
+        let old_date = date::date_days_ago(30);
+        let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_pip_old_version_unsupported() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(
+            recs[0].status.is_unsupported(),
+            "pip 26.0 should be unsupported (relative durations need 26.1), got: {:?}",
+            recs[0].status
+        );
+    }
+
+    #[test]
+    fn scan_pip_old_version_message_mentions_versions() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("26.1") && msg.contains(PIP_OLD),
+                "message should mention min and current version: {msg}"
+            );
+        } else {
+            panic!("expected Unsupported, got: {:?}", recs[0].status);
+        }
+    }
+
+    #[test]
+    fn scan_pip_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("[install]\n");
+        let recs = pip::scan(f.path(), PIP_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_pip_expected_is_iso_duration() {
+        let recs = pip::scan(Path::new("/nonexistent"), PIP_NEW);
+        assert_eq!(recs[0].expected, "P7D");
+        assert_eq!(recs[0].key, "install.uploaded-prior-to");
+    }
+
+    #[test]
+    fn extract_pip_version_realistic_string() {
+        let recs = pip::scan(
+            Path::new("/nonexistent"),
+            "pip 26.1 from /usr/lib/python3/dist-packages/pip (python 3.12)",
+        );
+        assert!(
+            !recs[0].status.is_unsupported(),
+            "realistic pip 26.1 string should be supported"
+        );
+    }
+
+    #[test]
+    fn pip_version_boundary_26_0_unsupported_26_1_supported() {
+        let f = tmp_file("[install]\nuploaded-prior-to = P7D\n");
+        assert!(pip::scan(f.path(), "26.0.5")[0].status.is_unsupported());
+        assert!(!pip::scan(Path::new("/nonexistent"), "26.1.0")[0]
+            .status
+            .is_unsupported());
+    }
+
+    // ── poetry tests ────────────────────────────────────────────────
+
+    const POETRY_NEW: &str = "2.4.0";
+    const POETRY_OLD: &str = "2.3.1";
+
+    #[test]
+    fn scan_poetry_ok() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_poetry_higher_value_is_misconfigured() {
+        // 14 differs from the default 7-day policy; exact match flags it.
+        let f = tmp_file("[solver]\nmin-release-age = 14\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_poetry_too_low() {
+        let f = tmp_file("[solver]\nmin-release-age = 3\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_poetry_missing() {
+        let f = tmp_file("[solver]\n");
+        let recs = poetry::scan(f.path(), POETRY_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_poetry_old_version_unsupported() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
+        assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_poetry_old_version_message_mentions_versions() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("2.4") && msg.contains(POETRY_OLD),
+                "message should mention min and current version: {msg}"
+            );
+        } else {
+            panic!("expected Unsupported, got: {:?}", recs[0].status);
+        }
+    }
+
+    #[test]
+    fn scan_poetry_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("[solver]\n");
+        let recs = poetry::scan(f.path(), POETRY_OLD);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_poetry_expected_is_days() {
+        let recs = poetry::scan(Path::new("/nonexistent"), POETRY_NEW);
+        assert_eq!(recs[0].expected, "7");
+        assert_eq!(recs[0].key, "solver.min-release-age");
+    }
+
+    #[test]
+    fn extract_poetry_version_realistic_string() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        let recs = poetry::scan(f.path(), "Poetry (version 2.4.0)");
+        assert!(
+            recs[0].status.is_ok(),
+            "realistic poetry version string should parse and pass"
+        );
+    }
+
+    #[test]
+    fn poetry_version_boundary_2_3_unsupported_2_4_supported() {
+        let f = tmp_file("[solver]\nmin-release-age = 7\n");
+        assert!(poetry::scan(f.path(), "2.3.9")[0].status.is_unsupported());
+        assert!(!poetry::scan(Path::new("/nonexistent"), "2.4.0")[0]
+            .status
+            .is_unsupported());
+    }
+
+    // ── aube tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn scan_aube_ok_camel_case() {
+        let f = tmp_file("minimumReleaseAge=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_aube_ok_kebab_case_shared_with_pnpm() {
+        // aube also honours pnpm's kebab key in the same .npmrc.
+        let f = tmp_file("minimum-release-age=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_aube_too_low() {
+        // 1440 minutes = 24h, aube's default, below the 7-day target.
+        let f = tmp_file("minimumReleaseAge=1440\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_aube_invalid_value_is_wrong_value() {
+        let f = tmp_file("minimumReleaseAge=soon\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_aube_missing() {
+        let f = tmp_file("ignore-scripts=true\n");
+        let recs = aube::scan(f.path());
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+    }
+
+    #[test]
+    fn scan_aube_expected_is_minutes() {
+        let recs = aube::scan(Path::new("/nonexistent"));
+        assert_eq!(recs[0].expected, "10080");
+        assert_eq!(recs[0].key, "minimumReleaseAge");
+        assert_eq!(recs[0].status.to_string(), "file missing");
+    }
+
+    #[test]
+    fn scan_aube_uses_larger_of_two_keys() {
+        let f = tmp_file("minimumReleaseAge=1440\nminimum-release-age=10080\n");
+        let recs = aube::scan(f.path());
+        assert!(recs[0].status.is_ok(), "should accept the larger value");
+    }
+
+    // ── helper tests: iso 8601 durations and version extraction ─────
+
+    #[test]
+    fn parse_iso8601_days_handles_days_and_weeks() {
+        use date::parse_iso8601_days;
+        assert_eq!(parse_iso8601_days("P7D"), Some(7));
+        assert_eq!(parse_iso8601_days("P14D"), Some(14));
+        assert_eq!(parse_iso8601_days("P2W"), Some(14));
+        assert_eq!(parse_iso8601_days("P0D"), Some(0));
+        assert_eq!(
+            parse_iso8601_days("P1DT12H"),
+            None,
+            "time component unsupported"
+        );
+        assert_eq!(parse_iso8601_days("7D"), None, "missing P prefix");
+        assert_eq!(parse_iso8601_days("PD"), None);
+    }
+
+    #[test]
+    fn extract_version_str_strips_tool_prefixes() {
+        use version::extract_version_str;
+        assert_eq!(
+            extract_version_str("pip 26.1 from /x (python 3.12)"),
+            "26.1"
+        );
+        assert_eq!(extract_version_str("Poetry (version 2.4.0)"), "2.4.0");
+        assert_eq!(extract_version_str("0.9.17"), "0.9.17");
+    }
+
+    #[test]
+    fn duration_parsers_do_not_panic_on_multibyte_input() {
+        // A config value ending in a multibyte char must not crash the scan
+        // (regression: a byte-index split_at would panic mid-codepoint).
+        use date::{parse_duration_minutes, parse_iso8601_days};
+        assert_eq!(parse_iso8601_days("P7é"), None);
+        assert_eq!(parse_iso8601_days("P7\u{1f389}"), None); // emoji
+        assert_eq!(parse_iso8601_days("Pé"), None);
+        assert_eq!(parse_duration_minutes("7é"), None);
+        assert_eq!(parse_duration_minutes("\u{1f389}"), None);
+        // A malformed pip.conf value must yield WrongValue, not a panic.
+        let f = tmp_file("[install]\nuploaded-prior-to = P7é\n");
+        let recs = pip::scan(f.path(), "26.1");
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_does_not_panic_on_multibyte_date_value() {
+        // Regression: a date-shaped value with a multibyte character must be
+        // reported as a wrong value, never panic the scan.
+        let pip_f = tmp_file("[install]\nuploaded-prior-to = 2024-01-0é\n");
+        let pip_recs = pip::scan(pip_f.path(), "26.1");
+        assert!(matches!(pip_recs[0].status, CheckStatus::WrongValue(_)));
+
+        let uv_f = tmp_file("exclude-newer = \"2024-01-0é\"\n");
+        let uv_recs = uv::scan(uv_f.path(), "0.9.17");
+        assert!(matches!(uv_recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     // ── yarn tests ──────────────────────────────────────────────────
@@ -983,9 +1612,17 @@ mod tests {
 
     #[test]
     fn scan_yarn_old_version_unsupported() {
-        let f = tmp_file("");
+        let f = tmp_file("npmMinimalAgeGate: \"7d\"\n");
         let recs = yarn::scan(f.path(), "4.9.2");
         assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_yarn_old_version_missing_setting_is_fixable() {
+        let f = tmp_file("");
+        let recs = yarn::scan(f.path(), "4.9.2");
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
     }
 
     #[test]
@@ -1456,7 +2093,7 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_old_version_block_exotic_unsupported() {
         let f = tmp_file(
-            "minimumReleaseAge: 10080\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
         );
         let recs = pnpm::scan_workspace(f.path(), "10.25.0");
         let exotic = recs.iter().find(|r| r.key == "blockExoticSubdeps").unwrap();
@@ -1466,20 +2103,22 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_workspace_very_old_version_all_unsupported() {
+    fn scan_pnpm_workspace_very_old_version_missing_settings_are_fixable() {
         let f = tmp_file("");
         let recs = pnpm::scan_workspace(f.path(), "10.2.0");
         assert!(
             recs.iter()
-                .all(|r| matches!(r.status, CheckStatus::Unsupported(_))),
-            "all settings should be unsupported on pnpm 10.2: {:?}",
+                .all(|r| matches!(r.status, CheckStatus::Missing)),
+            "all missing settings should remain fixable on pnpm 10.2: {:?}",
             recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
         );
     }
 
     #[test]
     fn scan_pnpm_workspace_version_10_16_partial_support() {
-        let f = tmp_file("minimumReleaseAge: 10080\nstrictDepBuilds: true\n");
+        let f = tmp_file(
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+        );
         let recs = pnpm::scan_workspace(f.path(), "10.16.0");
         let age = recs.iter().find(|r| r.key == "minimumReleaseAge").unwrap();
         assert!(age.status.is_ok());
@@ -1697,7 +2336,9 @@ mod tests {
 
     #[test]
     fn scan_pnpm_global_v10_old_version_partial() {
-        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let f = tmp_file(
+            "minimum-release-age=10080\nblock-exotic-subdeps=true\ntrust-policy=no-downgrade\nignore-scripts=true\n",
+        );
         let recs = pnpm::scan_global(f.path(), "10.16.0");
         let age = recs
             .iter()
@@ -1713,6 +2354,21 @@ mod tests {
             .find(|r| r.key == "block-exotic-subdeps")
             .unwrap();
         assert!(exotic.status.is_unsupported());
+    }
+
+    #[test]
+    fn scan_pnpm_global_v10_old_version_missing_gated_settings_are_fixable() {
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = pnpm::scan_global(f.path(), "10.16.0");
+        let trust = recs.iter().find(|r| r.key == "trust-policy").unwrap();
+        assert!(matches!(trust.status, CheckStatus::Missing));
+        assert!(trust.needs_fix());
+        let exotic = recs
+            .iter()
+            .find(|r| r.key == "block-exotic-subdeps")
+            .unwrap();
+        assert!(matches!(exotic.status, CheckStatus::Missing));
+        assert!(exotic.needs_fix());
     }
 
     // ── pnpm global scan tests (v11 config.yaml format) ────────────

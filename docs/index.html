@@ -12,13 +12,13 @@
   <meta property="og:url" content="https://depsguard.com/">
   <meta property="og:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
   <meta property="og:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
   <meta property="og:image" content="https://depsguard.com/img/select.png">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
   <meta name="twitter:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, and uv configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
   <meta name="twitter:image" content="https://depsguard.com/img/select.png">
   <link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon/favicon.svg">
@@ -1149,7 +1149,7 @@
         </h1>
         <p class="hero-desc fade-d1">
           Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn,
-          bun, and uv configs for security best practices. Zero dependencies. MIT.
+          bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.
         </p>
         <div class="plat-row fade-d2">
           <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
@@ -1570,6 +1570,23 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <path fill="#f59e0b" d="M12 8a5 5 0 0 1 5 5H7a5 5 0 0 1 5-5z" />
+                  <path stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"
+                    d="M3 16.5h18M12 3.5V5M5 6.5l1 1M19 6.5l-1 1" />
+                </svg> aube</td>
+              <td><code>.npmrc</code></td>
+              <td><code>minimumReleaseAge=10080</code></td>
+              <td>Delay new versions by 7 days (in minutes)</td>
+              <td><a class="doc-link" href="https://aube.en.dev/security.html#minimum-release-age" target="_blank"
+                  rel="noopener" title="aube docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 16 16">
                   <path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z" />
                 </svg> uv</td>
@@ -1579,6 +1596,40 @@ scoop install depsguard</code></pre>
                   0.9.17)</span></td>
               <td><a class="doc-link" href="https://docs.astral.sh/uv/reference/settings/" target="_blank"
                   rel="noopener" title="uv docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3776ab" />
+                  <path fill="#ffd43b" d="M3 12h18v5a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" />
+                </svg> pip</td>
+              <td><code>pip.conf</code></td>
+              <td><code>[install] uploaded-prior-to = P7D</code></td>
+              <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(pip &ge;
+                  26.1)</span></td>
+              <td><a class="doc-link" href="https://pip.pypa.io/en/stable/cli/pip_install/" target="_blank"
+                  rel="noopener" title="pip docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3b6fb6" />
+                  <path fill="#fff" d="M8 6h5a4 4 0 0 1 0 8h-3v4H8zm2 2v4h3a2 2 0 0 0 0-4z" />
+                </svg> poetry</td>
+              <td><code>config.toml</code></td>
+              <td><code>[solver] min-release-age = 7</code></td>
+              <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(poetry &ge;
+                  2.4)</span></td>
+              <td><a class="doc-link" href="https://python-poetry.org/docs/configuration/" target="_blank"
+                  rel="noopener" title="poetry docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
                     <polyline points="15 3 21 3 21 9" />
@@ -1674,6 +1725,15 @@ scoop install depsguard</code></pre>
               <td style="color:var(--text-mute);">&mdash;</td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <path fill="#f59e0b" d="M12 8a5 5 0 0 1 5 5H7a5 5 0 0 1 5-5z" />
+                  <path stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"
+                    d="M3 16.5h18M12 3.5V5M5 6.5l1 1M19 6.5l-1 1" />
+                </svg> aube</td>
+              <td colspan="3" style="text-align:center;"><code>~/.npmrc</code> <span style="color:var(--text-mute); font-size:.75rem;">(shared with npm)</span></td>
+              <td style="color:var(--text-mute);">&mdash;</td>
+            </tr>
+            <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
                   <path fill="#e0e0e0" d="M2 22h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zM12 12h8v8h-8z" />
                   <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
@@ -1741,6 +1801,26 @@ scoop install depsguard</code></pre>
               <td colspan="2" style="text-align:center;"><code>~/.config/uv/uv.toml</code></td>
               <td><code>%APPDATA%\uv\uv.toml</code></td>
               <td><code>$XDG_CONFIG_HOME/uv/uv.toml</code> <sup style="color:var(--text-mute);">*</sup></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3776ab" />
+                  <path fill="#ffd43b" d="M3 12h18v5a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" />
+                </svg> pip</td>
+              <td><code>~/Library/Application Support/pip/pip.conf</code></td>
+              <td><code>~/.config/pip/pip.conf</code></td>
+              <td><code>%APPDATA%\pip\pip.ini</code></td>
+              <td><code>$XDG_CONFIG_HOME/pip/pip.conf</code> <sup style="color:var(--text-mute);">*</sup></td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3b6fb6" />
+                  <path fill="#fff" d="M8 6h5a4 4 0 0 1 0 8h-3v4H8zm2 2v4h3a2 2 0 0 0 0-4z" />
+                </svg> poetry</td>
+              <td><code>~/Library/Application Support/pypoetry/config.toml</code></td>
+              <td><code>~/.config/pypoetry/config.toml</code></td>
+              <td><code>%APPDATA%\pypoetry\config.toml</code></td>
+              <td><code>$XDG_CONFIG_HOME/pypoetry/config.toml</code> <sup style="color:var(--text-mute);">*</sup></td>
             </tr>
           </tbody>
         </table>
@@ -1823,6 +1903,18 @@ scoop install depsguard</code></pre>
               </td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 24 24">
+                  <path fill="#f59e0b" d="M12 8a5 5 0 0 1 5 5H7a5 5 0 0 1 5-5z" />
+                  <path stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"
+                    d="M3 16.5h18M12 3.5V5M5 6.5l1 1M19 6.5l-1 1" />
+                </svg> aube</td>
+              <td>
+                Add <code>&lt;pkg&gt;</code> to <code>minimumReleaseAgeExclude</code> in <code>.npmrc</code>, or set
+                <code>AUBE_MINIMUM_RELEASE_AGE=0</code> (or <code>npm_config_minimum_release_age=0</code>) for a single
+                install.
+              </td>
+            </tr>
+            <tr>
               <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 16 16">
                   <path fill="#e040fb" d="M2 2v11c0 .5.5 1 1 1h8c.5 0 1-.5 1-1h1v1h1V2H8v8H7V2z" />
                 </svg> uv</td>
@@ -1833,6 +1925,30 @@ scoop install depsguard</code></pre>
                 <span style="color:var(--text-mute); font-size:.75rem;"><code>exclude-newer-package</code> is a separate
                   per-package override of the global <code>exclude-newer</code> cutoff. uv's CLI accepts
                   <code>--exclude-newer-package PACKAGE=DATE</code> but not <code>PACKAGE=false</code>.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3776ab" />
+                  <path fill="#ffd43b" d="M3 12h18v5a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" />
+                </svg> pip</td>
+              <td>
+                Run <code>pip install &lt;pkg&gt;==&lt;ver&gt; --uploaded-prior-to=P0D</code> for one install.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;"><code>P0D</code> disables the cooldown only for
+                  that command; pip has no per-package exclusion in config.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" fill="#3b6fb6" />
+                  <path fill="#fff" d="M8 6h5a4 4 0 0 1 0 8h-3v4H8zm2 2v4h3a2 2 0 0 0 0-4z" />
+                </svg> poetry</td>
+              <td>
+                Add <code>&lt;pkg&gt;</code> to <code>solver.min-release-age-exclude</code> (comma-separated) in
+                <code>poetry.toml</code>/<code>config.toml</code>, run <code>poetry add &lt;pkg&gt;@&lt;ver&gt;</code>,
+                then remove the entry.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;"><code>solver.min-release-age-exclude-source</code>
+                  exempts every package from a named index instead.</span>
               </td>
             </tr>
             <tr>
@@ -1985,12 +2101,25 @@ scoop install depsguard</code></pre>
         &ndash; a reference guide and companion shell helper (<code style="color:var(--text-dim)">cooldowns.sh</code>)
         focused specifically on minimum-release-age cooldowns. It complements DepsGuard: cooldowns.dev covers a
         broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard
-        covers npm/pnpm/yarn/bun/uv plus Renovate and Dependabot and adds other hardening settings
+        covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate and Dependabot and adds other hardening settings
         (<code style="color:var(--text-dim)">ignore-scripts</code>,
         <code style="color:var(--text-dim)">block-exotic-subdeps</code>,
         <code style="color:var(--text-dim)">trust-policy</code>,
         <code style="color:var(--text-dim)">strict-dep-builds</code>)
         with an interactive TUI, diff preview, and backup/restore.
+      </p>
+      <p style="color:var(--text-dim); line-height:1.75; margin-top:1rem;">
+        <strong>Python ecosystem:</strong> DepsGuard scans the package managers that expose a release-age cooldown as a
+        persistent config setting &ndash; <code style="color:var(--text-dim)">uv</code>
+        (<code style="color:var(--text-dim)">exclude-newer</code>), <code style="color:var(--text-dim)">pip</code>
+        (<code style="color:var(--text-dim)">uploaded-prior-to</code>, pip &ge; 26.1), and
+        <code style="color:var(--text-dim)">poetry</code> (<code style="color:var(--text-dim)">solver.min-release-age</code>,
+        poetry &ge; 2.4). <code style="color:var(--text-dim)">pdm</code> and <code style="color:var(--text-dim)">conda</code>
+        currently expose release-age only via one-off CLI flags / unreleased proposals, and
+        <code style="color:var(--text-dim)">pixi</code>'s <code style="color:var(--text-dim)">exclude-newer</code> is
+        project-scoped (no user-level config); these may be added later.
+        <code style="color:var(--text-dim)">pipenv</code> and <code style="color:var(--text-dim)">hatch</code> have no
+        cooldown setting yet.
       </p>
     </section>
 

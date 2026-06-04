@@ -66,7 +66,8 @@ pub fn user_config_candidates(
     os: TargetOs,
 ) -> (Vec<PathBuf>, usize) {
     match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => (vec![home.join(".npmrc")], 0),
+        // aube reads the same `.npmrc` as npm/pnpm (minimumReleaseAge key).
+        ManagerKind::Npm | ManagerKind::Pnpm | ManagerKind::Aube => (vec![home.join(".npmrc")], 0),
         ManagerKind::Yarn => (vec![home.join(".yarnrc.yml")], 0),
         ManagerKind::PnpmGlobal
         | ManagerKind::PnpmWorkspace
@@ -85,20 +86,75 @@ pub fn user_config_candidates(
             }
             (cands, default_idx)
         }
+        // uv reads a single user-level `uv.toml`: `$XDG_CONFIG_HOME/uv/uv.toml`
+        // when XDG is set, otherwise `~/.config/uv/uv.toml`. XDG *replaces*
+        // `~/.config` — uv does not read both — so we list only the effective one.
         ManagerKind::Uv => match os {
             TargetOs::Windows => (vec![appdata.join("uv/uv.toml")], 0),
             TargetOs::MacOs | TargetOs::Linux => {
-                let mut cands = Vec::new();
-                let default_idx;
-                if let Some(xdg) = xdg_config_home() {
-                    cands.push(xdg.join("uv/uv.toml"));
-                    cands.push(home.join(".config/uv/uv.toml"));
-                    default_idx = 0;
+                let current = if let Some(xdg) = xdg_config_home() {
+                    xdg.join("uv/uv.toml")
                 } else {
-                    cands.push(home.join(".config/uv/uv.toml"));
-                    default_idx = 0;
+                    home.join(".config/uv/uv.toml")
+                };
+                (vec![current], 0)
+            }
+        },
+        // pip user config: pip.conf (Unix/macOS) / pip.ini (Windows).
+        // The `uploaded-prior-to` cooldown lives in the `[install]` section.
+        //
+        // pip MERGES config files by precedence (global < user < site), and within
+        // the user level the *current* file overrides the *legacy* `~/.pip` file.
+        // We list user-level candidates highest-precedence first and resolve to the
+        // single effective file; the system/site levels and env overrides are not
+        // covered (documented limitation).
+        ManagerKind::Pip => match os {
+            TargetOs::Windows => (
+                vec![appdata.join("pip/pip.ini"), home.join("pip/pip.ini")],
+                0,
+            ),
+            TargetOs::MacOs => {
+                // pip's current user file is `~/Library/Application Support/pip/pip.conf`
+                // when that directory exists, otherwise the XDG/`~/.config` location.
+                let current = if home.join("Library/Application Support/pip").is_dir() {
+                    home.join("Library/Application Support/pip/pip.conf")
+                } else if let Some(xdg) = xdg_config_home() {
+                    xdg.join("pip/pip.conf")
+                } else {
+                    home.join(".config/pip/pip.conf")
+                };
+                (vec![current, home.join(".pip/pip.conf")], 0)
+            }
+            TargetOs::Linux => {
+                let current = if let Some(xdg) = xdg_config_home() {
+                    xdg.join("pip/pip.conf")
+                } else {
+                    home.join(".config/pip/pip.conf")
+                };
+                (vec![current, home.join(".pip/pip.conf")], 0)
+            }
+        },
+        // poetry global config: config.toml (`solver.min-release-age`).
+        // One effective global config per OS; `XDG_CONFIG_HOME` takes priority on
+        // Unix, with the platform default as fallback.
+        ManagerKind::Poetry => match os {
+            TargetOs::Windows => (vec![appdata.join("pypoetry/config.toml")], 0),
+            TargetOs::MacOs => {
+                // macOS canonically uses Library, but honor XDG when set.
+                let mut cands = Vec::new();
+                if let Some(xdg) = xdg_config_home() {
+                    cands.push(xdg.join("pypoetry/config.toml"));
                 }
-                (cands, default_idx)
+                cands.push(home.join("Library/Application Support/pypoetry/config.toml"));
+                (cands, 0)
+            }
+            TargetOs::Linux => {
+                let current = if let Some(xdg) = xdg_config_home() {
+                    xdg.join("pypoetry/config.toml")
+                } else {
+                    home.join(".config/pypoetry/config.toml")
+                };
+                (vec![current], 0)
             }
         },
     }

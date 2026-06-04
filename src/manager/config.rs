@@ -42,7 +42,7 @@ pub fn check_flat(
     desc: &str,
 ) -> Recommendation {
     let status = match cfg.get(key) {
-        Some(v) if v == expected => CheckStatus::Ok,
+        Some(v) if v == expected => CheckStatus::Ok(v.clone()),
         Some(v) => CheckStatus::WrongValue(v.clone()),
         None => missing_status_for_path(path),
     };
@@ -54,17 +54,17 @@ pub fn check_flat(
     }
 }
 
-/// Check a flat config key as an integer `>= min`.
-pub fn check_flat_min_int(
+/// Check a flat config key as an integer equal to the exact target.
+pub fn check_flat_exact_int(
     path: &Path,
     cfg: &HashMap<String, String>,
     key: &str,
-    min: u64,
+    expected: u64,
     desc: &str,
 ) -> Recommendation {
     let status = match cfg.get(key) {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= min => CheckStatus::Ok,
+            Ok(n) if n == expected => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         None => missing_status_for_path(path),
@@ -72,7 +72,7 @@ pub fn check_flat_min_int(
     Recommendation {
         key: key.into(),
         description: desc.into(),
-        expected: min.to_string(),
+        expected: expected.to_string(),
         status,
     }
 }
@@ -118,6 +118,47 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
     None
 }
 
+/// Read a value from an INI / Python-`configparser` file (pip.conf / pip.ini).
+///
+/// Matches configparser's default semantics, which differ from TOML:
+/// - both `=` and `:` are key/value delimiters (first one wins);
+/// - only whole-line comments are recognized (`#` or `;` at the start of a
+///   line); inline comments are NOT stripped — the value is the full remainder
+///   of the line, so `key = P7D ; note` has the literal value `P7D ; note`;
+/// - values are not unquoted.
+///
+/// Use `section.key` notation for sectioned keys (e.g. `install.uploaded-prior-to`).
+pub fn read_ini_value(path: &Path, dotted_key: &str) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    let parts: Vec<&str> = dotted_key.splitn(2, '.').collect();
+    let (target_section, target_key) = if parts.len() == 2 {
+        (Some(parts[0]), parts[1])
+    } else {
+        (None, parts[0])
+    };
+
+    let mut current_section: Option<&str> = None;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            current_section = Some(inner.trim());
+            continue;
+        }
+        // configparser accepts either `=` or `:`; the earliest delimiter wins.
+        if let Some(pos) = line.find(['=', ':']) {
+            let k = line[..pos].trim();
+            let v = line[pos + 1..].trim();
+            if current_section == target_section && k == target_key {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
 // ── YAML config ──────────────────────────────────────────────────────
 
 /// Read a top-level key from a simple YAML file.
@@ -152,7 +193,7 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
 /// Check mode for YAML values.
 pub enum YamlCheck {
     Exact,
-    MinInt(u64),
+    ExactInt(u64),
 }
 
 /// Check a YAML config key using the given mode.
@@ -166,9 +207,9 @@ pub fn check_yaml(
     let val = read_yaml_value(path, key);
     let status = match (&val, &check) {
         (None, _) => missing_status_for_path(path),
-        (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok,
-        (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
-            Ok(n) if n >= *min => CheckStatus::Ok,
+        (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok(v.clone()),
+        (Some(v), YamlCheck::ExactInt(want)) => match v.parse::<u64>() {
+            Ok(n) if n == *want => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         (Some(v), _) => CheckStatus::WrongValue(v.clone()),

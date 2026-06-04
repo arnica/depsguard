@@ -3,72 +3,66 @@
 use std::path::Path;
 
 use super::config::read_toml_value;
-use super::date::{is_date_old_enough, parse_relative_days};
+use super::date::parse_relative_days;
 use super::detect::get_delay_days;
-use super::types::{missing_status_for_path, CheckStatus, Recommendation};
+use super::types::{
+    missing_status_for_path, unsupported_with_message_if_configured, CheckStatus, Recommendation,
+};
+use super::version::{extract_version_str, parse_semver};
+
+/// uv stores the cooldown as the top-level `exclude-newer` key.
+pub(crate) const UV_KEY: &str = "exclude-newer";
 
 /// Minimum uv version that supports relative durations for `exclude-newer`.
 const UV_MIN_MAJOR: u64 = 0;
 const UV_MIN_MINOR: u64 = 9;
 const UV_MIN_PATCH: u64 = 17;
 
-/// Extract the semver portion from a uv version string like
-/// `"uv 0.11.6 (65950801c 2026-04-09 aarch64-apple-darwin)"`.
-fn extract_uv_version(version: &str) -> &str {
-    let s = version.trim();
-    let Some(numeric_start) = s.find(|c: char| c.is_ascii_digit()) else {
-        return s;
-    };
-    let rest = &s[numeric_start..];
-    rest.split(|c: char| !c.is_ascii_digit() && c != '.')
-        .next()
-        .unwrap_or(rest)
-}
-
 fn supports_relative_duration(version: &str) -> bool {
-    let ver = extract_uv_version(version);
-    super::version::parse_semver(ver).is_some_and(|(major, minor, patch)| {
+    let ver = extract_version_str(version);
+    parse_semver(ver).is_some_and(|(major, minor, patch)| {
         (major, minor, patch) >= (UV_MIN_MAJOR, UV_MIN_MINOR, UV_MIN_PATCH)
     })
 }
 
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
-    let ver = extract_uv_version(version);
+    let ver = extract_version_str(version);
 
-    if !supports_relative_duration(version) {
-        return vec![Recommendation {
-            key: "exclude-newer".into(),
-            description: format!("Delay new versions by {days} days"),
-            expected: format!("{days} days"),
-            status: CheckStatus::Unsupported(format!(
-                "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
-            )),
-        }];
-    }
-
-    let val = read_toml_value(path, "exclude-newer");
+    let val = read_toml_value(path, UV_KEY);
     let status = match &val {
         Some(v) => {
-            if let Some(d) = parse_relative_days(v) {
-                if d >= days {
-                    CheckStatus::Ok
-                } else {
-                    CheckStatus::WrongValue(v.clone())
-                }
-            } else if is_date_old_enough(v, days) {
-                CheckStatus::Ok
-            } else {
-                CheckStatus::WrongValue(v.clone())
+            // Exact policy: only the requested rolling duration is OK. An absolute
+            // date (or any other form) is a different kind of value and is flagged.
+            match parse_relative_days(v) {
+                Some(d) if d == days => CheckStatus::Ok(v.clone()),
+                _ => CheckStatus::WrongValue(v.clone()),
             }
         }
         None => missing_status_for_path(path),
     };
 
-    vec![Recommendation {
-        key: "exclude-newer".into(),
+    let rec = Recommendation {
+        key: UV_KEY.into(),
         description: format!("Delay new versions by {days} days"),
         expected: format!("{days} days"),
         status,
-    }]
+    };
+
+    // Only relative durations (e.g. `7 days`) require uv >= 0.9.17; absolute
+    // RFC-3339 dates work on older uv, so don't relabel a valid absolute-date
+    // config as needing an upgrade.
+    let configured_relative_duration = val.as_deref().and_then(parse_relative_days).is_some();
+    let rec = if configured_relative_duration && !supports_relative_duration(version) {
+        unsupported_with_message_if_configured(
+            rec,
+            format!(
+                "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
+            ),
+        )
+    } else {
+        rec
+    };
+
+    vec![rec]
 }

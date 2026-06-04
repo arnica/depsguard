@@ -230,13 +230,22 @@ fn run_interactive() -> io::Result<()> {
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            writeln!(
-                out,
-                "  {}{}All package managers are properly configured!{}",
-                term::BOLD,
-                term::GREEN,
-                term::RESET
-            )?;
+            if has_unsupported_recommendations(&managers) {
+                writeln!(
+                    out,
+                    "  {}Some checks require package manager upgrades before the configured settings apply.{}",
+                    term::BOLD,
+                    term::RESET
+                )?;
+            } else {
+                writeln!(
+                    out,
+                    "  {}{}All package managers are properly configured!{}",
+                    term::BOLD,
+                    term::GREEN,
+                    term::RESET
+                )?;
+            }
             return Ok(());
         }
 
@@ -277,6 +286,15 @@ fn run_interactive() -> io::Result<()> {
             return Ok(());
         }
     }
+}
+
+fn has_unsupported_recommendations(managers: &[ManagerInfo]) -> bool {
+    managers.iter().any(|manager| {
+        manager
+            .recommendations
+            .iter()
+            .any(|rec| rec.status.is_unsupported())
+    })
 }
 
 /// Drive the interactive fix-selection loop.

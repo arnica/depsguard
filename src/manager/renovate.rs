@@ -13,8 +13,8 @@ pub fn scan(path: &Path) -> Vec<Recommendation> {
     let status = match &val {
         Some(v) => {
             if let Some(d) = parse_relative_days(v) {
-                if d >= days {
-                    CheckStatus::Ok
+                if d == days {
+                    CheckStatus::Ok(v.clone())
                 } else {
                     CheckStatus::WrongValue(v.clone())
                 }

@@ -36,55 +36,6 @@ pub fn epoch_to_date(epoch: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T00:00:00Z")
 }
 
-/// Parse a YYYY-MM-DD prefix from a date string (also works with RFC 3339 timestamps).
-fn parse_date_to_days(date_str: &str) -> Option<u64> {
-    if date_str.len() < 10 {
-        return None;
-    }
-    let b = date_str.as_bytes();
-    if b[4] != b'-' || b[7] != b'-' {
-        return None;
-    }
-    let y: u64 = date_str[0..4].parse().ok()?;
-    let m: u64 = date_str[5..7].parse().ok()?;
-    let d: u64 = date_str[8..10].parse().ok()?;
-    if !(1..=12).contains(&m) || d == 0 || d > 31 {
-        return None;
-    }
-    if y == 0 {
-        return None;
-    }
-    let (adj_y, adj_m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
-    let era = adj_y / 400;
-    let yoe = adj_y - era * 400;
-    let doy = (153 * adj_m + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let total = era * 146097 + doe;
-    // Guard against underflow for dates before Unix epoch (~1970)
-    if total < 719468 {
-        return None;
-    }
-    Some(total - 719468)
-}
-
-fn current_epoch_days() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        / 86400
-}
-
-/// Parse a date (YYYY-MM-DD or RFC 3339) and check if it's at least `min_days` old.
-pub fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
-    let Some(date_days) = parse_date_to_days(date_str) else {
-        return false;
-    };
-    let today = current_epoch_days();
-    date_days <= today.saturating_sub(min_days)
-}
-
 /// Parse a relative duration string like "7 days", "2 weeks" into days.
 pub fn parse_relative_days(s: &str) -> Option<u64> {
     let s = s.trim().to_lowercase();
@@ -101,18 +52,46 @@ pub fn parse_relative_days(s: &str) -> Option<u64> {
     }
 }
 
+/// Parse a simple ISO 8601 duration like "P7D" (7 days) or "P2W" (2 weeks) into days.
+///
+/// pip's `--uploaded-prior-to` accepts these relative durations (e.g. `P3D`).
+/// Only whole-day and whole-week periods are supported; durations with a time
+/// component (e.g. `P1DT12H`) return `None`.
+pub fn parse_iso8601_days(s: &str) -> Option<u64> {
+    let s = s.trim().trim_matches('"').trim_matches('\'');
+    let rest = s.strip_prefix(['P', 'p'])?;
+    // Split off the trailing unit character safely. A byte-index split would
+    // panic on multibyte input (e.g. "P7é").
+    let mut chars = rest.chars();
+    let unit = chars.next_back()?;
+    let num_part = chars.as_str();
+    if num_part.is_empty() {
+        return None;
+    }
+    let n: u64 = num_part.parse().ok()?;
+    match unit {
+        'D' | 'd' => Some(n),
+        'W' | 'w' => n.checked_mul(7),
+        _ => None,
+    }
+}
+
 /// Parse a compact duration string like "7d", "3d", "1440m", "24h" into minutes.
 pub fn parse_duration_minutes(s: &str) -> Option<u64> {
     let s = s.trim().trim_matches('"').trim_matches('\'');
-    if s.is_empty() {
+    // Split off the trailing unit character safely (avoid a byte-index split,
+    // which panics on multibyte input).
+    let mut chars = s.chars();
+    let unit = chars.next_back()?;
+    let num_part = chars.as_str();
+    if num_part.is_empty() {
         return None;
     }
-    let (num_part, unit) = s.split_at(s.len().saturating_sub(1));
     let n: u64 = num_part.parse().ok()?;
     match unit {
-        "d" => Some(n.saturating_mul(24 * 60)),
-        "h" => Some(n.saturating_mul(60)),
-        "m" => Some(n),
+        'd' => Some(n.saturating_mul(24 * 60)),
+        'h' => Some(n.saturating_mul(60)),
+        'm' => Some(n),
         _ => None,
     }
 }

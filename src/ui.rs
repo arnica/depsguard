@@ -6,8 +6,6 @@ use std::path::Path;
 use crate::manager::{self, CheckStatus, ManagerInfo};
 use crate::term::{BG_GREEN, BG_RED, BOLD, CYAN, DIM, GREEN, RED, RESET, WHITE, YELLOW};
 
-const BLUE: &str = "\x1b[34m";
-
 /// Return "1 config" or "3 configs" — simple singular/plural.
 fn plural(n: usize, singular: &str, plural_form: &str) -> String {
     if n == 1 {
@@ -134,7 +132,7 @@ fn format_manager_header(managers: &[&ManagerInfo]) -> String {
 
 fn status_icon(s: &CheckStatus) -> &'static str {
     match s {
-        CheckStatus::Ok => "✓",
+        CheckStatus::Ok(_) => "✓",
         CheckStatus::Missing | CheckStatus::FileMissing => "✗",
         CheckStatus::WrongValue(_) => "~",
         CheckStatus::Unsupported(_) => "ℹ",
@@ -143,10 +141,10 @@ fn status_icon(s: &CheckStatus) -> &'static str {
 
 fn status_color(s: &CheckStatus) -> &'static str {
     match s {
-        CheckStatus::Ok => GREEN,
+        CheckStatus::Ok(_) => GREEN,
         CheckStatus::Missing | CheckStatus::FileMissing => RED,
         CheckStatus::WrongValue(_) => YELLOW,
-        CheckStatus::Unsupported(_) => BLUE,
+        CheckStatus::Unsupported(_) => YELLOW,
     }
 }
 
@@ -177,7 +175,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 continue;
             }
             match &rec.status {
-                CheckStatus::Ok => ok_count += 1,
+                CheckStatus::Ok(_) => ok_count += 1,
                 CheckStatus::Missing => missing_count += 1,
                 CheckStatus::FileMissing => file_missing_count += 1,
                 CheckStatus::WrongValue(_) => wrong_count += 1,
@@ -185,7 +183,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             }
         }
     }
-    let total_issues = missing_count + file_missing_count + wrong_count;
+    let total_errors = missing_count + file_missing_count + wrong_count;
     let unique_configs = {
         let s: std::collections::HashSet<_> = managers.iter().map(|m| &m.config_path).collect();
         s.len()
@@ -216,11 +214,24 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         let group_managers: Vec<&ManagerInfo> = group.iter().map(|&idx| &managers[idx]).collect();
         let header = format_manager_header(&group_managers);
 
-        let all_ok = group.iter().all(|&idx| managers[idx].all_ok());
-        let badge = if all_ok {
-            format!("{BG_GREEN}{BOLD} SECURE {RESET}")
-        } else {
+        let has_errors = group.iter().any(|&idx| {
+            managers[idx]
+                .recommendations
+                .iter()
+                .any(|rec| rec.status.is_error())
+        });
+        let has_warnings = group.iter().any(|&idx| {
+            managers[idx]
+                .recommendations
+                .iter()
+                .any(|rec| rec.status.is_unsupported())
+        });
+        let badge = if has_errors {
             format!("{BG_RED}{BOLD} ACTION NEEDED {RESET}")
+        } else if has_warnings {
+            format!("{YELLOW}{BOLD} WARNING {RESET}")
+        } else {
+            format!("{BG_GREEN}{BOLD} SECURE {RESET}")
         };
 
         writeln!(w, "  {header}  {badge}")?;
@@ -242,15 +253,13 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 let icon = status_icon(&rec.status);
                 let color = status_color(&rec.status);
                 let detail = match &rec.status {
-                    CheckStatus::Ok => format!("{GREEN}{}{RESET}", rec.expected),
+                    CheckStatus::Ok(v) => format!("{GREEN}{v}{RESET}"),
                     CheckStatus::Missing => format!("{RED}not set{RESET}"),
                     CheckStatus::FileMissing => format!("{RED}file missing{RESET}"),
                     CheckStatus::WrongValue(v) => {
                         format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
                     }
-                    CheckStatus::Unsupported(v) => {
-                        format!("{BLUE}{v}{RESET}")
-                    }
+                    CheckStatus::Unsupported(v) => format!("{YELLOW}{v}{RESET}"),
                 };
                 let prefix = if show_prefix {
                     format!("{DIM}({}){RESET} ", mgr.kind.name())
@@ -267,7 +276,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         writeln!(w)?;
     }
 
-    if total_issues == 0 {
+    if total_errors == 0 && unsupported_count == 0 {
         writeln!(
             w,
             "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
@@ -289,7 +298,11 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             write!(w, "{YELLOW}{BOLD}{wrong_count} misconfigured{RESET}  ")?;
         }
         if unsupported_count > 0 {
-            write!(w, "{BLUE}{unsupported_count} unsupported{RESET}  ")?;
+            write!(
+                w,
+                "{YELLOW}{BOLD}{}{RESET}  ",
+                plural(unsupported_count, "warning", "warnings")
+            )?;
         }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
         let total = ok_count + file_missing_count + missing_count + wrong_count + unsupported_count;
@@ -380,22 +393,25 @@ pub struct ToggleKey {
 fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
     use crate::manager::ManagerKind;
     match kind {
-        ManagerKind::Npm | ManagerKind::Pnpm => ".npmrc",
+        // npm, pnpm, and aube all read `.npmrc`.
+        ManagerKind::Npm | ManagerKind::Pnpm | ManagerKind::Aube => ".npmrc",
         ManagerKind::PnpmGlobal => "pnpm-global",
         ManagerKind::PnpmWorkspace => "pnpm-workspace",
         ManagerKind::Bun => ".bunfig.toml",
         ManagerKind::Uv => "uv.toml",
+        ManagerKind::Pip => "pip.conf",
+        ManagerKind::Poetry => "poetry",
         ManagerKind::Yarn => ".yarnrc.yml",
         ManagerKind::Renovate => "renovate",
         ManagerKind::Dependabot => "dependabot",
     }
 }
 
-/// Canonical kind for toggle grouping (npm + pnpm share `.npmrc`).
+/// Canonical kind for toggle grouping (npm, pnpm, and aube share `.npmrc`).
 fn toggle_canonical(kind: crate::manager::ManagerKind) -> crate::manager::ManagerKind {
     use crate::manager::ManagerKind;
-    if kind == ManagerKind::Pnpm {
-        ManagerKind::Npm // group .npmrc pnpm with npm
+    if kind == ManagerKind::Pnpm || kind == ManagerKind::Aube {
+        ManagerKind::Npm // group `.npmrc` consumers under npm
     } else {
         kind
     }
@@ -514,12 +530,20 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
 /// Compute the number of terminal rows used by fixed chrome (header, footer).
 /// `has_toggle_keys` adds a line for the toggle shortcut bar.
 pub fn selector_chrome_lines(has_toggle_keys: bool) -> usize {
-    let title = 1;
-    let nav_line = 1;
+    let blank_after_items = 1;
+    let cta_line = 1; // "press enter to apply ..."
+    let diff_line = 1; // "press d to preview ..."
+    let blank_before_controls = 1; // separates CTA from other commands
+    let nav_line = 1; // navigate / page / toggle / filter / quit
+    let status_line = 1; // pagination / filter status
     let toggle_line = if has_toggle_keys { 1 } else { 0 };
-    let blank_after_header = 1;
-    let footer = 2; // blank + status/page line
-    title + nav_line + toggle_line + blank_after_header + footer
+    blank_after_items
+        + cta_line
+        + diff_line
+        + blank_before_controls
+        + nav_line
+        + status_line
+        + toggle_line
 }
 
 /// Return the maximum number of item-area lines available for the current terminal.
@@ -613,39 +637,48 @@ pub fn print_selector(
 
     writeln!(w)?;
 
-    // Status line
+    // Primary call-to-action first: pressing Enter applies the selected fixes,
+    // and every recommended fix is pre-selected, so a user can just press Enter.
     let selected_count = items.iter().filter(|i| i.selected).count();
+    writeln!(
+        w,
+        "  press {YELLOW}enter{RESET} to apply {} recommended {}",
+        selected_count,
+        if selected_count == 1 { "fix" } else { "fixes" },
+    )?;
+    // Then: see exactly what will change.
+    writeln!(
+        w,
+        "  press {YELLOW}d{RESET} to preview the exact changes first"
+    )?;
+    writeln!(w)?;
+    // Then the rest of the controls — same bright key / dim label styling as the
+    // toggle row below (keys must NOT be wrapped in DIM or they render faded).
+    writeln!(
+        w,
+        "  {YELLOW}\u{2191}\u{2193}{RESET} {DIM}navigate{RESET}  \
+         {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
+         {YELLOW}space{RESET} {DIM}toggle{RESET}  \
+         {YELLOW}f{RESET} {DIM}{}{RESET}  \
+         {YELLOW}q{RESET} {DIM}quit{RESET}",
+        filter.next_action()
+    )?;
+    // Always emit exactly one status line so the rendered footer matches the rows
+    // reserved by `selector_chrome_lines` (when not paginated and the filter is
+    // All, this is an intentionally blank line rather than a dropped row).
     if paginated {
         writeln!(
             w,
-            "  {DIM}items {}-{} of {} (page {}/{}) \u{2014} {} selected{RESET}{filter_label}",
+            "  {DIM}items {}-{} of {} (page {}/{}){RESET}{filter_label}",
             vis_page_start + 1,
             view_page_end,
             total_vis,
             current_page,
             total_pages,
-            selected_count,
         )?;
     } else {
-        writeln!(
-            w,
-            "  {DIM}{} selected{RESET}{filter_label}",
-            plural(selected_count, "fix", "fixes")
-        )?;
+        writeln!(w, "{filter_label}")?;
     }
-
-    // Shortcuts at the bottom
-    writeln!(
-        w,
-        "  {YELLOW}↑↓{RESET} {DIM}navigate{RESET}  \
-         {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
-         {YELLOW}space{RESET} {DIM}toggle{RESET}  \
-         {YELLOW}enter{RESET} {DIM}apply{RESET}  \
-         {YELLOW}d{RESET} {DIM}diff{RESET}  \
-         {YELLOW}f{RESET} {DIM}{}{RESET}  \
-         {YELLOW}q{RESET} {DIM}quit{RESET}",
-        filter.next_action()
-    )?;
     if !toggle_keys.is_empty() {
         let toggles: String = toggle_keys
             .iter()
@@ -1060,8 +1093,32 @@ mod tests {
     }
 
     #[test]
+    fn scan_results_ok_shows_actual_configured_value_not_target() {
+        // Regression: an OK check must display the ACTUAL configured value, not
+        // the target. A value stricter than the target (e.g. 20160 >= 10080) is
+        // OK and must be shown as 20160, never relabeled as the 10080 target.
+        let mgr = make_manager(vec![Recommendation {
+            key: "minimum-release-age".into(),
+            description: "Delay new versions by 7 days".into(),
+            expected: "10080".into(),
+            status: CheckStatus::Ok("20160".into()),
+        }]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(
+            s.contains("20160"),
+            "OK row must show the actual configured value:\n{s}"
+        );
+        assert!(
+            !s.contains("10080"),
+            "OK row must not show the target as if it were the current value:\n{s}"
+        );
+    }
+
+    #[test]
     fn scan_results_all_ok() {
-        let mgr = make_manager(vec![make_rec("key", CheckStatus::Ok)]);
+        let mgr = make_manager(vec![make_rec("key", CheckStatus::Ok("ok_val".into()))]);
         let mut buf = Vec::new();
         print_scan_results(&mut buf, &[mgr]).unwrap();
         let s = String::from_utf8(buf).unwrap();
@@ -1100,9 +1157,23 @@ mod tests {
     }
 
     #[test]
+    fn scan_results_unsupported_is_warning_not_all_clear() {
+        let mgr = make_manager(vec![make_rec(
+            "key",
+            CheckStatus::Unsupported("requires npm ≥ 11.10 (have 10.8.0)".into()),
+        )]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("WARNING"));
+        assert!(s.contains("1 warning"));
+        assert!(!s.contains("All 0 checks passed"));
+    }
+
+    #[test]
     fn build_fix_items_skips_ok() {
         let mgr = make_manager(vec![
-            make_rec("ok_key", CheckStatus::Ok),
+            make_rec("ok_key", CheckStatus::Ok("ok_val".into())),
             make_rec("bad_key", CheckStatus::Missing),
         ]);
         let items = build_fix_items(&[mgr]);
@@ -1113,7 +1184,7 @@ mod tests {
 
     #[test]
     fn build_fix_items_empty_when_all_ok() {
-        let mgr = make_manager(vec![make_rec("ok", CheckStatus::Ok)]);
+        let mgr = make_manager(vec![make_rec("ok", CheckStatus::Ok("ok_val".into()))]);
         let items = build_fix_items(&[mgr]);
         assert!(items.is_empty());
     }
@@ -1145,7 +1216,8 @@ mod tests {
         assert!(s.contains("▸")); // cursor
         assert!(s.contains("●"));
         assert!(s.contains("○"));
-        assert!(s.contains("1 fix selected"));
+        assert!(s.contains("enter")); // primary call-to-action
+        assert!(s.contains("apply 1 recommended fix"));
     }
 
     #[test]
@@ -1172,7 +1244,7 @@ mod tests {
         let vis: Vec<usize> = (0..items.len()).collect();
         print_selector(&mut buf, &items, &vis, 1, 0, &[], SelectFilter::All).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("2 fixes selected"));
+        assert!(s.contains("apply 2 recommended fixes"));
     }
 
     #[test]
