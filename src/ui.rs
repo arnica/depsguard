@@ -630,14 +630,12 @@ pub fn print_selector(
 
     writeln!(w)?;
 
-    // Primary call-to-action FIRST: pressing Enter applies the selected fixes,
-    // and every recommended fix is pre-selected. Someone who just wants things
-    // fixed can press Enter without touching anything else.
+    // Primary call-to-action first: pressing Enter applies the selected fixes,
+    // and every recommended fix is pre-selected, so a user can just press Enter.
     let selected_count = items.iter().filter(|i| i.selected).count();
     writeln!(
         w,
-        "  {GREEN}{BOLD}\u{25b8} ENTER{RESET}  {BOLD}apply {}{RESET}  \
-         {DIM}\u{2014} recommended; just press Enter if you're unsure{RESET}",
+        "  {YELLOW}{BOLD}enter{RESET} {BOLD}apply {}{RESET}",
         plural(selected_count, "fix", "fixes"),
     )?;
     // Then: see exactly what will change.
@@ -645,14 +643,15 @@ pub fn print_selector(
         w,
         "  {YELLOW}d{RESET} {DIM}preview the exact changes first{RESET}"
     )?;
-    // Then the rest of the controls, de-emphasized.
+    // Then the rest of the controls — same bright key / dim label styling as the
+    // toggle row below (keys must NOT be wrapped in DIM or they render faded).
     writeln!(
         w,
-        "  {DIM}{YELLOW}\u{2191}\u{2193}{RESET}{DIM} navigate \u{b7} \
-         {YELLOW}^u ^d{RESET}{DIM} page \u{b7} \
-         {YELLOW}space{RESET}{DIM} toggle \u{b7} \
-         {YELLOW}f{RESET}{DIM} {} \u{b7} \
-         {YELLOW}q{RESET}{DIM} quit{RESET}",
+        "  {YELLOW}\u{2191}\u{2193}{RESET} {DIM}navigate{RESET}  \
+         {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
+         {YELLOW}space{RESET} {DIM}toggle{RESET}  \
+         {YELLOW}f{RESET} {DIM}{}{RESET}  \
+         {YELLOW}q{RESET} {DIM}quit{RESET}",
         filter.next_action()
     )?;
     if paginated {
@@ -1205,7 +1204,7 @@ mod tests {
         assert!(s.contains("▸")); // cursor
         assert!(s.contains("●"));
         assert!(s.contains("○"));
-        assert!(s.contains("ENTER")); // primary call-to-action
+        assert!(s.contains("enter")); // primary call-to-action
         assert!(s.contains("apply 1 fix"));
     }
 
