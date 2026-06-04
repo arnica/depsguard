@@ -530,12 +530,13 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
 /// Compute the number of terminal rows used by fixed chrome (header, footer).
 /// `has_toggle_keys` adds a line for the toggle shortcut bar.
 pub fn selector_chrome_lines(has_toggle_keys: bool) -> usize {
-    let title = 1;
-    let nav_line = 1;
+    let blank_after_items = 1;
+    let cta_line = 1; // "▸ ENTER apply ..."
+    let diff_line = 1; // "d preview ..."
+    let nav_line = 1; // navigate / page / toggle / filter / quit
+    let status_line = 1; // pagination / filter status
     let toggle_line = if has_toggle_keys { 1 } else { 0 };
-    let blank_after_header = 1;
-    let footer = 2; // blank + status/page line
-    title + nav_line + toggle_line + blank_after_header + footer
+    blank_after_items + cta_line + diff_line + nav_line + status_line + toggle_line
 }
 
 /// Return the maximum number of item-area lines available for the current terminal.
@@ -629,39 +630,44 @@ pub fn print_selector(
 
     writeln!(w)?;
 
-    // Status line
+    // Primary call-to-action FIRST: pressing Enter applies the selected fixes,
+    // and every recommended fix is pre-selected. Someone who just wants things
+    // fixed can press Enter without touching anything else.
     let selected_count = items.iter().filter(|i| i.selected).count();
+    writeln!(
+        w,
+        "  {GREEN}{BOLD}\u{25b8} ENTER{RESET}  {BOLD}apply {}{RESET}  \
+         {DIM}\u{2014} recommended; just press Enter if you're unsure{RESET}",
+        plural(selected_count, "fix", "fixes"),
+    )?;
+    // Then: see exactly what will change.
+    writeln!(
+        w,
+        "  {YELLOW}d{RESET} {DIM}preview the exact changes first{RESET}"
+    )?;
+    // Then the rest of the controls, de-emphasized.
+    writeln!(
+        w,
+        "  {DIM}{YELLOW}\u{2191}\u{2193}{RESET}{DIM} navigate \u{b7} \
+         {YELLOW}^u ^d{RESET}{DIM} page \u{b7} \
+         {YELLOW}space{RESET}{DIM} toggle \u{b7} \
+         {YELLOW}f{RESET}{DIM} {} \u{b7} \
+         {YELLOW}q{RESET}{DIM} quit{RESET}",
+        filter.next_action()
+    )?;
     if paginated {
         writeln!(
             w,
-            "  {DIM}items {}-{} of {} (page {}/{}) \u{2014} {} selected{RESET}{filter_label}",
+            "  {DIM}items {}-{} of {} (page {}/{}){RESET}{filter_label}",
             vis_page_start + 1,
             view_page_end,
             total_vis,
             current_page,
             total_pages,
-            selected_count,
         )?;
-    } else {
-        writeln!(
-            w,
-            "  {DIM}{} selected{RESET}{filter_label}",
-            plural(selected_count, "fix", "fixes")
-        )?;
+    } else if filter != SelectFilter::All {
+        writeln!(w, "{filter_label}")?;
     }
-
-    // Shortcuts at the bottom
-    writeln!(
-        w,
-        "  {YELLOW}↑↓{RESET} {DIM}navigate{RESET}  \
-         {YELLOW}^u ^d{RESET} {DIM}page{RESET}  \
-         {YELLOW}space{RESET} {DIM}toggle{RESET}  \
-         {YELLOW}enter{RESET} {DIM}apply{RESET}  \
-         {YELLOW}d{RESET} {DIM}diff{RESET}  \
-         {YELLOW}f{RESET} {DIM}{}{RESET}  \
-         {YELLOW}q{RESET} {DIM}quit{RESET}",
-        filter.next_action()
-    )?;
     if !toggle_keys.is_empty() {
         let toggles: String = toggle_keys
             .iter()
@@ -1199,7 +1205,8 @@ mod tests {
         assert!(s.contains("▸")); // cursor
         assert!(s.contains("●"));
         assert!(s.contains("○"));
-        assert!(s.contains("1 fix selected"));
+        assert!(s.contains("ENTER")); // primary call-to-action
+        assert!(s.contains("apply 1 fix"));
     }
 
     #[test]
@@ -1226,7 +1233,7 @@ mod tests {
         let vis: Vec<usize> = (0..items.len()).collect();
         print_selector(&mut buf, &items, &vis, 1, 0, &[], SelectFilter::All).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("2 fixes selected"));
+        assert!(s.contains("apply 2 fixes"));
     }
 
     #[test]
