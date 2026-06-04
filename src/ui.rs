@@ -531,12 +531,19 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
 /// `has_toggle_keys` adds a line for the toggle shortcut bar.
 pub fn selector_chrome_lines(has_toggle_keys: bool) -> usize {
     let blank_after_items = 1;
-    let cta_line = 1; // "▸ ENTER apply ..."
-    let diff_line = 1; // "d preview ..."
+    let cta_line = 1; // "press enter to apply ..."
+    let diff_line = 1; // "press d to preview ..."
+    let blank_before_controls = 1; // separates CTA from other commands
     let nav_line = 1; // navigate / page / toggle / filter / quit
     let status_line = 1; // pagination / filter status
     let toggle_line = if has_toggle_keys { 1 } else { 0 };
-    blank_after_items + cta_line + diff_line + nav_line + status_line + toggle_line
+    blank_after_items
+        + cta_line
+        + diff_line
+        + blank_before_controls
+        + nav_line
+        + status_line
+        + toggle_line
 }
 
 /// Return the maximum number of item-area lines available for the current terminal.
@@ -635,14 +642,16 @@ pub fn print_selector(
     let selected_count = items.iter().filter(|i| i.selected).count();
     writeln!(
         w,
-        "  {YELLOW}{BOLD}enter{RESET} {BOLD}apply {}{RESET}",
-        plural(selected_count, "fix", "fixes"),
+        "  press {YELLOW}enter{RESET} to apply {} recommended {}",
+        selected_count,
+        if selected_count == 1 { "fix" } else { "fixes" },
     )?;
     // Then: see exactly what will change.
     writeln!(
         w,
-        "  {YELLOW}d{RESET} {DIM}preview the exact changes first{RESET}"
+        "  press {YELLOW}d{RESET} to preview the exact changes first"
     )?;
+    writeln!(w)?;
     // Then the rest of the controls — same bright key / dim label styling as the
     // toggle row below (keys must NOT be wrapped in DIM or they render faded).
     writeln!(
@@ -1205,7 +1214,7 @@ mod tests {
         assert!(s.contains("●"));
         assert!(s.contains("○"));
         assert!(s.contains("enter")); // primary call-to-action
-        assert!(s.contains("apply 1 fix"));
+        assert!(s.contains("apply 1 recommended fix"));
     }
 
     #[test]
@@ -1232,7 +1241,7 @@ mod tests {
         let vis: Vec<usize> = (0..items.len()).collect();
         print_selector(&mut buf, &items, &vis, 1, 0, &[], SelectFilter::All).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("apply 2 fixes"));
+        assert!(s.contains("apply 2 recommended fixes"));
     }
 
     #[test]
