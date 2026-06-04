@@ -588,14 +588,6 @@ mod tests {
         assert_eq!(date::epoch_to_date(1704067200), "2024-01-01T00:00:00Z");
     }
 
-    #[test]
-    fn is_date_old_enough_works() {
-        let old = date::date_days_ago(30);
-        assert!(date::is_date_old_enough(&old, 7));
-        let recent = date::date_days_ago(1);
-        assert!(!date::is_date_old_enough(&recent, 7));
-    }
-
     // ── CheckStatus tests ───────────────────────────────────────────
 
     #[test]
@@ -1064,12 +1056,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_absolute_date_ok() {
+    fn scan_uv_absolute_date_is_misconfigured() {
+        // Exact policy: a fixed absolute date is not the requested rolling N-day
+        // window, so it is flagged (even if it's an old date).
         let old_date = date::date_days_ago(30);
         let content = format!("exclude-newer = \"{old_date}\"\n");
         let f = tmp_file(&content);
         let recs = uv::scan(f.path(), UV_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1109,18 +1103,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_old_version_absolute_date_stays_ok() {
-        // Only relative durations need uv >= 0.9.17; an absolute RFC-3339 date is
-        // supported on older uv, so a valid old-enough date must NOT be relabeled
-        // as requiring an upgrade.
+    fn scan_uv_old_version_absolute_date_is_misconfigured() {
+        // An absolute date is never the exact rolling policy, so it is flagged
+        // regardless of uv version (the version gate only applies to relative
+        // durations that are otherwise correct).
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("exclude-newer = \"{old_date}\"\n"));
         let recs = uv::scan(f.path(), UV_OLD);
-        assert!(
-            recs[0].status.is_ok(),
-            "absolute date on old uv should stay Ok, got: {:?}",
-            recs[0].status
-        );
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1218,11 +1208,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_absolute_date_ok() {
+    fn scan_pip_absolute_date_is_misconfigured() {
+        // Exact policy: a fixed absolute date is not the requested rolling N-day
+        // window, so it is flagged (even if it's an old date).
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
         let recs = pip::scan(f.path(), PIP_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1240,18 +1232,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_old_version_absolute_date_stays_ok() {
-        // pip 26.0 supports absolute datetimes; only relative ISO-8601 durations
-        // need 26.1. A valid old-enough absolute date must stay Ok, not be
-        // relabeled "requires pip >= 26.1".
+    fn scan_pip_old_version_absolute_date_is_misconfigured() {
+        // An absolute date is never the exact rolling policy, so it is flagged
+        // regardless of pip version (the version gate only applies to relative
+        // durations that are otherwise correct).
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
         let recs = pip::scan(f.path(), PIP_OLD);
-        assert!(
-            recs[0].status.is_ok(),
-            "absolute date on pip 26.0 should stay Ok, got: {:?}",
-            recs[0].status
-        );
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1504,11 +1492,9 @@ mod tests {
     }
 
     #[test]
-    fn date_parser_does_not_panic_on_multibyte_input() {
-        // Regression: parse_date_to_days sliced date_str[8..10] by byte index
-        // after a byte-length guard, so a date-shaped value whose 10th byte
-        // landed mid-codepoint panicked and aborted the whole scan.
-        // Reaches the date path via pip/uv when it isn't a relative duration.
+    fn scan_does_not_panic_on_multibyte_date_value() {
+        // Regression: a date-shaped value with a multibyte character must be
+        // reported as a wrong value, never panic the scan.
         let pip_f = tmp_file("[install]\nuploaded-prior-to = 2024-01-0é\n");
         let pip_recs = pip::scan(pip_f.path(), "26.1");
         assert!(matches!(pip_recs[0].status, CheckStatus::WrongValue(_)));
@@ -1516,12 +1502,6 @@ mod tests {
         let uv_f = tmp_file("exclude-newer = \"2024-01-0é\"\n");
         let uv_recs = uv::scan(uv_f.path(), "0.9.17");
         assert!(matches!(uv_recs[0].status, CheckStatus::WrongValue(_)));
-
-        // Multibyte char straddling each guarded boundary must be rejected, not panic.
-        use date::is_date_old_enough;
-        assert!(!is_date_old_enough("2024-01-0é", 7));
-        assert!(!is_date_old_enough("2024-01-\u{1f389}", 7));
-        assert!(!is_date_old_enough("20é4-01-01", 7));
     }
 
     // ── yarn tests ──────────────────────────────────────────────────

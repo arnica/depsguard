@@ -948,7 +948,8 @@ fn uv_config_fix_and_rescan() {
     };
     fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
 
-    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    // Exact policy: the default target is 7 days, so write the matching rolling value.
+    fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -1023,7 +1024,8 @@ fn uv_config_fix_and_rescan_from_xdg() {
     let xdg = home.path().join("xdg");
     let uv_config = xdg.join("uv/uv.toml");
     fs::create_dir_all(uv_config.parent().unwrap()).unwrap();
-    fs::write(&uv_config, "exclude-newer = \"2024-01-01T00:00:00Z\"\n").unwrap();
+    // Exact policy: the default target is 7 days, so write the matching rolling value.
+    fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
     let out = run_depsguard_with_env(
         &["--scan", "--no-search"],

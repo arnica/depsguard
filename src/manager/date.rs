@@ -36,61 +36,6 @@ pub fn epoch_to_date(epoch: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T00:00:00Z")
 }
 
-/// Parse a YYYY-MM-DD prefix from a date string (also works with RFC 3339 timestamps).
-fn parse_date_to_days(date_str: &str) -> Option<u64> {
-    if date_str.len() < 10 {
-        return None;
-    }
-    let b = date_str.as_bytes();
-    if b[4] != b'-' || b[7] != b'-' {
-        return None;
-    }
-    // The ASCII '-' checks at b[4]/b[7] make indices 0,4,5,7,8 char boundaries,
-    // but index 10 is unguarded: a multibyte char straddling it would make the
-    // `date_str[8..10]` slice panic. Reject such input instead of crashing.
-    if !date_str.is_char_boundary(10) {
-        return None;
-    }
-    let y: u64 = date_str[0..4].parse().ok()?;
-    let m: u64 = date_str[5..7].parse().ok()?;
-    let d: u64 = date_str[8..10].parse().ok()?;
-    if !(1..=12).contains(&m) || d == 0 || d > 31 {
-        return None;
-    }
-    if y == 0 {
-        return None;
-    }
-    let (adj_y, adj_m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
-    let era = adj_y / 400;
-    let yoe = adj_y - era * 400;
-    let doy = (153 * adj_m + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let total = era * 146097 + doe;
-    // Guard against underflow for dates before Unix epoch (~1970)
-    if total < 719468 {
-        return None;
-    }
-    Some(total - 719468)
-}
-
-fn current_epoch_days() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        / 86400
-}
-
-/// Parse a date (YYYY-MM-DD or RFC 3339) and check if it's at least `min_days` old.
-pub fn is_date_old_enough(date_str: &str, min_days: u64) -> bool {
-    let Some(date_days) = parse_date_to_days(date_str) else {
-        return false;
-    };
-    let today = current_epoch_days();
-    date_days <= today.saturating_sub(min_days)
-}
-
 /// Parse a relative duration string like "7 days", "2 weeks" into days.
 pub fn parse_relative_days(s: &str) -> Option<u64> {
     let s = s.trim().to_lowercase();

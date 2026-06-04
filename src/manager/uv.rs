@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use super::config::read_toml_value;
-use super::date::{is_date_old_enough, parse_relative_days};
+use super::date::parse_relative_days;
 use super::detect::get_delay_days;
 use super::types::{
     missing_status_for_path, unsupported_with_message_if_configured, CheckStatus, Recommendation,
@@ -32,16 +32,11 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let val = read_toml_value(path, UV_KEY);
     let status = match &val {
         Some(v) => {
-            if let Some(d) = parse_relative_days(v) {
-                if d == days {
-                    CheckStatus::Ok(v.clone())
-                } else {
-                    CheckStatus::WrongValue(v.clone())
-                }
-            } else if is_date_old_enough(v, days) {
-                CheckStatus::Ok(v.clone())
-            } else {
-                CheckStatus::WrongValue(v.clone())
+            // Exact policy: only the requested rolling duration is OK. An absolute
+            // date (or any other form) is a different kind of value and is flagged.
+            match parse_relative_days(v) {
+                Some(d) if d == days => CheckStatus::Ok(v.clone()),
+                _ => CheckStatus::WrongValue(v.clone()),
             }
         }
         None => missing_status_for_path(path),
