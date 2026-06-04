@@ -38,7 +38,7 @@ pub fn scan(path: &Path) -> Vec<Recommendation> {
         .max_by_key(|(_, n)| *n);
 
     let status = match configured {
-        Some((raw, minutes)) if minutes >= required_minutes => CheckStatus::Ok(raw),
+        Some((raw, minutes)) if minutes == required_minutes => CheckStatus::Ok(raw),
         Some((raw, _)) => CheckStatus::WrongValue(raw),
         None => {
             invalid_value.map_or_else(|| missing_status_for_path(path), CheckStatus::WrongValue)

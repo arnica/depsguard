@@ -12,7 +12,7 @@ pub fn scan(path: &Path) -> Vec<Recommendation> {
     let delay = read_toml_value(path, "install.minimumReleaseAge");
     let delay_status = match &delay {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= seconds => CheckStatus::Ok(v.clone()),
+            Ok(n) if n == seconds => CheckStatus::Ok(v.clone()),
             Ok(_) => CheckStatus::WrongValue(v.clone()),
             Err(_) => CheckStatus::WrongValue(v.clone()),
         },

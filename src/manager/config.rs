@@ -54,17 +54,17 @@ pub fn check_flat(
     }
 }
 
-/// Check a flat config key as an integer `>= min`.
-pub fn check_flat_min_int(
+/// Check a flat config key as an integer equal to the exact target.
+pub fn check_flat_exact_int(
     path: &Path,
     cfg: &HashMap<String, String>,
     key: &str,
-    min: u64,
+    expected: u64,
     desc: &str,
 ) -> Recommendation {
     let status = match cfg.get(key) {
         Some(v) => match v.parse::<u64>() {
-            Ok(n) if n >= min => CheckStatus::Ok(v.clone()),
+            Ok(n) if n == expected => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         None => missing_status_for_path(path),
@@ -72,7 +72,7 @@ pub fn check_flat_min_int(
     Recommendation {
         key: key.into(),
         description: desc.into(),
-        expected: min.to_string(),
+        expected: expected.to_string(),
         status,
     }
 }
@@ -152,7 +152,7 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
 /// Check mode for YAML values.
 pub enum YamlCheck {
     Exact,
-    MinInt(u64),
+    ExactInt(u64),
 }
 
 /// Check a YAML config key using the given mode.
@@ -167,8 +167,8 @@ pub fn check_yaml(
     let status = match (&val, &check) {
         (None, _) => missing_status_for_path(path),
         (Some(v), YamlCheck::Exact) if v == expected => CheckStatus::Ok(v.clone()),
-        (Some(v), YamlCheck::MinInt(min)) => match v.parse::<u64>() {
-            Ok(n) if n >= *min => CheckStatus::Ok(v.clone()),
+        (Some(v), YamlCheck::ExactInt(want)) => match v.parse::<u64>() {
+            Ok(n) if n == *want => CheckStatus::Ok(v.clone()),
             _ => CheckStatus::WrongValue(v.clone()),
         },
         (Some(v), _) => CheckStatus::WrongValue(v.clone()),

@@ -864,16 +864,15 @@ mod tests {
     }
 
     #[test]
-    fn scan_npm_higher_release_age_is_ok() {
-        // npm's min-release-age means "at least N days"; a value higher than the
-        // target satisfies the policy (>= comparison, not an exact match).
-        // Default target is 7 days, so 14 must be OK — not flagged for "fixing"
-        // (which would wrongly lower it to 7).
+    fn scan_npm_higher_release_age_is_misconfigured() {
+        // DepsGuard enforces an EXACT policy: the configured delay must equal the
+        // requested value. The default target is 7 days, so 14 (different, even if
+        // stricter) is flagged so it can be normalized to exactly 7.
         let f = tmp_file("min-release-age=14\nignore-scripts=true\n");
         let recs = npm::scan(f.path(), "11.10.0");
         assert!(
-            recs[0].status.is_ok(),
-            "14-day min-release-age should satisfy a 7-day policy, got: {:?}",
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "14 must not satisfy an exact 7-day policy, got: {:?}",
             recs[0].status
         );
     }
@@ -918,10 +917,15 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_higher_release_age_ok() {
+    fn scan_pnpm_higher_release_age_is_misconfigured() {
+        // 20160 (14 days) differs from the default 10080-minute (7-day) policy;
+        // exact match flags it even though it is a longer delay.
         let f = tmp_file("minimum-release-age=20160\nignore-scripts=true\n");
         let recs = pnpm::scan_project(f.path(), "10.16.0");
-        assert!(recs[0].status.is_ok(), "20160 >= 10080 should be Ok");
+        assert!(
+            matches!(recs[0].status, CheckStatus::WrongValue(_)),
+            "20160 != 10080 should be WrongValue (exact match)"
+        );
     }
 
     #[test]
@@ -966,28 +970,32 @@ mod tests {
     }
 
     #[test]
-    fn check_flat_min_int_basic() {
+    fn check_flat_exact_int_basic() {
         let mut cfg = HashMap::new();
         cfg.insert("minimum-release-age".into(), "10080".into());
-        let r = config::check_flat_min_int(
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
             10080,
             "test",
         );
-        assert!(r.status.is_ok());
+        assert!(r.status.is_ok(), "exactly 10080 should be Ok");
 
-        let r = config::check_flat_min_int(
+        // A value higher than the target is NOT OK under exact-policy semantics.
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
             5000,
             "test",
         );
-        assert!(r.status.is_ok(), "10080 >= 5000 should be Ok");
+        assert!(
+            matches!(r.status, CheckStatus::WrongValue(_)),
+            "10080 != 5000 should be WrongValue (exact match)"
+        );
 
-        let r = config::check_flat_min_int(
+        let r = config::check_flat_exact_int(
             Path::new("/tmp/existing"),
             &cfg,
             "minimum-release-age",
@@ -1040,10 +1048,12 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_relative_weeks() {
+    fn scan_uv_relative_weeks_differs_is_misconfigured() {
+        // "2 weeks" (14 days) differs from the default 7-day policy; exact match
+        // flags it even though it is a longer delay.
         let f = tmp_file("exclude-newer = \"2 weeks\"\n");
         let recs = uv::scan(f.path(), UV_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1193,10 +1203,11 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_relative_weeks_ok() {
+    fn scan_pip_relative_weeks_differs_is_misconfigured() {
+        // P2W (14 days) differs from the default 7-day policy; exact match flags it.
         let f = tmp_file("[install]\nuploaded-prior-to = P2W\n");
         let recs = pip::scan(f.path(), PIP_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
@@ -1317,10 +1328,11 @@ mod tests {
     }
 
     #[test]
-    fn scan_poetry_higher_value_ok() {
+    fn scan_poetry_higher_value_is_misconfigured() {
+        // 14 differs from the default 7-day policy; exact match flags it.
         let f = tmp_file("[solver]\nmin-release-age = 14\n");
         let recs = poetry::scan(f.path(), POETRY_NEW);
-        assert!(recs[0].status.is_ok());
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]

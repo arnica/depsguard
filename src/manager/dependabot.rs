@@ -16,7 +16,7 @@ pub fn scan(path: &Path) -> Vec<Recommendation> {
     let mut recs = Vec::new();
     for entry in &entries {
         let status = match entry.cooldown_default_days {
-            Some(d) if d >= days => CheckStatus::Ok(d.to_string()),
+            Some(d) if d == days => CheckStatus::Ok(d.to_string()),
             Some(d) => CheckStatus::WrongValue(d.to_string()),
             None => CheckStatus::Missing,
         };

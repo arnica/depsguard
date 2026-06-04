@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::config::{check_flat, check_flat_min_int, read_flat_config};
+use super::config::{check_flat, check_flat_exact_int, read_flat_config};
 use super::detect::get_delay_days;
 use super::types::{unsupported_if_configured, Recommendation};
 use super::version::version_at_least;
@@ -10,9 +10,9 @@ use super::version::version_at_least;
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let cfg = read_flat_config(path);
-    // npm's `min-release-age` is a number of days meaning "at least N days old",
-    // so any value >= the target satisfies the policy (not an exact match).
-    let release_age = check_flat_min_int(
+    // npm's `min-release-age` is a number of days; DepsGuard enforces the exact
+    // configured policy, so the value must equal the requested delay.
+    let release_age = check_flat_exact_int(
         path,
         &cfg,
         "min-release-age",

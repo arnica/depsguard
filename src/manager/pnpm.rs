@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::config::{check_flat, check_flat_min_int, check_yaml, read_flat_config, YamlCheck};
+use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
 use super::types::{unsupported_if_configured, Recommendation};
 use super::version::version_at_least;
@@ -13,7 +13,7 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
     let minutes = days.saturating_mul(24).saturating_mul(60);
     let cfg = read_flat_config(path);
 
-    let release_age = check_flat_min_int(
+    let release_age = check_flat_exact_int(
         path,
         &cfg,
         "minimum-release-age",
@@ -70,7 +70,7 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "minimumReleaseAge",
             &minutes.to_string(),
             &format!("Delay new versions by {days} days"),
-            YamlCheck::MinInt(minutes),
+            YamlCheck::ExactInt(minutes),
         ),
         g((10, 26)).yaml(
             "blockExoticSubdeps",
@@ -89,7 +89,7 @@ fn scan_global_rc(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<Re
         min_ver,
     };
     vec![
-        g((10, 16)).flat_min_int(
+        g((10, 16)).flat_exact_int(
             &cfg,
             "minimum-release-age",
             minutes,
@@ -138,7 +138,7 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "minimumReleaseAge",
             &minutes.to_string(),
             &format!("Delay new versions by {days} days"),
-            YamlCheck::MinInt(minutes),
+            YamlCheck::ExactInt(minutes),
         ),
         g((10, 26)).yaml(
             "blockExoticSubdeps",
@@ -195,14 +195,14 @@ impl VersionGate<'_> {
         }
     }
 
-    fn flat_min_int(
+    fn flat_exact_int(
         &self,
         cfg: &std::collections::HashMap<String, String>,
         key: &str,
-        min: u64,
+        expected: u64,
         desc: &str,
     ) -> Recommendation {
-        let rec = check_flat_min_int(self.path, cfg, key, min, desc);
+        let rec = check_flat_exact_int(self.path, cfg, key, expected, desc);
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
             rec
         } else {
