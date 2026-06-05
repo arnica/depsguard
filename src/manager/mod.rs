@@ -151,7 +151,7 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::Npm => npm::scan(path, version),
         ManagerKind::Pnpm => pnpm::scan_project(path, version),
         ManagerKind::PnpmGlobal => pnpm::scan_global(path, version),
-        ManagerKind::Bun => bun::scan(path),
+        ManagerKind::Bun => bun::scan(path, version),
         ManagerKind::Uv => uv::scan(path, version),
         ManagerKind::Pip => pip::scan(path, version),
         ManagerKind::Poetry => poetry::scan(path, version),
@@ -1059,32 +1059,60 @@ mod tests {
 
     // ── bun tests ───────────────────────────────────────────────────
 
+    // bun added install.minimumReleaseAge in 1.3.0.
+    const BUN_NEW: &str = "1.3.0";
+    const BUN_OLD: &str = "1.2.21";
+
     #[test]
     fn scan_bun_checks() {
         let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(recs[0].status.is_ok());
     }
 
     #[test]
     fn scan_bun_too_low() {
         let f = tmp_file("[install]\nminimumReleaseAge = 100\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
     fn scan_bun_missing() {
         let f = tmp_file("");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::Missing));
     }
 
     #[test]
     fn scan_bun_invalid_value() {
         let f = tmp_file("[install]\nminimumReleaseAge = abc\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_bun_old_version_missing_setting_is_unsupported() {
+        // install.minimumReleaseAge needs bun >= 1.3; on 1.2.x a missing setting
+        // is informational, not an actionable fix (issue #52 class).
+        let f = tmp_file("");
+        let recs = bun::scan(f.path(), BUN_OLD);
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_bun_old_version_configured_is_unsupported() {
+        let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
+        let recs = bun::scan(f.path(), BUN_OLD);
+        assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn bun_version_boundary_1_2_unsupported_1_3_supported() {
+        let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
+        assert!(bun::scan(f.path(), "1.2.99")[0].status.is_unsupported());
+        assert!(bun::scan(f.path(), "1.3.0")[0].status.is_ok());
     }
 
     // ── uv tests ────────────────────────────────────────────────────
@@ -2229,6 +2257,7 @@ mod tests {
                 "10.15.0",
                 "minimum-release-age",
             ),
+            ("bun", bun::scan, "1.2.21", "install.minimumReleaseAge"),
             ("uv", uv::scan, "0.9.16", "exclude-newer"),
             ("pip", pip::scan, "26.0", "install.uploaded-prior-to"),
             ("poetry", poetry::scan, "2.3.0", "solver.min-release-age"),

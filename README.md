@@ -184,7 +184,7 @@ depsguard --help       # CLI help
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
-| bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay |
+| bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay (requires bun >= 1.3) |
 | aube | `~/.npmrc` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes (requires uv >= 0.9.17) |
 | pip | `pip.conf` (`[install]`) | `uploaded-prior-to` | `P7D` (7 days) | Delay new publishes (requires pip >= 26.1) |
