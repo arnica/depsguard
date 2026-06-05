@@ -42,8 +42,11 @@ pub fn uses_yaml_config(version: &str) -> bool {
 /// Scan the pnpm global config file.
 ///
 /// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all settings accepted.
-/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase) — only
-///   `minimumReleaseAge` and `blockExoticSubdeps` are valid globally.
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase). DepsGuard
+///   scans `minimumReleaseAge` and `blockExoticSubdeps` here. Known gap: pnpm
+///   11.0.7 (#11474) also began accepting `trustPolicy`/`strictDepBuilds` in the
+///   global file; DepsGuard does not yet scan those two in the global config
+///   (it still scans them in `pnpm-workspace.yaml`).
 pub fn scan_global(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
