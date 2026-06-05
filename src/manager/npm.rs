@@ -4,8 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, read_flat_config};
 use super::detect::get_delay_days;
-use super::types::{mark_unsupported, Recommendation};
-use super::version::version_at_least;
+use super::types::{gate_min_version, Recommendation};
 
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
@@ -19,11 +18,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         days,
         &format!("Delay new versions by {days} days"),
     );
-    let release_age = if version_at_least(version, 11, 10) {
-        release_age
-    } else {
-        mark_unsupported(release_age, "npm", 11, 10, version)
-    };
+    let release_age = gate_min_version(release_age, "npm", 11, 10, version);
     vec![
         release_age,
         check_flat(

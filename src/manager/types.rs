@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use super::version::version_at_least;
+
 /// Result of checking a single security setting against its expected value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckStatus {
@@ -204,18 +206,39 @@ pub enum RepoConfigKind {
     Dependabot,
 }
 
-/// Force a recommendation to `Unsupported` because the installed tool version
-/// predates the feature.
+/// Apply a `major.minor` version gate: return `rec` unchanged when the installed
+/// version is new enough, otherwise mark it `Unsupported`.
 ///
-/// The conversion is unconditional: a missing, wrong, or already-correct value
-/// is equally unusable on a version that lacks the feature, so DepsGuard reports
-/// every state as an informational "requires >= X" note rather than an
-/// actionable fix. Callers decide *when* a setting is unsupported (the version
-/// gate); this helper only applies the verdict.
+/// This is the canonical way to gate a setting whose feature simply does not
+/// exist before `min_major.min_minor`. Keeping the version check and the
+/// `Unsupported` verdict in one place means a setting the tool can't use is never
+/// reported as an actionable fix — the inconsistency behind issue #52, where a
+/// *missing* setting on an old version was treated as fixable while a configured
+/// one was marked unsupported.
 ///
-/// Reporting a missing setting as fixable on an unsupported version would prompt
-/// users to add a config their tool ignores (see issue #52). Keep the gate and
-/// this verdict together so that never regresses.
+/// Scanners whose gate is more than a plain version floor (e.g. pip/uv, where
+/// only the relative-duration *value form* needs a newer release) compute their
+/// own condition and call [`mark_unsupported`] / [`mark_unsupported_with_message`].
+pub fn gate_min_version(
+    rec: Recommendation,
+    manager_name: &str,
+    min_major: u64,
+    min_minor: u64,
+    have_version: &str,
+) -> Recommendation {
+    if version_at_least(have_version, min_major, min_minor) {
+        rec
+    } else {
+        mark_unsupported(rec, manager_name, min_major, min_minor, have_version)
+    }
+}
+
+/// Force a recommendation to `Unsupported` with the standard
+/// "requires <tool> >= <major>.<minor> (have <version>)" message.
+///
+/// Unconditional: a missing, wrong, or already-correct value is equally unusable
+/// on a version that lacks the feature. Most callers want [`gate_min_version`];
+/// use this directly only when the caller computes the gate condition itself.
 pub fn mark_unsupported(
     rec: Recommendation,
     manager_name: &str,
@@ -229,9 +252,8 @@ pub fn mark_unsupported(
     )
 }
 
-/// Like [`mark_unsupported`] but with a caller-supplied version message (e.g.
-/// when the gate needs patch-level precision). Also unconditional — see the
-/// note on [`mark_unsupported`].
+/// Force a recommendation to `Unsupported` with a caller-supplied message (e.g.
+/// when the gate needs patch-level precision). The lowest-level verdict helper.
 pub fn mark_unsupported_with_message(mut rec: Recommendation, message: String) -> Recommendation {
     rec.status = CheckStatus::Unsupported(message);
     rec
