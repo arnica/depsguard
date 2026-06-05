@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{unsupported_if_configured, Recommendation};
+use super::types::{mark_unsupported, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -23,7 +23,7 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
     let release_age = if version_at_least(version, 10, 16) {
         release_age
     } else {
-        unsupported_if_configured(release_age, "pnpm", 10, 16, version)
+        mark_unsupported(release_age, "pnpm", 10, 16, version)
     };
 
     vec![
@@ -176,7 +176,7 @@ impl VersionGate<'_> {
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
             rec
         } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
+            mark_unsupported(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 
@@ -191,7 +191,7 @@ impl VersionGate<'_> {
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
             rec
         } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
+            mark_unsupported(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 
@@ -206,7 +206,7 @@ impl VersionGate<'_> {
         if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
             rec
         } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
+            mark_unsupported(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
         }
     }
 }

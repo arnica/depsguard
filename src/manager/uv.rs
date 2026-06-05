@@ -6,7 +6,7 @@ use super::config::read_toml_value;
 use super::date::parse_relative_days;
 use super::detect::get_delay_days;
 use super::types::{
-    missing_status_for_path, unsupported_with_message_if_configured, CheckStatus, Recommendation,
+    mark_unsupported_with_message, missing_status_for_path, CheckStatus, Recommendation,
 };
 use super::version::{extract_version_str, parse_semver};
 
@@ -49,12 +49,17 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         status,
     };
 
-    // Only relative durations (e.g. `7 days`) require uv >= 0.9.17; absolute
-    // RFC-3339 dates work on older uv, so don't relabel a valid absolute-date
-    // config as needing an upgrade.
+    // The value DepsGuard writes (`7 days`) is a relative duration, which
+    // requires uv >= 0.9.17. On older uv, a relative duration — or a missing
+    // setting we would fill with one — is unusable, so it's reported as
+    // `Unsupported` rather than an actionable fix (issue #52). A configured
+    // absolute RFC-3339 date works on older uv, so it stays out of the gate and
+    // is evaluated on its own merits (flagged as a wrong value, never an upgrade
+    // prompt).
     let configured_relative_duration = val.as_deref().and_then(parse_relative_days).is_some();
-    let rec = if configured_relative_duration && !supports_relative_duration(version) {
-        unsupported_with_message_if_configured(
+    let would_recommend_relative = val.is_none() || configured_relative_duration;
+    let rec = if would_recommend_relative && !supports_relative_duration(version) {
+        mark_unsupported_with_message(
             rec,
             format!(
                 "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"

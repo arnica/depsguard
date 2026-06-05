@@ -204,30 +204,36 @@ pub enum RepoConfigKind {
     Dependabot,
 }
 
-/// Mark an already-correct setting as `Unsupported`; keep missing/wrong config fixable.
-pub fn unsupported_if_configured(
-    mut rec: Recommendation,
+/// Force a recommendation to `Unsupported` because the installed tool version
+/// predates the feature.
+///
+/// The conversion is unconditional: a missing, wrong, or already-correct value
+/// is equally unusable on a version that lacks the feature, so DepsGuard reports
+/// every state as an informational "requires >= X" note rather than an
+/// actionable fix. Callers decide *when* a setting is unsupported (the version
+/// gate); this helper only applies the verdict.
+///
+/// Reporting a missing setting as fixable on an unsupported version would prompt
+/// users to add a config their tool ignores (see issue #52). Keep the gate and
+/// this verdict together so that never regresses.
+pub fn mark_unsupported(
+    rec: Recommendation,
     manager_name: &str,
     min_major: u64,
     min_minor: u64,
     have_version: &str,
 ) -> Recommendation {
-    if rec.status.is_ok() {
-        rec.status = CheckStatus::Unsupported(format!(
-            "requires {manager_name} \u{2265} {min_major}.{min_minor} (have {have_version})"
-        ));
-    }
-    rec
+    mark_unsupported_with_message(
+        rec,
+        format!("requires {manager_name} \u{2265} {min_major}.{min_minor} (have {have_version})"),
+    )
 }
 
-/// Mark an already-correct setting as `Unsupported` using a custom version message.
-pub fn unsupported_with_message_if_configured(
-    mut rec: Recommendation,
-    message: String,
-) -> Recommendation {
-    if rec.status.is_ok() {
-        rec.status = CheckStatus::Unsupported(message);
-    }
+/// Like [`mark_unsupported`] but with a caller-supplied version message (e.g.
+/// when the gate needs patch-level precision). Also unconditional — see the
+/// note on [`mark_unsupported`].
+pub fn mark_unsupported_with_message(mut rec: Recommendation, message: String) -> Recommendation {
+    rec.status = CheckStatus::Unsupported(message);
     rec
 }
 

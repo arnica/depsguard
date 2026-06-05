@@ -5,9 +5,7 @@ use std::path::Path;
 use super::config::read_ini_value;
 use super::date::parse_iso8601_days;
 use super::detect::get_delay_days;
-use super::types::{
-    missing_status_for_path, unsupported_if_configured, CheckStatus, Recommendation,
-};
+use super::types::{mark_unsupported, missing_status_for_path, CheckStatus, Recommendation};
 use super::version::{extract_version_str, version_at_least};
 
 /// Minimum pip version that supports relative ISO 8601 durations for
@@ -46,16 +44,20 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         status,
     };
 
-    // Only relative ISO-8601 durations (e.g. `P7D`) require pip >= 26.1; absolute
-    // datetimes are supported on 26.0, so don't relabel a valid absolute-date
-    // config as needing an upgrade.
+    // The value DepsGuard writes (`P7D`) is a relative ISO-8601 duration, which
+    // requires pip >= 26.1. On older pip, a relative duration — or a missing
+    // setting we would fill with one — is unusable, so it's reported as
+    // `Unsupported` rather than an actionable fix (issue #52). A configured
+    // absolute datetime works on pip 26.0, so it stays out of the gate and is
+    // evaluated on its own merits (flagged as a wrong value, never an upgrade
+    // prompt).
     let configured_relative_duration = val.as_deref().and_then(parse_iso8601_days).is_some();
-    let rec =
-        if configured_relative_duration && !version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
-            unsupported_if_configured(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver)
-        } else {
-            rec
-        };
+    let would_recommend_relative = val.is_none() || configured_relative_duration;
+    let rec = if would_recommend_relative && !version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
+        mark_unsupported(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver)
+    } else {
+        rec
+    };
 
     vec![rec]
 }

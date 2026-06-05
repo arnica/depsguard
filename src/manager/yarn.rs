@@ -5,9 +5,7 @@ use std::path::Path;
 use super::config::read_yaml_value;
 use super::date::parse_duration_minutes;
 use super::detect::get_delay_days;
-use super::types::{
-    missing_status_for_path, unsupported_if_configured, CheckStatus, Recommendation,
-};
+use super::types::{mark_unsupported, missing_status_for_path, CheckStatus, Recommendation};
 use super::version::version_at_least;
 
 pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
@@ -44,7 +42,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     let rec = if version_at_least(version, 4, 10) {
         rec
     } else {
-        unsupported_if_configured(rec, "yarn", 4, 10, version)
+        mark_unsupported(rec, "yarn", 4, 10, version)
     };
 
     vec![rec]

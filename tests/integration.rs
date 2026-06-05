@@ -75,6 +75,30 @@ fn tool_at_least(cmd: &str, major: u32, minor: u32) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether the installed `uv` supports relative `exclude-newer` durations
+/// (added in uv 0.9.17). DepsGuard writes a relative value (e.g. `7 days`), so
+/// on older uv that value — and a config we would fill with it — is reported as
+/// version-unsupported rather than an actionable fix (issue #52). Tests that
+/// assert the *supported* behaviour skip on older uv; the unsupported path is
+/// covered exhaustively by the unit tests. Needs patch precision, so it parses
+/// uv's prefixed `uv X.Y.Z (...)` output rather than using `tool_at_least`.
+fn uv_supports_relative_exclude_newer() -> bool {
+    Command::new("uv")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|v| {
+            let nums: Vec<u64> = v
+                .split(|c: char| !c.is_ascii_digit())
+                .filter_map(|s| s.parse().ok())
+                .take(3)
+                .collect();
+            matches!(nums.as_slice(), [maj, min, pat, ..] if (*maj, *min, *pat) >= (0, 9, 17))
+        })
+        .unwrap_or(false)
+}
+
 fn run_depsguard(args: &[&str], home: &Path) -> std::process::Output {
     run_depsguard_with_env(args, home, &[])
 }
@@ -937,6 +961,11 @@ fn uv_config_fix_and_rescan() {
     if !has_command("uv") {
         return;
     }
+    // A correct relative `7 days` only reads back as OK on uv >= 0.9.17; older
+    // uv reports it as version-unsupported (issue #52).
+    if !uv_supports_relative_exclude_newer() {
+        return;
+    }
     let home = TmpHome::new("uv_fix");
     // uv config path differs by OS
     let uv_config = if cfg!(target_os = "macos") {
@@ -963,6 +992,12 @@ fn uv_config_fix_and_rescan() {
 #[test]
 fn uv_scan_distinguishes_missing_file_from_empty_file() {
     if !has_command("uv") {
+        return;
+    }
+    // The "file missing" vs "not set" distinction is only visible while the
+    // setting is supported. On uv < 0.9.17 both states are (correctly) reported
+    // as version-unsupported (issue #52), so the distinction does not apply.
+    if !uv_supports_relative_exclude_newer() {
         return;
     }
 
@@ -1018,6 +1053,10 @@ fn uv_scan_distinguishes_missing_file_from_empty_file() {
 #[test]
 fn uv_config_fix_and_rescan_from_xdg() {
     if !has_command("uv") {
+        return;
+    }
+    // See uv_config_fix_and_rescan: the OK read-back requires uv >= 0.9.17.
+    if !uv_supports_relative_exclude_newer() {
         return;
     }
     let home = TmpHome::new("uv_xdg_fix");
