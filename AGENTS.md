@@ -99,12 +99,23 @@ an unsupported version must never become `Missing`/`FileMissing` (which read as
 `ACTION NEEDED`).
 
 **Do it via the shared helpers** in `manager::types` — compute the normal
-`Recommendation`, then apply the gate:
+`Recommendation`, then apply the gate. For a plain major.minor floor, prefer
+the all-in-one helper:
 
-- `mark_unsupported(rec, tool, min_major, min_minor, have)` — standard message.
-- `mark_unsupported_with_message(rec, msg)` — when you need patch-level detail.
+- `gate_min_version(rec, tool, min_major, min_minor, have)` — **the default.**
+  Returns `rec` unchanged when `have >= min_major.min_minor`, otherwise an
+  `Unsupported` verdict. It does the version check *and* applies the verdict, so
+  scanners never hand-roll the comparison.
 
-Both convert *any* status to `Unsupported`. Do **not** re-introduce an
+When the gate is more than a major.minor floor — patch-level precision, or a
+value-form gate (pip/uv, below) — compute the condition yourself and apply the
+verdict directly with the lower-level helpers:
+
+- `mark_unsupported(rec, tool, min_major, min_minor, have)` — unconditional,
+  standard message.
+- `mark_unsupported_with_message(rec, msg)` — unconditional, custom message.
+
+All three convert *any* status to `Unsupported`. Do **not** re-introduce an
 "only-if-configured" guard (that was the #52 bug): the version check decides
 *whether* a setting is supported; the helper applies that verdict to every
 state.
