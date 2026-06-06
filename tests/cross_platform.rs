@@ -243,7 +243,7 @@ fn npmrc_round_trip_all_keys() {
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let _stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success());
+    assert!(!out.status.success()); // empty npmrc means there were actionable findings
 
     // Write all npmrc keys
     fs::write(&npmrc, "min-release-age=7\nignore-scripts=true\n").unwrap();
