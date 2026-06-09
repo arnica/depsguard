@@ -939,6 +939,28 @@ mod tests {
         assert!(f.read().contains("strictDepBuilds: true"));
     }
 
+    #[test]
+    fn apply_fix_pnpm_workspace_ignore_scripts_unquoted() {
+        // ignoreScripts is a YAML boolean: must be bare `true`, never quoted.
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "ignoreScripts".into(),
+            description: "test".into(),
+            expected: "true".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(
+            content.contains("ignoreScripts: true"),
+            "ignoreScripts must be a bare YAML boolean: {content}"
+        );
+        assert!(
+            !content.contains("\"true\""),
+            "ignoreScripts must not be quoted: {content}"
+        );
+    }
+
     // ── PnpmGlobal fix tests (v10 rc vs v11 yaml) ─────────────────
 
     #[test]
@@ -1002,6 +1024,35 @@ mod tests {
         assert!(
             !content.contains("\"true\""),
             "strictDepBuilds must not be quoted: {content}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn apply_fix_pnpm_global_yaml_ignore_scripts_unquoted() {
+        // ignoreScripts is a YAML boolean: bare `true`, never quoted.
+        let dir = std::env::temp_dir().join(format!(
+            "depsguard_pnpmglobal_yaml_is_{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        fs::write(&path, "").unwrap();
+        let rec = Recommendation {
+            key: "ignoreScripts".into(),
+            description: "test".into(),
+            expected: "true".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmGlobal, &path, &rec).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(
+            content.contains("ignoreScripts: true"),
+            "ignoreScripts must be an unquoted YAML boolean: {content}"
+        );
+        assert!(
+            !content.contains("\"true\""),
+            "ignoreScripts must not be quoted: {content}"
         );
         let _ = fs::remove_dir_all(&dir);
     }

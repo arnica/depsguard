@@ -1050,8 +1050,8 @@ mod tests {
         );
         let scripts_msg = msg("ignore-scripts");
         assert!(
-            scripts_msg.contains("ignoreScripts"),
-            "redirect must name the camelCase key: {scripts_msg}"
+            scripts_msg.contains("ignoreScripts") && scripts_msg.contains("pnpm-workspace.yaml"),
+            "redirect must name the camelCase key and target file: {scripts_msg}"
         );
 
         // Missing is also Unsupported (do not push a fix into a file pnpm ignores).
@@ -2133,10 +2133,38 @@ mod tests {
             "workspace scan should recommend ignoreScripts: {:?}",
             recs.iter().map(|r| &r.key).collect::<Vec<_>>()
         );
-        // No version gate: a missing ignoreScripts is fixable even on old pnpm.
+        // Gated at 10.16 (when pnpm began reading settings from pnpm-workspace.yaml),
+        // but a MISSING ignoreScripts stays fixable on older pnpm (forward-looking).
         let recs_old = pnpm::scan_workspace(f.path(), "10.2.0");
         let ignore_old = recs_old.iter().find(|r| r.key == "ignoreScripts").unwrap();
         assert!(ignore_old.needs_fix());
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_ignore_scripts_wrong_value() {
+        // A misconfigured ignoreScripts (false) must flag WrongValue, not Ok.
+        let f = tmp_file("ignoreScripts: false\n");
+        let recs = pnpm::scan_workspace(f.path(), "11.0.0");
+        let ignore = recs.iter().find(|r| r.key == "ignoreScripts").unwrap();
+        assert!(
+            matches!(ignore.status, CheckStatus::WrongValue(_)),
+            "ignoreScripts: false should be WrongValue: {:?}",
+            ignore.status
+        );
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_ignore_scripts_present_on_old_version_unsupported() {
+        // Set correctly but on pnpm < 10.16 (which does not read workspace settings):
+        // must be Unsupported, not a false Ok.
+        let f = tmp_file("ignoreScripts: true\n");
+        let recs = pnpm::scan_workspace(f.path(), "10.2.0");
+        let ignore = recs.iter().find(|r| r.key == "ignoreScripts").unwrap();
+        assert!(
+            ignore.status.is_unsupported(),
+            "ignoreScripts set on pnpm 10.2 (pre-workspace-settings) should be Unsupported: {:?}",
+            ignore.status
+        );
     }
 
     #[test]
@@ -2477,6 +2505,21 @@ mod tests {
             assert!(
                 rec.unwrap().needs_fix(),
                 "{key} should be fixable when missing"
+            );
+        }
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_wrong_values_flagged() {
+        // Misconfigured boolean keys in the global config.yaml must flag WrongValue.
+        let f = tmp_file("ignoreScripts: false\nstrictDepBuilds: false\n");
+        let recs = pnpm::scan_global(f.path(), "11.0.0");
+        for key in ["ignoreScripts", "strictDepBuilds"] {
+            let rec = recs.iter().find(|r| r.key == key).unwrap();
+            assert!(
+                matches!(rec.status, CheckStatus::WrongValue(_)),
+                "{key}: false should be WrongValue: {:?}",
+                rec.status
             );
         }
     }

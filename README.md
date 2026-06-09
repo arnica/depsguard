@@ -181,13 +181,13 @@ depsguard --help       # CLI help
 | pnpm | global `config.yaml` (pnpm >= 11) | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
 | pnpm | global `config.yaml` (pnpm >= 11) | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | global `config.yaml` (pnpm >= 11) | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
-| pnpm | global `config.yaml` (pnpm >= 11) | `ignoreScripts` | `true` | Block malicious install scripts |
+| pnpm | global `config.yaml` (pnpm >= 11) | `ignoreScripts` | `true` | Block malicious install scripts (requires pnpm >= 10.16) |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
-| pnpm | `pnpm-workspace.yaml` | `ignoreScripts` | `true` | Block malicious install scripts |
+| pnpm | `pnpm-workspace.yaml` | `ignoreScripts` | `true` | Block malicious install scripts (requires pnpm >= 10.16) |
 | bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay |
 | aube | `~/.npmrc` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes (requires uv >= 0.9.17) |

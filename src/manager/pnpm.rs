@@ -112,10 +112,11 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "Fail on unreviewed build scripts",
             YamlCheck::Exact,
         ),
-        // ignoreScripts is a long-standing core flag (no version gate) and is on
-        // pnpm's global-config allowlist, so it is honored in config.yaml.
-        check_yaml(
-            path,
+        // pnpm reads root settings from config.yaml only since 10.16 (verified:
+        // 8.x/9/10.0 ignore them, 10.16 honors them). config.yaml itself is pnpm
+        // >= 11, so this gate is always satisfied here, but kept for parity with
+        // scan_workspace; ignoreScripts is on pnpm's global-config allowlist.
+        g((10, 16)).yaml(
             "ignoreScripts",
             "true",
             "Block malicious install scripts",
@@ -201,11 +202,11 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "Fail on unreviewed build scripts",
             YamlCheck::Exact,
         ),
-        // ignoreScripts is a long-standing core flag (no version gate); pnpm reads
-        // it from pnpm-workspace.yaml, and it is the project-level home for
-        // script-blocking now that pnpm >= 11 ignores it in `.npmrc`.
-        check_yaml(
-            path,
+        // pnpm reads root settings from pnpm-workspace.yaml only since 10.16
+        // (verified: 8.x/9/10.0 ignore them, 10.16 honors ignoreScripts). This is
+        // the project-level home for script-blocking now that pnpm >= 11 ignores
+        // it in `.npmrc`.
+        g((10, 16)).yaml(
             "ignoreScripts",
             "true",
             "Block malicious install scripts",
