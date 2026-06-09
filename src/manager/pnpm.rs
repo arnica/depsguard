@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{mark_unsupported, unsupported_if_configured, Recommendation};
+use super::types::{mark_unsupported, unsupported_if_configured, CheckStatus, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -28,17 +28,25 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
         "Block malicious install scripts",
     );
 
-    // pnpm >= 11 ignores pnpm-specific settings in `.npmrc` (auth/registry only).
-    // Mark them Unsupported (no false protection, no fix pnpm ignores) and redirect
-    // to the camelCase YAML key — pnpm 11 ignores kebab-case keys in YAML configs.
+    // pnpm >= 11 reads only auth/registry settings from `.npmrc`. Flag keys still
+    // present as Unsupported, redirecting to the camelCase YAML key (pnpm 11
+    // ignores kebab-case keys in YAML). Absent keys are omitted: there is nothing
+    // to warn about, and the YAML scanners already recommend them where they work.
     if version_at_least(version, 11, 0) {
         let redirect = |yaml_key: &str| {
-            format!("ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in pnpm-workspace.yaml")
+            format!(
+                "ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in \
+                 pnpm-workspace.yaml or the global config.yaml"
+            )
         };
-        return vec![
-            mark_unsupported(release_age, redirect("minimumReleaseAge")),
-            mark_unsupported(ignore_scripts, redirect("ignoreScripts")),
-        ];
+        return [
+            (release_age, "minimumReleaseAge"),
+            (ignore_scripts, "ignoreScripts"),
+        ]
+        .into_iter()
+        .filter(|(rec, _)| matches!(rec.status, CheckStatus::Ok(_) | CheckStatus::WrongValue(_)))
+        .map(|(rec, yaml_key)| mark_unsupported(rec, redirect(yaml_key)))
+        .collect();
     }
 
     let release_age = if version_at_least(version, 10, 16) {
@@ -58,12 +66,8 @@ pub fn uses_yaml_config(version: &str) -> bool {
 /// Scan the pnpm global config file.
 ///
 /// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all settings accepted.
-/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase). pnpm filters
-///   this file through a global-config allowlist (`pnpmConfigFileKeys`), but every
-///   hardening key we set — `minimumReleaseAge`, `blockExoticSubdeps`,
-///   `trustPolicy`, `strictDepBuilds`, `ignoreScripts` — is on it and honored
-///   globally. (Project-only keys like `nodeLinker`/`hoistPattern` are the ones
-///   rejected from the global file.)
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase); every hardening
+///   key we set is on pnpm's global-config allowlist (`pnpmConfigFileKeys`).
 pub fn scan_global(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
@@ -107,7 +111,7 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             YamlCheck::Exact,
         ),
         // Gated for parity with scan_workspace (config.yaml is pnpm >= 11, so 10.16
-        // is always satisfied here). ignoreScripts is on pnpm's global allowlist.
+        // is always satisfied here).
         g((10, 16)).yaml(
             "ignoreScripts",
             "true",
@@ -194,8 +198,8 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "Fail on unreviewed build scripts",
             YamlCheck::Exact,
         ),
-        // pnpm reads workspace settings only since 10.16. This is the project-level
-        // home for script-blocking now that pnpm >= 11 ignores `.npmrc`.
+        // The project-level home for script-blocking now that pnpm >= 11 ignores
+        // `.npmrc`.
         g((10, 16)).yaml(
             "ignoreScripts",
             "true",

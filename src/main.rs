@@ -233,7 +233,7 @@ fn run_interactive() -> io::Result<()> {
             if has_unsupported_recommendations(&managers) {
                 writeln!(
                     out,
-                    "  {}Some checks can't be auto-fixed here — see the notes above (a setting may need a newer package manager, or must move to another config file).{}",
+                    "  {}Some checks can't be auto-fixed here — see the notes above.{}",
                     term::BOLD,
                     term::RESET
                 )?;

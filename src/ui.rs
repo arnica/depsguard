@@ -261,10 +261,8 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             display_path(&managers[group[0]].config_path)
         )?;
 
-        // Within a grouped config file, show each key once using the manager whose
-        // status ranks highest, so a pnpm >= 11 Unsupported warning isn't hidden
-        // behind another manager's Ok for the same key. First appearance sets the
-        // display order; ties keep the first-seen manager.
+        // Show each key once via its highest-ranked manager (see status_rank).
+        // First appearance sets display order; ties keep the first-seen manager.
         let show_prefix = group.len() > 1;
         let mut order: Vec<&str> = Vec::new();
         let mut best: std::collections::HashMap<&str, (usize, usize)> =
@@ -1212,10 +1210,8 @@ mod tests {
 
     #[test]
     fn scan_results_shared_key_shows_most_significant_status() {
-        // npm and pnpm scan the SAME .npmrc and report the same key with diverging
-        // statuses: npm Ok (npm honors .npmrc), pnpm Unsupported (pnpm >= 11 ignores
-        // it). The pnpm warning must NOT be hidden behind npm's Ok, and it must be
-        // counted (no false all-clear).
+        // npm reports Ok and pnpm >= 11 reports Unsupported for the same .npmrc key;
+        // the higher-ranked status must be both shown and counted.
         let path = PathBuf::from("/home/test/.npmrc");
         let npm = ManagerInfo {
             kind: ManagerKind::Npm,
@@ -1231,7 +1227,8 @@ mod tests {
             recommendations: vec![make_rec(
                 "ignore-scripts",
                 CheckStatus::Unsupported(
-                    "ignored in .npmrc by pnpm \u{2265} 11 — set ignoreScripts in pnpm-workspace.yaml"
+                    "ignored in .npmrc by pnpm \u{2265} 11 — set ignoreScripts in \
+                     pnpm-workspace.yaml or the global config.yaml"
                         .into(),
                 ),
             )],

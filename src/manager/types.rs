@@ -231,14 +231,9 @@ pub fn unsupported_with_message_if_configured(
     rec
 }
 
-/// Force a recommendation to `Unsupported` regardless of its current status.
-///
-/// Unlike [`unsupported_if_configured`] (which only downgrades an already-correct
-/// setting), this marks the recommendation unsupported whether it is present,
-/// missing, or wrong. Use when a setting cannot take effect in this file for the
-/// running tool version — e.g. pnpm >= 11 ignores non-auth settings written to
-/// `.npmrc` — so depsguard neither reports false protection nor offers a fix that
-/// the tool would silently ignore.
+/// Force `Unsupported` regardless of current status — for settings the tool
+/// ignores entirely in this file (unlike [`unsupported_if_configured`], which
+/// keeps missing/wrong config fixable).
 pub fn mark_unsupported(mut rec: Recommendation, message: String) -> Recommendation {
     rec.status = CheckStatus::Unsupported(message);
     rec
