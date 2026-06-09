@@ -1018,6 +1018,43 @@ mod tests {
     }
 
     #[test]
+    fn scan_pnpm_v11_npmrc_settings_marked_unsupported() {
+        // pnpm >= 11 reads only auth/registry settings from .npmrc: present keys
+        // are Unsupported (not Ok, not fixable), absent keys are omitted entirely.
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = pnpm::scan_project(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2);
+        assert!(recs.iter().all(|r| r.status.is_unsupported()));
+        assert!(recs.iter().all(|r| !r.needs_fix()));
+
+        // pnpm 11 ignores kebab-case keys in YAML, so the redirect must name the
+        // camelCase key.
+        for (key, yaml_key) in [
+            ("minimum-release-age", "minimumReleaseAge"),
+            ("ignore-scripts", "ignoreScripts"),
+        ] {
+            let msg = match &recs.iter().find(|r| r.key == key).unwrap().status {
+                CheckStatus::Unsupported(m) => m.clone(),
+                other => panic!("expected Unsupported, got {other:?}"),
+            };
+            assert!(
+                msg.contains(yaml_key) && msg.contains("pnpm-workspace.yaml"),
+                "redirect must name the camelCase key and target file: {msg}"
+            );
+        }
+
+        // Absent keys: nothing to warn about in a file pnpm no longer reads.
+        let empty = tmp_file("");
+        assert!(pnpm::scan_project(empty.path(), "11.0.0").is_empty());
+
+        // Partial: only the key actually present is flagged.
+        let partial = tmp_file("ignore-scripts=true\n");
+        let recs = pnpm::scan_project(partial.path(), "11.0.0");
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].key, "ignore-scripts");
+    }
+
+    #[test]
     fn check_flat_exact_int_basic() {
         let mut cfg = HashMap::new();
         cfg.insert("minimum-release-age".into(), "10080".into());
@@ -2056,10 +2093,10 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_all_ok() {
         let f = tmp_file(
-            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\nignoreScripts: true\n",
         );
         let recs = pnpm::scan_workspace(f.path(), "10.26.0");
-        assert_eq!(recs.len(), 4);
+        assert_eq!(recs.len(), 5);
         assert!(recs.iter().all(|r| r.status.is_ok()));
     }
 
@@ -2067,13 +2104,45 @@ mod tests {
     fn scan_pnpm_workspace_missing() {
         let f = tmp_file("");
         let recs = pnpm::scan_workspace(f.path(), "10.26.0");
-        assert_eq!(recs.len(), 4);
+        assert_eq!(recs.len(), 5);
         assert!(
             recs.iter()
                 .filter(|r| matches!(r.status, CheckStatus::Missing))
                 .count()
-                == 4
+                == 5
         );
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_ignore_scripts() {
+        // Recommended, gated at 10.16 (when pnpm began reading workspace settings).
+        let find = |recs: &[Recommendation]| {
+            recs.iter()
+                .find(|r| r.key == "ignoreScripts")
+                .cloned()
+                .expect("workspace scan should check ignoreScripts")
+        };
+
+        let missing = tmp_file("");
+        assert!(matches!(
+            find(&pnpm::scan_workspace(missing.path(), "11.0.0")).status,
+            CheckStatus::Missing
+        ));
+        // Missing on old pnpm stays fixable: harmless now, takes effect on upgrade.
+        assert!(find(&pnpm::scan_workspace(missing.path(), "10.2.0")).needs_fix());
+
+        let wrong = tmp_file("ignoreScripts: false\n");
+        assert!(matches!(
+            find(&pnpm::scan_workspace(wrong.path(), "11.0.0")).status,
+            CheckStatus::WrongValue(_)
+        ));
+
+        // Set on pnpm < 10.16 (which doesn't read workspace settings): Unsupported,
+        // not a false Ok.
+        let set = tmp_file("ignoreScripts: true\n");
+        assert!(find(&pnpm::scan_workspace(set.path(), "10.2.0"))
+            .status
+            .is_unsupported());
     }
 
     #[test]
@@ -2375,9 +2444,11 @@ mod tests {
 
     #[test]
     fn scan_pnpm_global_v11_all_ok() {
-        let f = tmp_file("minimumReleaseAge: 10080\nblockExoticSubdeps: true\n");
+        let f = tmp_file(
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\nignoreScripts: true\n",
+        );
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert_eq!(recs.len(), 2);
+        assert_eq!(recs.len(), 5);
         assert!(recs.iter().all(|r| r.status.is_ok()));
     }
 
@@ -2385,21 +2456,41 @@ mod tests {
     fn scan_pnpm_global_v11_missing() {
         let f = tmp_file("");
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert_eq!(recs.len(), 2, "v11 global should only have 2 settings");
+        assert_eq!(recs.len(), 5, "v11 global config.yaml has 5 hardening keys");
         assert!(recs
             .iter()
             .all(|r| matches!(r.status, CheckStatus::Missing)));
     }
 
     #[test]
-    fn scan_pnpm_global_v11_no_trust_or_strict() {
+    fn scan_pnpm_global_v11_includes_trust_and_strict_and_ignore_scripts() {
+        // pnpm >= 11 honors all five keys in the global config.yaml (they are on
+        // pnpm's `pnpmConfigFileKeys` allowlist), not just the original 2-key subset.
         let f = tmp_file("");
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert!(
-            recs.iter()
-                .all(|r| r.key != "trustPolicy" && r.key != "strictDepBuilds"),
-            "v11 global should not check trustPolicy or strictDepBuilds"
-        );
+        for key in ["trustPolicy", "strictDepBuilds", "ignoreScripts"] {
+            let rec = recs.iter().find(|r| r.key == key);
+            assert!(rec.is_some(), "v11 global should check {key}");
+            assert!(
+                rec.unwrap().needs_fix(),
+                "{key} should be fixable when missing"
+            );
+        }
+    }
+
+    #[test]
+    fn scan_pnpm_global_v11_wrong_values_flagged() {
+        // Misconfigured boolean keys in the global config.yaml must flag WrongValue.
+        let f = tmp_file("ignoreScripts: false\nstrictDepBuilds: false\n");
+        let recs = pnpm::scan_global(f.path(), "11.0.0");
+        for key in ["ignoreScripts", "strictDepBuilds"] {
+            let rec = recs.iter().find(|r| r.key == key).unwrap();
+            assert!(
+                matches!(rec.status, CheckStatus::WrongValue(_)),
+                "{key}: false should be WrongValue: {:?}",
+                rec.status
+            );
+        }
     }
 
     #[test]

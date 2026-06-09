@@ -148,6 +148,18 @@ fn status_color(s: &CheckStatus) -> &'static str {
     }
 }
 
+/// Rank a status by display significance. When several managers share a config
+/// file and report the same key, the highest rank wins so an error or an
+/// `Unsupported` warning is never hidden behind another manager's `Ok` (e.g.
+/// `ignore-scripts` in `.npmrc` is `Ok` for npm but `Unsupported` for pnpm >= 11).
+fn status_rank(s: &CheckStatus) -> u8 {
+    match s {
+        CheckStatus::Missing | CheckStatus::FileMissing | CheckStatus::WrongValue(_) => 3,
+        CheckStatus::Unsupported(_) => 2,
+        CheckStatus::Ok(_) => 1,
+    }
+}
+
 /// Render a summary of scan results grouped by config file, with status badges.
 pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::Result<()> {
     if managers.is_empty() {
@@ -162,25 +174,33 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
         return Ok(());
     }
 
-    // Count issues (deduplicate by config_path + key, matching display logic)
+    // Count issues, collapsing each (config_path, key) to its most-significant
+    // status across managers (see status_rank) so the summary matches the badges.
     let mut ok_count = 0usize;
     let mut missing_count = 0usize;
     let mut file_missing_count = 0usize;
     let mut wrong_count = 0usize;
     let mut unsupported_count = 0usize;
-    let mut seen_keys = std::collections::HashSet::new();
+    let mut best: std::collections::HashMap<(&Path, &str), &CheckStatus> =
+        std::collections::HashMap::new();
     for mgr in managers {
         for rec in &mgr.recommendations {
-            if !seen_keys.insert((&mgr.config_path, &rec.key)) {
-                continue;
+            let k = (mgr.config_path.as_path(), rec.key.as_str());
+            let replace = best
+                .get(&k)
+                .map_or(true, |ex| status_rank(&rec.status) > status_rank(ex));
+            if replace {
+                best.insert(k, &rec.status);
             }
-            match &rec.status {
-                CheckStatus::Ok(_) => ok_count += 1,
-                CheckStatus::Missing => missing_count += 1,
-                CheckStatus::FileMissing => file_missing_count += 1,
-                CheckStatus::WrongValue(_) => wrong_count += 1,
-                CheckStatus::Unsupported(_) => unsupported_count += 1,
-            }
+        }
+    }
+    for status in best.values() {
+        match status {
+            CheckStatus::Ok(_) => ok_count += 1,
+            CheckStatus::Missing => missing_count += 1,
+            CheckStatus::FileMissing => file_missing_count += 1,
+            CheckStatus::WrongValue(_) => wrong_count += 1,
+            CheckStatus::Unsupported(_) => unsupported_count += 1,
         }
     }
     let total_errors = missing_count + file_missing_count + wrong_count;
@@ -241,37 +261,55 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             display_path(&managers[group[0]].config_path)
         )?;
 
-        let mut seen_keys = std::collections::HashSet::new();
+        // Show each key once via its highest-ranked manager (see status_rank).
+        // First appearance sets display order; ties keep the first-seen manager.
+        let show_prefix = group.len() > 1;
+        let mut order: Vec<&str> = Vec::new();
+        let mut best: std::collections::HashMap<&str, (usize, usize)> =
+            std::collections::HashMap::new();
         for &idx in group {
-            let mgr = &managers[idx];
-            let show_prefix = group.len() > 1;
-            for rec in &mgr.recommendations {
-                // Deduplicate identical keys within a grouped config file
-                if !seen_keys.insert(rec.key.clone()) {
-                    continue;
-                }
-                let icon = status_icon(&rec.status);
-                let color = status_color(&rec.status);
-                let detail = match &rec.status {
-                    CheckStatus::Ok(v) => format!("{GREEN}{v}{RESET}"),
-                    CheckStatus::Missing => format!("{RED}not set{RESET}"),
-                    CheckStatus::FileMissing => format!("{RED}file missing{RESET}"),
-                    CheckStatus::WrongValue(v) => {
-                        format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
+            for (ri, rec) in managers[idx].recommendations.iter().enumerate() {
+                let key = rec.key.as_str();
+                let replace = match best.get(key) {
+                    Some(&(mi, rj)) => {
+                        status_rank(&rec.status)
+                            > status_rank(&managers[mi].recommendations[rj].status)
                     }
-                    CheckStatus::Unsupported(v) => format!("{YELLOW}{v}{RESET}"),
+                    None => {
+                        order.push(key);
+                        true
+                    }
                 };
-                let prefix = if show_prefix {
-                    format!("{DIM}({}){RESET} ", mgr.kind.name())
-                } else {
-                    String::new()
-                };
-                writeln!(
-                    w,
-                    "     {color}{icon}{RESET} {prefix}{color}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
-                    rec.key, rec.description
-                )?;
+                if replace {
+                    best.insert(key, (idx, ri));
+                }
             }
+        }
+        for key in order {
+            let (idx, ri) = best[key];
+            let mgr = &managers[idx];
+            let rec = &mgr.recommendations[ri];
+            let icon = status_icon(&rec.status);
+            let color = status_color(&rec.status);
+            let detail = match &rec.status {
+                CheckStatus::Ok(v) => format!("{GREEN}{v}{RESET}"),
+                CheckStatus::Missing => format!("{RED}not set{RESET}"),
+                CheckStatus::FileMissing => format!("{RED}file missing{RESET}"),
+                CheckStatus::WrongValue(v) => {
+                    format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
+                }
+                CheckStatus::Unsupported(v) => format!("{YELLOW}{v}{RESET}"),
+            };
+            let prefix = if show_prefix {
+                format!("{DIM}({}){RESET} ", mgr.kind.name())
+            } else {
+                String::new()
+            };
+            writeln!(
+                w,
+                "     {color}{icon}{RESET} {prefix}{color}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
+                rec.key, rec.description
+            )?;
         }
         writeln!(w)?;
     }
@@ -1168,6 +1206,46 @@ mod tests {
         assert!(s.contains("WARNING"));
         assert!(s.contains("1 warning"));
         assert!(!s.contains("All 0 checks passed"));
+    }
+
+    #[test]
+    fn scan_results_shared_key_shows_most_significant_status() {
+        // npm reports Ok and pnpm >= 11 reports Unsupported for the same .npmrc key;
+        // the higher-ranked status must be both shown and counted.
+        let path = PathBuf::from("/home/test/.npmrc");
+        let npm = ManagerInfo {
+            kind: ManagerKind::Npm,
+            version: "11.0.0".into(),
+            config_path: path.clone(),
+            recommendations: vec![make_rec("ignore-scripts", CheckStatus::Ok("true".into()))],
+            discovered: true,
+        };
+        let pnpm = ManagerInfo {
+            kind: ManagerKind::Pnpm,
+            version: "11.5.0".into(),
+            config_path: path,
+            recommendations: vec![make_rec(
+                "ignore-scripts",
+                CheckStatus::Unsupported(
+                    "ignored in .npmrc by pnpm \u{2265} 11 — set ignoreScripts in \
+                     pnpm-workspace.yaml or the global config.yaml"
+                        .into(),
+                ),
+            )],
+            discovered: true,
+        };
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[npm, pnpm]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(
+            s.contains("pnpm-workspace.yaml"),
+            "pnpm >= 11 Unsupported warning must not be hidden behind npm's Ok:\n{s}"
+        );
+        assert!(s.contains("WARNING"), "group badge should be WARNING:\n{s}");
+        assert!(
+            s.contains("1 warning") && !s.contains("checks passed"),
+            "summary must count the Unsupported, not report all clear:\n{s}"
+        );
     }
 
     #[test]
