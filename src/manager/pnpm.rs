@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{unsupported_if_configured, Recommendation};
+use super::types::{mark_unsupported, unsupported_if_configured, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -20,22 +20,35 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
         minutes,
         &format!("Delay new versions by {days} days"),
     );
+    let ignore_scripts = check_flat(
+        path,
+        &cfg,
+        "ignore-scripts",
+        "true",
+        "Block malicious install scripts",
+    );
+
+    // pnpm >= 11 reads ONLY auth/registry settings from `.npmrc`; pnpm-specific
+    // settings written here are silently ignored and must instead live in
+    // `pnpm-workspace.yaml` (or the global `config.yaml`). Mark them Unsupported so
+    // depsguard neither reports false protection nor writes a fix pnpm would ignore.
+    // npm still reads `ignore-scripts` from this same file via its own scanner.
+    if version_at_least(version, 11, 0) {
+        let redirect =
+            "ignored in .npmrc by pnpm \u{2265} 11 — set in pnpm-workspace.yaml".to_string();
+        return vec![
+            mark_unsupported(release_age, redirect.clone()),
+            mark_unsupported(ignore_scripts, redirect),
+        ];
+    }
+
     let release_age = if version_at_least(version, 10, 16) {
         release_age
     } else {
         unsupported_if_configured(release_age, "pnpm", 10, 16, version)
     };
 
-    vec![
-        release_age,
-        check_flat(
-            path,
-            &cfg,
-            "ignore-scripts",
-            "true",
-            "Block malicious install scripts",
-        ),
-    ]
+    vec![release_age, ignore_scripts]
 }
 
 /// Whether this pnpm version uses `config.yaml` (>= 11) instead of `rc`.
@@ -46,8 +59,12 @@ pub fn uses_yaml_config(version: &str) -> bool {
 /// Scan the pnpm global config file.
 ///
 /// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all settings accepted.
-/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase) — only
-///   `minimumReleaseAge` and `blockExoticSubdeps` are valid globally.
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase). pnpm filters
+///   this file through a global-config allowlist (`pnpmConfigFileKeys`), but every
+///   hardening key we set — `minimumReleaseAge`, `blockExoticSubdeps`,
+///   `trustPolicy`, `strictDepBuilds`, `ignoreScripts` — is on it and honored
+///   globally. (Project-only keys like `nodeLinker`/`hoistPattern` are the ones
+///   rejected from the global file.)
 pub fn scan_global(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
@@ -76,6 +93,27 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "blockExoticSubdeps",
             "true",
             "Block untrusted transitive deps",
+            YamlCheck::Exact,
+        ),
+        g((10, 21)).yaml(
+            "trustPolicy",
+            "no-downgrade",
+            "Block provenance downgrades",
+            YamlCheck::Exact,
+        ),
+        g((10, 3)).yaml(
+            "strictDepBuilds",
+            "true",
+            "Fail on unreviewed build scripts",
+            YamlCheck::Exact,
+        ),
+        // ignoreScripts is a long-standing core flag (no version gate) and is on
+        // pnpm's global-config allowlist, so it is honored in config.yaml.
+        check_yaml(
+            path,
+            "ignoreScripts",
+            "true",
+            "Block malicious install scripts",
             YamlCheck::Exact,
         ),
     ]
@@ -156,6 +194,16 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "strictDepBuilds",
             "true",
             "Fail on unreviewed build scripts",
+            YamlCheck::Exact,
+        ),
+        // ignoreScripts is a long-standing core flag (no version gate); pnpm reads
+        // it from pnpm-workspace.yaml, and it is the project-level home for
+        // script-blocking now that pnpm >= 11 ignores it in `.npmrc`.
+        check_yaml(
+            path,
+            "ignoreScripts",
+            "true",
+            "Block malicious install scripts",
             YamlCheck::Exact,
         ),
     ]

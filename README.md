@@ -170,20 +170,24 @@ depsguard --help       # CLI help
 | Manager | Config | Setting | Target | Why |
 |---------|--------|---------|--------|-----|
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
-| npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
-| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
+| npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk (npm honors this in `.npmrc`; pnpm >= 11 reads it from `pnpm-workspace.yaml` / global `config.yaml`, not `.npmrc`) |
+| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (pnpm 10.16–10.x only; pnpm >= 11 ignores `.npmrc` — use `pnpm-workspace.yaml`) |
 | pnpm | global `rc` (pnpm <= 10) | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | global `rc` (pnpm <= 10) | `block-exotic-subdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
 | pnpm | global `rc` (pnpm <= 10) | `trust-policy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | global `rc` (pnpm <= 10) | `strict-dep-builds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
 | pnpm | global `rc` (pnpm <= 10) | `ignore-scripts` | `true` | Block malicious install scripts |
-| pnpm | global `config.yaml` (pnpm >= 11) | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
-| pnpm | global `config.yaml` (pnpm >= 11) | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
+| pnpm | global `config.yaml` (pnpm >= 11) | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
+| pnpm | global `config.yaml` (pnpm >= 11) | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
+| pnpm | global `config.yaml` (pnpm >= 11) | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
+| pnpm | global `config.yaml` (pnpm >= 11) | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
+| pnpm | global `config.yaml` (pnpm >= 11) | `ignoreScripts` | `true` | Block malicious install scripts |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
+| pnpm | `pnpm-workspace.yaml` | `ignoreScripts` | `true` | Block malicious install scripts |
 | bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay |
 | aube | `~/.npmrc` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes (requires uv >= 0.9.17) |
@@ -197,7 +201,8 @@ depsguard --help       # CLI help
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
 | npm/pnpm/aube | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
-| pnpm global | `$XDG_CONFIG_HOME/pnpm/rc` or `~/.config/pnpm/rc` | `$XDG_CONFIG_HOME/pnpm/rc` or `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
+| pnpm global (pnpm <= 10) | `$XDG_CONFIG_HOME/pnpm/rc` or `~/.config/pnpm/rc` | `$XDG_CONFIG_HOME/pnpm/rc` or `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
+| pnpm global (pnpm >= 11) | `$XDG_CONFIG_HOME/pnpm/config.yaml` or `~/.config/pnpm/config.yaml` | `$XDG_CONFIG_HOME/pnpm/config.yaml` or `~/Library/Preferences/pnpm/config.yaml` | `%LOCALAPPDATA%\pnpm\config\config.yaml` |
 | yarn | `~/.yarnrc.yml` | `~/.yarnrc.yml` | `%USERPROFILE%\.yarnrc.yml` |
 | pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
 | bun | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |

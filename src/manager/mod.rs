@@ -1018,6 +1018,32 @@ mod tests {
     }
 
     #[test]
+    fn scan_pnpm_v11_npmrc_settings_marked_unsupported() {
+        // pnpm >= 11 reads only auth/registry settings from .npmrc, so depsguard
+        // must neither report .npmrc minimum-release-age/ignore-scripts as protected
+        // (false protection) nor offer to write them to a file pnpm ignores.
+
+        // Present-and-correct must NOT count as Ok/protected on pnpm 11.
+        let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
+        let recs = pnpm::scan_project(f.path(), "11.0.0");
+        assert_eq!(recs.len(), 2);
+        assert!(
+            recs.iter().all(|r| r.status.is_unsupported()),
+            "v11 .npmrc pnpm settings should be Unsupported: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
+        assert!(
+            recs.iter().all(|r| !r.needs_fix()),
+            "v11 .npmrc pnpm settings should not be offered as fixes"
+        );
+
+        // Missing is also Unsupported (do not push a fix into a file pnpm ignores).
+        let empty = tmp_file("");
+        let recs_missing = pnpm::scan_project(empty.path(), "11.0.0");
+        assert!(recs_missing.iter().all(|r| r.status.is_unsupported()));
+    }
+
+    #[test]
     fn check_flat_exact_int_basic() {
         let mut cfg = HashMap::new();
         cfg.insert("minimum-release-age".into(), "10080".into());
@@ -2056,24 +2082,44 @@ mod tests {
     #[test]
     fn scan_pnpm_workspace_all_ok() {
         let f = tmp_file(
-            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\n",
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\nignoreScripts: true\n",
         );
         let recs = pnpm::scan_workspace(f.path(), "10.26.0");
-        assert_eq!(recs.len(), 4);
-        assert!(recs.iter().all(|r| r.status.is_ok()));
+        assert_eq!(recs.len(), 5);
+        assert!(
+            recs.iter().all(|r| r.status.is_ok()),
+            "all should be Ok: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn scan_pnpm_workspace_missing() {
         let f = tmp_file("");
         let recs = pnpm::scan_workspace(f.path(), "10.26.0");
-        assert_eq!(recs.len(), 4);
+        assert_eq!(recs.len(), 5);
         assert!(
             recs.iter()
                 .filter(|r| matches!(r.status, CheckStatus::Missing))
                 .count()
-                == 4
+                == 5
         );
+    }
+
+    #[test]
+    fn scan_pnpm_workspace_includes_ignore_scripts() {
+        let f = tmp_file("");
+        let recs = pnpm::scan_workspace(f.path(), "11.0.0");
+        let ignore = recs.iter().find(|r| r.key == "ignoreScripts");
+        assert!(
+            ignore.is_some(),
+            "workspace scan should recommend ignoreScripts: {:?}",
+            recs.iter().map(|r| &r.key).collect::<Vec<_>>()
+        );
+        // No version gate: a missing ignoreScripts is fixable even on old pnpm.
+        let recs_old = pnpm::scan_workspace(f.path(), "10.2.0");
+        let ignore_old = recs_old.iter().find(|r| r.key == "ignoreScripts").unwrap();
+        assert!(ignore_old.needs_fix());
     }
 
     #[test]
@@ -2375,31 +2421,47 @@ mod tests {
 
     #[test]
     fn scan_pnpm_global_v11_all_ok() {
-        let f = tmp_file("minimumReleaseAge: 10080\nblockExoticSubdeps: true\n");
+        let f = tmp_file(
+            "minimumReleaseAge: 10080\nblockExoticSubdeps: true\ntrustPolicy: \"no-downgrade\"\nstrictDepBuilds: true\nignoreScripts: true\n",
+        );
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert_eq!(recs.len(), 2);
-        assert!(recs.iter().all(|r| r.status.is_ok()));
+        assert_eq!(recs.len(), 5);
+        assert!(
+            recs.iter().all(|r| r.status.is_ok()),
+            "all should be Ok: {:?}",
+            recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn scan_pnpm_global_v11_missing() {
         let f = tmp_file("");
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert_eq!(recs.len(), 2, "v11 global should only have 2 settings");
+        assert_eq!(recs.len(), 5, "v11 global config.yaml has 5 hardening keys");
         assert!(recs
             .iter()
             .all(|r| matches!(r.status, CheckStatus::Missing)));
     }
 
     #[test]
-    fn scan_pnpm_global_v11_no_trust_or_strict() {
+    fn scan_pnpm_global_v11_includes_trust_and_strict_and_ignore_scripts() {
+        // pnpm >= 11 honors these in the global config.yaml (verified against
+        // pnpm's pnpmConfigFileKeys allowlist and a live pnpm 11.5.0 read-back),
+        // so the global scanner must recommend them — not just the 2-key subset.
         let f = tmp_file("");
         let recs = pnpm::scan_global(f.path(), "11.0.0");
-        assert!(
-            recs.iter()
-                .all(|r| r.key != "trustPolicy" && r.key != "strictDepBuilds"),
-            "v11 global should not check trustPolicy or strictDepBuilds"
-        );
+        for key in ["trustPolicy", "strictDepBuilds", "ignoreScripts"] {
+            let rec = recs.iter().find(|r| r.key == key);
+            assert!(
+                rec.is_some(),
+                "v11 global should check {key}: {:?}",
+                recs.iter().map(|r| &r.key).collect::<Vec<_>>()
+            );
+            assert!(
+                rec.unwrap().needs_fix(),
+                "{key} should be fixable when missing"
+            );
+        }
     }
 
     #[test]

@@ -977,6 +977,36 @@ mod tests {
     }
 
     #[test]
+    fn apply_fix_pnpm_global_yaml_strict_dep_builds_unquoted() {
+        // strictDepBuilds is a YAML boolean: it MUST be written bare (`true`), not
+        // quoted (`"true"`), or pnpm reads a string. Only trustPolicy is quoted.
+        let dir = std::env::temp_dir().join(format!(
+            "depsguard_pnpmglobal_yaml_sdb_{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        fs::write(&path, "").unwrap();
+        let rec = Recommendation {
+            key: "strictDepBuilds".into(),
+            description: "test".into(),
+            expected: "true".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmGlobal, &path, &rec).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(
+            content.contains("strictDepBuilds: true"),
+            "strictDepBuilds must be an unquoted YAML boolean: {content}"
+        );
+        assert!(
+            !content.contains("\"true\""),
+            "strictDepBuilds must not be quoted: {content}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn apply_fix_pnpm_global_yaml_trust_policy_quoted() {
         let dir = std::env::temp_dir().join(format!(
             "depsguard_pnpmglobal_yaml_tp_{}",
