@@ -175,10 +175,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
     }
 
     // Count issues, collapsing each (config_path, key) to its most-significant
-    // status across managers. Several managers can scan the same file and report
-    // the same key with diverging statuses (e.g. ignore-scripts in .npmrc is Ok
-    // for npm but Unsupported for pnpm >= 11); counting the highest-rank status
-    // keeps this summary consistent with the per-group badges and the display.
+    // status across managers (see status_rank) so the summary matches the badges.
     let mut ok_count = 0usize;
     let mut missing_count = 0usize;
     let mut file_missing_count = 0usize;

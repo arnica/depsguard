@@ -1000,8 +1000,7 @@ mod tests {
 
     #[test]
     fn apply_fix_pnpm_global_yaml_strict_dep_builds_unquoted() {
-        // strictDepBuilds is a YAML boolean: it MUST be written bare (`true`), not
-        // quoted (`"true"`), or pnpm reads a string. Only trustPolicy is quoted.
+        // YAML boolean: must be written bare, not quoted (only trustPolicy is quoted).
         let dir = std::env::temp_dir().join(format!(
             "depsguard_pnpmglobal_yaml_sdb_{}",
             std::process::id()
@@ -1055,6 +1054,25 @@ mod tests {
             "ignoreScripts must not be quoted: {content}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn apply_fix_pnpm_workspace_block_exotic_subdeps_unquoted() {
+        // YAML boolean: bare `true`, never quoted (only trustPolicy is quoted).
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "blockExoticSubdeps".into(),
+            description: "test".into(),
+            expected: "true".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(content.contains("blockExoticSubdeps: true"), "{content}");
+        assert!(
+            !content.contains("\"true\""),
+            "must not be quoted: {content}"
+        );
     }
 
     #[test]

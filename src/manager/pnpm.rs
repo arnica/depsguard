@@ -28,15 +28,9 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
         "Block malicious install scripts",
     );
 
-    // pnpm >= 11 reads ONLY auth/registry settings from `.npmrc`; pnpm-specific
-    // settings written here are silently ignored and must instead live in
-    // `pnpm-workspace.yaml` (or the global `config.yaml`). Mark them Unsupported so
-    // depsguard neither reports false protection nor writes a fix pnpm would ignore.
-    // The redirect names the camelCase YAML key on purpose: pnpm >= 11 ignores the
-    // kebab-case `.npmrc` spelling when it appears in a YAML config (verified —
-    // `minimum-release-age`/`ignore-scripts` in pnpm-workspace.yaml return undefined
-    // on pnpm 11), so reusing the rec's kebab key would just relocate the silent
-    // failure. npm still reads `ignore-scripts` from this same file via its own scanner.
+    // pnpm >= 11 ignores pnpm-specific settings in `.npmrc` (auth/registry only).
+    // Mark them Unsupported (no false protection, no fix pnpm ignores) and redirect
+    // to the camelCase YAML key — pnpm 11 ignores kebab-case keys in YAML configs.
     if version_at_least(version, 11, 0) {
         let redirect = |yaml_key: &str| {
             format!("ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in pnpm-workspace.yaml")
@@ -112,10 +106,8 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "Fail on unreviewed build scripts",
             YamlCheck::Exact,
         ),
-        // pnpm reads root settings from config.yaml only since 10.16 (verified:
-        // 8.x/9/10.0 ignore them, 10.16 honors them). config.yaml itself is pnpm
-        // >= 11, so this gate is always satisfied here, but kept for parity with
-        // scan_workspace; ignoreScripts is on pnpm's global-config allowlist.
+        // Gated for parity with scan_workspace (config.yaml is pnpm >= 11, so 10.16
+        // is always satisfied here). ignoreScripts is on pnpm's global allowlist.
         g((10, 16)).yaml(
             "ignoreScripts",
             "true",
@@ -202,10 +194,8 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "Fail on unreviewed build scripts",
             YamlCheck::Exact,
         ),
-        // pnpm reads root settings from pnpm-workspace.yaml only since 10.16
-        // (verified: 8.x/9/10.0 ignore them, 10.16 honors ignoreScripts). This is
-        // the project-level home for script-blocking now that pnpm >= 11 ignores
-        // it in `.npmrc`.
+        // pnpm reads workspace settings only since 10.16. This is the project-level
+        // home for script-blocking now that pnpm >= 11 ignores `.npmrc`.
         g((10, 16)).yaml(
             "ignoreScripts",
             "true",
