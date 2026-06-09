@@ -1037,6 +1037,23 @@ mod tests {
             "v11 .npmrc pnpm settings should not be offered as fixes"
         );
 
+        // The redirect must name the camelCase YAML key, since pnpm >= 11 ignores
+        // the kebab-case .npmrc spelling in pnpm-workspace.yaml (verified empirically).
+        let msg = |key: &str| match &recs.iter().find(|r| r.key == key).unwrap().status {
+            CheckStatus::Unsupported(m) => m.clone(),
+            other => panic!("expected Unsupported, got {other:?}"),
+        };
+        let age_msg = msg("minimum-release-age");
+        assert!(
+            age_msg.contains("minimumReleaseAge") && age_msg.contains("pnpm-workspace.yaml"),
+            "redirect must name the camelCase key: {age_msg}"
+        );
+        let scripts_msg = msg("ignore-scripts");
+        assert!(
+            scripts_msg.contains("ignoreScripts"),
+            "redirect must name the camelCase key: {scripts_msg}"
+        );
+
         // Missing is also Unsupported (do not push a fix into a file pnpm ignores).
         let empty = tmp_file("");
         let recs_missing = pnpm::scan_project(empty.path(), "11.0.0");

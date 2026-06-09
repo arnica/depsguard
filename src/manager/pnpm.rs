@@ -32,13 +32,18 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
     // settings written here are silently ignored and must instead live in
     // `pnpm-workspace.yaml` (or the global `config.yaml`). Mark them Unsupported so
     // depsguard neither reports false protection nor writes a fix pnpm would ignore.
-    // npm still reads `ignore-scripts` from this same file via its own scanner.
+    // The redirect names the camelCase YAML key on purpose: pnpm >= 11 ignores the
+    // kebab-case `.npmrc` spelling when it appears in a YAML config (verified —
+    // `minimum-release-age`/`ignore-scripts` in pnpm-workspace.yaml return undefined
+    // on pnpm 11), so reusing the rec's kebab key would just relocate the silent
+    // failure. npm still reads `ignore-scripts` from this same file via its own scanner.
     if version_at_least(version, 11, 0) {
-        let redirect =
-            "ignored in .npmrc by pnpm \u{2265} 11 — set in pnpm-workspace.yaml".to_string();
+        let redirect = |yaml_key: &str| {
+            format!("ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in pnpm-workspace.yaml")
+        };
         return vec![
-            mark_unsupported(release_age, redirect.clone()),
-            mark_unsupported(ignore_scripts, redirect),
+            mark_unsupported(release_age, redirect("minimumReleaseAge")),
+            mark_unsupported(ignore_scripts, redirect("ignoreScripts")),
         ];
     }
 
