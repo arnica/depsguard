@@ -122,6 +122,44 @@ fn run_depsguard_with_env(
     cmd.output().expect("failed to run depsguard")
 }
 
+fn run_depsguard_in_dir(args: &[&str], home: &Path, cwd: &Path) -> std::process::Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_depsguard"));
+    cmd.args(args)
+        .current_dir(cwd)
+        .env("HOME", home)
+        .env_remove("XDG_CONFIG_HOME");
+    cmd.output().expect("failed to run depsguard")
+}
+
+fn docker_only_args<'a>(extra: &'a [&'a str]) -> Vec<&'a str> {
+    let mut args = vec![
+        "--scan",
+        "--no-color",
+        "--exclude",
+        "npm",
+        "--exclude",
+        "pnpm",
+        "--exclude",
+        "bun",
+        "--exclude",
+        "uv",
+        "--exclude",
+        "pip",
+        "--exclude",
+        "poetry",
+        "--exclude",
+        "aube",
+        "--exclude",
+        "yarn",
+        "--exclude",
+        "renovate",
+        "--exclude",
+        "dependabot",
+    ];
+    args.extend_from_slice(extra);
+    args
+}
+
 fn display_under_home(path: &Path, home: &Path) -> String {
     match path.strip_prefix(home) {
         Ok(rel) => format!("~/{}", rel.display()).replace('\\', "/"),
@@ -1178,6 +1216,161 @@ dependencies = ["six==1.16.0"]
         out.status.success(),
         "uv pip install failed: {}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// ── Docker integration ───────────────────────────────────────────────
+
+#[test]
+fn docker_scan_reports_compose_and_dockerfile_findings() {
+    let home = TmpHome::new("docker_findings_home");
+    let project = TmpHome::new("docker_findings_project");
+
+    fs::write(project.path().join("Dockerfile"), "FROM node:latest\n").unwrap();
+    fs::write(
+        project.path().join("docker-compose.yml"),
+        "services:\n  app:\n    image: ghcr.io/example/app:latest\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "risky Docker findings should make scan fail:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docker"),
+        "expected docker group:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Dockerfile") && stdout.contains("base image line 1"),
+        "expected Dockerfile finding:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docker-compose.yml") && stdout.contains("compose image line 3"),
+        "expected Compose finding:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("node:latest"),
+        "expected base image:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ghcr.io/example/app:latest"),
+        "expected compose image:\n{stdout}"
+    );
+}
+
+#[test]
+fn docker_scan_reports_missing_digest_as_warning_only() {
+    let home = TmpHome::new("docker_digest_warn_home");
+    let project = TmpHome::new("docker_digest_warn_project");
+
+    fs::write(project.path().join("Dockerfile"), "FROM node:22\n").unwrap();
+    fs::write(
+        project.path().join("compose.yaml"),
+        "services:\n  app:\n    image: ghcr.io/example/app:1.2.3\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        out.status.success(),
+        "digest warnings should not fail non-strict scan:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("WARNING"),
+        "expected warning badge:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("not digest-pinned: node:22"),
+        "expected Dockerfile digest warning:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("not digest-pinned: ghcr.io/example/app:1.2.3"),
+        "expected Compose digest warning:\n{stdout}"
+    );
+}
+
+#[test]
+fn docker_scan_can_be_excluded() {
+    let home = TmpHome::new("docker_exclude_home");
+    let project = TmpHome::new("docker_exclude_project");
+
+    fs::write(project.path().join("Dockerfile"), "FROM node:latest\n").unwrap();
+
+    let args = docker_only_args(&["--exclude", "docker"]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        out.status.success(),
+        "excluded Docker findings should not fail scan:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("node:latest") && !stdout.contains("Dockerfile"),
+        "Docker finding should be excluded:\n{stdout}"
+    );
+}
+
+#[test]
+fn docker_scan_reports_package_manager_install_without_hardening() {
+    let home = TmpHome::new("docker_pm_home");
+    let project = TmpHome::new("docker_pm_project");
+
+    fs::write(
+        project.path().join("Dockerfile"),
+        "FROM node:22@sha256:abc\nRUN npm ci\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "unhardened Dockerfile package install should fail scan:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("npm ignore-scripts line 2"),
+        "expected npm ignore-scripts Dockerfile finding:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("npm release age line 2"),
+        "expected npm release-age Dockerfile finding:\n{stdout}"
+    );
+}
+
+#[test]
+fn docker_scan_accepts_package_manager_hardening_before_install() {
+    let home = TmpHome::new("docker_pm_ok_home");
+    let project = TmpHome::new("docker_pm_ok_project");
+
+    fs::write(
+        project.path().join("Dockerfile"),
+        "FROM node:22@sha256:abc\nRUN npm config set ignore-scripts true && npm config set min-release-age 7\nRUN npm ci\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        out.status.success(),
+        "hardened Dockerfile package install should pass scan:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("npm ignore-scripts") && !stdout.contains("npm release age"),
+        "hardened npm install should not report Dockerfile package-manager findings:\n{stdout}"
     );
 }
 

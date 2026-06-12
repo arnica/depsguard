@@ -36,13 +36,14 @@ By **[[arnica](https://arnica.io?utm_source=depsguard&utm_medium=referral&utm_ca
 
 ## Overview
 
-DepsGuard looks for **npm**, **pnpm**, **yarn**, **bun**, **uv**, **pip**, **poetry**, and **aube** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It also scans for **Renovate** and **Dependabot** configs in your repos. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
+DepsGuard looks for **npm**, **pnpm**, **yarn**, **bun**, **uv**, **pip**, **poetry**, and **aube** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It also scans for **Renovate**, **Dependabot**, and **Docker** configs in your repos. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
 
 ### Key features
 
 - Interactive TUI: scan, review, toggle fixes, apply
 - `scan` subcommand for read-only reporting
 - `restore` subcommand to pick a backup and roll back a file
+- Report-only Docker checks for floating images and Dockerfile package-manager hardening
 - Cross-platform: Linux, macOS, Windows
 - No bundled third-party Rust crates (stdlib + small amount of platform FFI for the terminal)
 
@@ -195,6 +196,9 @@ depsguard --help       # CLI help
 | poetry | `config.toml` (`[solver]`) | `min-release-age` | `7` (days) | Delay new publishes (requires poetry >= 2.4) |
 | renovate | `renovate.json` etc. | `minimumReleaseAge` | `7 days` | Delay dependency update PRs by 7 days |
 | dependabot | `.github/dependabot.yml` | `cooldown.default-days` | `7` | Delay dependency update PRs by 7 days |
+| docker | `Dockerfile`, `Dockerfile.*` | image references | version tag / digest | Flag `latest`, missing tags, and warn on missing digest pins |
+| docker | `docker-compose.yml`, `docker-compose.yaml`, `compose.yml`, `compose.yaml` | service images | version tag / digest | Flag `latest`, missing tags, and warn on missing digest pins |
+| docker | `Dockerfile`, `Dockerfile.*` | package-manager install commands | prior hardening config | Require npm/pnpm/pip/uv/poetry hardening before Docker build installs packages |
 
 ## Config file locations
 
@@ -211,8 +215,9 @@ depsguard --help       # CLI help
 | poetry | `$XDG_CONFIG_HOME/pypoetry/config.toml` or `~/.config/pypoetry/config.toml` | `$XDG_CONFIG_HOME/pypoetry/config.toml` (when set) or `~/Library/Application Support/pypoetry/config.toml` | `%APPDATA%\pypoetry\config.toml` |
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
+| docker | `Dockerfile`, `Dockerfile.*`, `docker-compose.yml`, `docker-compose.yaml`, `compose.yml`, `compose.yaml` | (same) | (same) |
 
-User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, Dependabot configs, Dockerfiles, and Docker Compose files are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`). Docker findings are report-only: DepsGuard reports floating image references and package-manager installs that run before hardening config, but it does not rewrite Dockerfiles or Compose files.
 
 ## Urgent security fix
 
@@ -277,7 +282,7 @@ src/
 
 ## See also
 
-- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
+- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot, report-only Docker checks, and other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
 
 > **Python ecosystem note:** DepsGuard scans the package managers that expose a release-age cooldown as a **persistent config setting** — `uv` (`exclude-newer`), `pip` (`uploaded-prior-to`, pip ≥ 26.1), and `poetry` (`solver.min-release-age`, poetry ≥ 2.4). `pdm` and `conda` currently offer release-age only via one-off CLI flags / unreleased proposals (nothing to scan in a config file), and `pixi`'s `exclude-newer` is project-scoped (no user-level config); these may be added later. `pipenv` and `hatch` have no cooldown setting yet.
 

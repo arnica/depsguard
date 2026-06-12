@@ -72,7 +72,8 @@ pub fn user_config_candidates(
         ManagerKind::PnpmGlobal
         | ManagerKind::PnpmWorkspace
         | ManagerKind::Renovate
-        | ManagerKind::Dependabot => (vec![PathBuf::new()], 0),
+        | ManagerKind::Dependabot
+        | ManagerKind::Docker => (vec![PathBuf::new()], 0),
         ManagerKind::Bun => {
             let mut cands = Vec::new();
             let default_idx;

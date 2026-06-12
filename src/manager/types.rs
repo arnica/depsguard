@@ -83,6 +83,7 @@ pub enum ManagerKind {
     Yarn,
     Renovate,
     Dependabot,
+    Docker,
 }
 
 impl ManagerKind {
@@ -112,6 +113,7 @@ impl ManagerKind {
         ManagerKind::Yarn,
         ManagerKind::Renovate,
         ManagerKind::Dependabot,
+        ManagerKind::Docker,
     ];
 
     pub fn name(self) -> &'static str {
@@ -127,6 +129,7 @@ impl ManagerKind {
             ManagerKind::Yarn => "yarn",
             ManagerKind::Renovate => "renovate",
             ManagerKind::Dependabot => "dependabot",
+            ManagerKind::Docker => "docker",
         }
     }
 
@@ -140,6 +143,7 @@ impl ManagerKind {
             ManagerKind::Yarn => "🧶",
             ManagerKind::Renovate => "🔄",
             ManagerKind::Dependabot => "🤖",
+            ManagerKind::Docker => "🐳",
         }
     }
 
@@ -204,6 +208,8 @@ pub enum RepoConfigKind {
     YarnRc,
     Renovate,
     Dependabot,
+    DockerCompose,
+    Dockerfile,
 }
 
 /// Apply a `major.minor` version gate: return `rec` unchanged when the installed
