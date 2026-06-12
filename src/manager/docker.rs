@@ -285,12 +285,12 @@ fn update_hardening_from_copied_file(state: &mut HardeningState, context: &Path,
                 state.uv_release_age = true;
             }
         }
-        "poetry.toml" | "config.toml" => {
-            if read_toml_value(&path, "solver.min-release-age").and_then(|v| v.parse::<u64>().ok())
-                == Some(days)
-            {
-                state.poetry_release_age = true;
-            }
+        "poetry.toml" | "config.toml"
+            if read_toml_value(&path, "solver.min-release-age")
+                .and_then(|v| v.parse::<u64>().ok())
+                == Some(days) =>
+        {
+            state.poetry_release_age = true;
         }
         _ => {}
     }
