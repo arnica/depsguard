@@ -292,6 +292,7 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
         ManagerKind::Yarn => apply_yaml_fix(path, &rec.key, &rec.expected, true),
         ManagerKind::Renovate => apply_json_fix(path, &rec.key, &rec.expected),
         ManagerKind::Dependabot => apply_dependabot_fix(path, &rec.key, &rec.expected),
+        ManagerKind::Docker => Err(io::Error::other("Docker findings are report-only")),
     }
 }
 

@@ -442,6 +442,7 @@ fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
         ManagerKind::Yarn => ".yarnrc.yml",
         ManagerKind::Renovate => "renovate",
         ManagerKind::Dependabot => "dependabot",
+        ManagerKind::Docker => "docker",
     }
 }
 
@@ -531,6 +532,9 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
     }
 
     for (mi, mgr) in managers.iter().enumerate() {
+        if mgr.kind == crate::manager::ManagerKind::Docker {
+            continue;
+        }
         for (ri, rec) in mgr.recommendations.iter().enumerate() {
             if rec.needs_fix() {
                 let dedup_key = (mgr.config_path.clone(), rec.key.clone());

@@ -249,7 +249,14 @@ fn run_interactive() -> io::Result<()> {
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            if has_unsupported_recommendations(&managers) {
+            if has_needs_fix(&managers) {
+                writeln!(
+                    out,
+                    "  {}Some findings need manual changes — see the notes above.{}",
+                    term::BOLD,
+                    term::RESET
+                )?;
+            } else if has_unsupported_recommendations(&managers) {
                 writeln!(
                     out,
                     "  {}Some checks can't be auto-fixed here — see the notes above.{}",

@@ -10,6 +10,7 @@ pub mod config;
 pub mod date;
 pub mod dependabot;
 pub mod detect;
+pub mod docker;
 pub mod npm;
 pub mod paths;
 pub mod pip;
@@ -157,7 +158,10 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::Poetry => poetry::scan(path, version),
         ManagerKind::Aube => aube::scan(path),
         ManagerKind::Yarn => yarn::scan(path, version),
-        ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
+        ManagerKind::PnpmWorkspace
+        | ManagerKind::Renovate
+        | ManagerKind::Dependabot
+        | ManagerKind::Docker => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
         }
     }
@@ -260,6 +264,28 @@ fn scan_repo_configs_with_progress(
                         version: String::new(),
                         config_path: path.clone(),
                         recommendations: dependabot::scan(&path),
+                        discovered: true,
+                    });
+                }
+            }
+            RepoConfigKind::DockerCompose => {
+                if !is_excluded(ManagerKind::Docker) {
+                    results.push(ManagerInfo {
+                        kind: ManagerKind::Docker,
+                        version: String::new(),
+                        config_path: path.clone(),
+                        recommendations: docker::scan_compose(&path),
+                        discovered: true,
+                    });
+                }
+            }
+            RepoConfigKind::Dockerfile => {
+                if !is_excluded(ManagerKind::Docker) {
+                    results.push(ManagerInfo {
+                        kind: ManagerKind::Docker,
+                        version: String::new(),
+                        config_path: path.clone(),
+                        recommendations: docker::scan_dockerfile(&path),
                         discovered: true,
                     });
                 }
@@ -856,6 +882,38 @@ mod tests {
         let home = Path::new("/home/user");
         let dir = Path::new("/home/user/project");
         assert_eq!(classify_file("dependabot.yml", dir, home), None);
+    }
+
+    #[test]
+    fn classify_docker_compose_filenames() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        for name in [
+            "docker-compose.yml",
+            "docker-compose.yaml",
+            "compose.yml",
+            "compose.yaml",
+        ] {
+            assert_eq!(
+                classify_file(name, dir, home),
+                Some(RepoConfigKind::DockerCompose),
+                "expected Docker Compose for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_dockerfile_filenames() {
+        let home = Path::new("/home/user");
+        let dir = Path::new("/home/user/project");
+        assert_eq!(
+            classify_file("Dockerfile", dir, home),
+            Some(RepoConfigKind::Dockerfile)
+        );
+        assert_eq!(
+            classify_file("Dockerfile.prod", dir, home),
+            Some(RepoConfigKind::Dockerfile)
+        );
     }
 
     #[test]
