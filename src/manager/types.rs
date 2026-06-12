@@ -231,6 +231,14 @@ pub fn unsupported_with_message_if_configured(
     rec
 }
 
+/// Force `Unsupported` regardless of current status — for settings the tool
+/// ignores entirely in this file (unlike [`unsupported_if_configured`], which
+/// keeps missing/wrong config fixable).
+pub fn mark_unsupported(mut rec: Recommendation, message: String) -> Recommendation {
+    rec.status = CheckStatus::Unsupported(message);
+    rec
+}
+
 /// Return `Missing` or `FileMissing` based on whether the config file exists on disk.
 pub fn missing_status_for_path(path: &Path) -> CheckStatus {
     if path.exists() {

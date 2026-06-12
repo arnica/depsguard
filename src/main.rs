@@ -252,7 +252,7 @@ fn run_interactive() -> io::Result<()> {
             if has_unsupported_recommendations(&managers) {
                 writeln!(
                     out,
-                    "  {}Some checks require package manager upgrades before the configured settings apply.{}",
+                    "  {}Some checks can't be auto-fixed here — see the notes above.{}",
                     term::BOLD,
                     term::RESET
                 )?;
