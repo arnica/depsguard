@@ -50,23 +50,30 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     };
 
     // The value DepsGuard writes (`7 days`) is a relative duration, which
-    // requires uv >= 0.9.17. On older uv, a relative duration — or a missing
-    // setting we would fill with one — is unusable, so it's reported as
-    // `Unsupported` rather than an actionable fix (issue #52). A configured
-    // absolute RFC-3339 date works on older uv, so it stays out of the gate and
-    // is evaluated on its own merits (flagged as a wrong value, never an upgrade
-    // prompt).
-    let configured_relative_duration = val.as_deref().and_then(parse_relative_days).is_some();
-    let would_recommend_relative = val.is_none() || configured_relative_duration;
-    let rec = if would_recommend_relative && !supports_relative_duration(version) {
-        mark_unsupported_with_message(
-            rec,
-            format!(
+    // requires uv >= 0.9.17, so on older uv every state is version-gated
+    // (issue #52): a missing setting would be filled with a value the tool
+    // can't parse, a configured relative duration is already unusable, and a
+    // configured absolute RFC-3339 date — which does work on older uv — must
+    // not be offered a fix that replaces it with the unsupported relative
+    // form. The absolute-date case keeps a message naming the current value,
+    // since the value itself works and only the recommended form needs the
+    // upgrade.
+    let rec = if supports_relative_duration(version) {
+        rec
+    } else {
+        let configured_non_relative = val
+            .as_deref()
+            .is_some_and(|v| parse_relative_days(v).is_none());
+        let msg = match val.as_deref() {
+            Some(v) if configured_non_relative => format!(
+                "set to {v} — relative durations require uv \u{2265} \
+                 {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
+            ),
+            _ => format!(
                 "requires uv \u{2265} {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
             ),
-        )
-    } else {
-        rec
+        };
+        mark_unsupported_with_message(rec, msg)
     };
 
     vec![rec]

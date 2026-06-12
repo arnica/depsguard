@@ -129,10 +129,13 @@ All three convert *any* status to `Unsupported`. Do **not** re-introduce an
 state.
 
 For settings whose feature exists earlier but whose *value form* needs a newer
-version (pip/uv relative durations vs. absolute dates), gate on
-`val.is_none() || configured_<new_form>` so a *missing* setting — which DepsGuard
-would fill with the new form — is also treated as unsupported, while a valid
-older form (e.g. an absolute date) is left to its own evaluation.
+version (pip/uv relative durations vs. absolute dates), gate **every** state on
+the version floor, not just missing or new-form values: the fix always writes
+the new form, so even a configured old-form value (e.g. a working absolute
+date) must become `Unsupported` — otherwise the offered fix would replace a
+working config with a value the tool cannot parse. Give the old-form case a
+message that names the current value, so a working config is not reduced to a
+bare "requires >= X" upgrade prompt.
 
 The invariant is enforced by the table-driven
 `missing_setting_on_unsupported_version_is_never_actionable` test in

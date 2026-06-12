@@ -5,7 +5,10 @@ use std::path::Path;
 use super::config::read_ini_value;
 use super::date::parse_iso8601_days;
 use super::detect::get_delay_days;
-use super::types::{mark_unsupported, missing_status_for_path, CheckStatus, Recommendation};
+use super::types::{
+    mark_unsupported, mark_unsupported_with_message, missing_status_for_path, CheckStatus,
+    Recommendation,
+};
 use super::version::{extract_version_str, version_at_least};
 
 /// Minimum pip version that supports relative ISO 8601 durations for
@@ -45,18 +48,29 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     };
 
     // The value DepsGuard writes (`P7D`) is a relative ISO-8601 duration, which
-    // requires pip >= 26.1. On older pip, a relative duration — or a missing
-    // setting we would fill with one — is unusable, so it's reported as
-    // `Unsupported` rather than an actionable fix (issue #52). A configured
-    // absolute datetime works on pip 26.0, so it stays out of the gate and is
-    // evaluated on its own merits (flagged as a wrong value, never an upgrade
-    // prompt).
-    let configured_relative_duration = val.as_deref().and_then(parse_iso8601_days).is_some();
-    let would_recommend_relative = val.is_none() || configured_relative_duration;
-    let rec = if would_recommend_relative && !version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
-        mark_unsupported(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver)
-    } else {
+    // requires pip >= 26.1, so on older pip every state is version-gated
+    // (issue #52): a missing setting would be filled with a value the tool
+    // can't parse, a configured relative duration is already unusable, and a
+    // configured absolute datetime — which does work on pip 26.0 — must not be
+    // offered a fix that replaces it with the unsupported relative form. The
+    // absolute-datetime case keeps a message naming the current value, since
+    // the value itself works and only the recommended form needs the upgrade.
+    let rec = if version_at_least(ver, PIP_MIN_MAJOR, PIP_MIN_MINOR) {
         rec
+    } else {
+        let configured_non_relative = val
+            .as_deref()
+            .is_some_and(|v| parse_iso8601_days(v).is_none());
+        match val.as_deref() {
+            Some(v) if configured_non_relative => mark_unsupported_with_message(
+                rec,
+                format!(
+                    "set to {v} — relative durations require pip \u{2265} \
+                     {PIP_MIN_MAJOR}.{PIP_MIN_MINOR} (have {ver})"
+                ),
+            ),
+            _ => mark_unsupported(rec, "pip", PIP_MIN_MAJOR, PIP_MIN_MINOR, ver),
+        }
     };
 
     vec![rec]

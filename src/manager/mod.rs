@@ -1228,14 +1228,23 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_old_version_absolute_date_is_misconfigured() {
-        // An absolute date is never the exact rolling policy, so it is flagged
-        // regardless of uv version (the version gate only applies to relative
-        // durations that are otherwise correct).
+    fn scan_uv_old_version_absolute_date_is_unsupported_not_fixable() {
+        // A working absolute date on old uv must never be offered a fix: the
+        // fix writes the relative form (`7 days`), which uv < 0.9.17 cannot
+        // parse, replacing a working config with a broken one (issue #52
+        // class). The verdict message names the current value so the user
+        // knows their date still works.
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("exclude-newer = \"{old_date}\"\n"));
         let recs = uv::scan(f.path(), UV_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains(&old_date),
+                "message should name the working value: {msg}"
+            );
+        }
     }
 
     #[test]
@@ -1385,14 +1394,23 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_old_version_absolute_date_is_misconfigured() {
-        // An absolute date is never the exact rolling policy, so it is flagged
-        // regardless of pip version (the version gate only applies to relative
-        // durations that are otherwise correct).
+    fn scan_pip_old_version_absolute_date_is_unsupported_not_fixable() {
+        // A working absolute datetime on pip 26.0 must never be offered a fix:
+        // the fix writes the relative form (`P7D`), which pip < 26.1 cannot
+        // parse, replacing a working config with a broken one (issue #52
+        // class). The verdict message names the current value so the user
+        // knows their datetime still works.
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
         let recs = pip::scan(f.path(), PIP_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains(&old_date),
+                "message should name the working value: {msg}"
+            );
+        }
     }
 
     #[test]
