@@ -1319,6 +1319,61 @@ fn docker_scan_can_be_excluded() {
     );
 }
 
+#[test]
+fn docker_scan_reports_package_manager_install_without_hardening() {
+    let home = TmpHome::new("docker_pm_home");
+    let project = TmpHome::new("docker_pm_project");
+
+    fs::write(
+        project.path().join("Dockerfile"),
+        "FROM node:22@sha256:abc\nRUN npm ci\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "unhardened Dockerfile package install should fail scan:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("npm ignore-scripts line 2"),
+        "expected npm ignore-scripts Dockerfile finding:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("npm release age line 2"),
+        "expected npm release-age Dockerfile finding:\n{stdout}"
+    );
+}
+
+#[test]
+fn docker_scan_accepts_package_manager_hardening_before_install() {
+    let home = TmpHome::new("docker_pm_ok_home");
+    let project = TmpHome::new("docker_pm_ok_project");
+
+    fs::write(
+        project.path().join("Dockerfile"),
+        "FROM node:22@sha256:abc\nRUN npm config set ignore-scripts true && npm config set min-release-age 7\nRUN npm ci\n",
+    )
+    .unwrap();
+
+    let args = docker_only_args(&[]);
+    let out = run_depsguard_in_dir(&args, home.path(), project.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        out.status.success(),
+        "hardened Dockerfile package install should pass scan:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("npm ignore-scripts") && !stdout.contains("npm release age"),
+        "hardened npm install should not report Dockerfile package-manager findings:\n{stdout}"
+    );
+}
+
 // ── Cross-cutting integration ────────────────────────────────────────
 
 #[test]
