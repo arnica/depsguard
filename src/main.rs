@@ -193,7 +193,7 @@ fn print_usage() {
 fn print_usage_short() {
     println!("  USAGE:");
     println!("    depsguard                  Interactive mode (TUI)");
-    println!("    depsguard scan             Scan only, no changes");
+    println!("    depsguard scan             Scan only, no changes (exits 1 if action needed)");
     println!("    depsguard restore          Restore config files from backup");
     println!("    depsguard --help           Show this help");
     println!("    depsguard --version        Show version");
