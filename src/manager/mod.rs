@@ -151,7 +151,7 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::Npm => npm::scan(path, version),
         ManagerKind::Pnpm => pnpm::scan_project(path, version),
         ManagerKind::PnpmGlobal => pnpm::scan_global(path, version),
-        ManagerKind::Bun => bun::scan(path),
+        ManagerKind::Bun => bun::scan(path, version),
         ManagerKind::Uv => uv::scan(path, version),
         ManagerKind::Pip => pip::scan(path, version),
         ManagerKind::Poetry => poetry::scan(path, version),
@@ -934,11 +934,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_npm_old_version_missing_release_age_is_fixable() {
+    fn scan_npm_old_version_missing_release_age_is_unsupported() {
+        // A setting the installed version cannot use must never be an actionable
+        // fix, even when absent — DepsGuard reports it as Unsupported (issue #52).
         let f = tmp_file("ignore-scripts=true\n");
         let recs = npm::scan(f.path(), "10.8.0");
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
     }
 
     #[test]
@@ -1010,11 +1012,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_old_version_missing_release_age_is_fixable() {
+    fn scan_pnpm_old_version_missing_release_age_is_unsupported() {
+        // minimum-release-age needs pnpm >= 10.16; on 10.15 a missing setting is
+        // informational, not an actionable fix (issue #52).
         let f = tmp_file("ignore-scripts=true\n");
         let recs = pnpm::scan_project(f.path(), "10.15.0");
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
     }
 
     #[test]
@@ -1092,32 +1096,60 @@ mod tests {
 
     // ── bun tests ───────────────────────────────────────────────────
 
+    // bun added install.minimumReleaseAge in 1.3.0.
+    const BUN_NEW: &str = "1.3.0";
+    const BUN_OLD: &str = "1.2.21";
+
     #[test]
     fn scan_bun_checks() {
         let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(recs[0].status.is_ok());
     }
 
     #[test]
     fn scan_bun_too_low() {
         let f = tmp_file("[install]\nminimumReleaseAge = 100\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
     }
 
     #[test]
     fn scan_bun_missing() {
         let f = tmp_file("");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::Missing));
     }
 
     #[test]
     fn scan_bun_invalid_value() {
         let f = tmp_file("[install]\nminimumReleaseAge = abc\n");
-        let recs = bun::scan(f.path());
+        let recs = bun::scan(f.path(), BUN_NEW);
         assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_bun_old_version_missing_setting_is_unsupported() {
+        // install.minimumReleaseAge needs bun >= 1.3; on 1.2.x a missing setting
+        // is informational, not an actionable fix (issue #52 class).
+        let f = tmp_file("");
+        let recs = bun::scan(f.path(), BUN_OLD);
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_bun_old_version_configured_is_unsupported() {
+        let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
+        let recs = bun::scan(f.path(), BUN_OLD);
+        assert!(recs[0].status.is_unsupported());
+    }
+
+    #[test]
+    fn bun_version_boundary_1_2_unsupported_1_3_supported() {
+        let f = tmp_file("[install]\nminimumReleaseAge = 604800\n");
+        assert!(bun::scan(f.path(), "1.2.99")[0].status.is_unsupported());
+        assert!(bun::scan(f.path(), "1.3.0")[0].status.is_ok());
     }
 
     // ── uv tests ────────────────────────────────────────────────────
@@ -1196,14 +1228,23 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_old_version_absolute_date_is_misconfigured() {
-        // An absolute date is never the exact rolling policy, so it is flagged
-        // regardless of uv version (the version gate only applies to relative
-        // durations that are otherwise correct).
+    fn scan_uv_old_version_absolute_date_is_unsupported_not_fixable() {
+        // A working absolute date on old uv must never be offered a fix: the
+        // fix writes the relative form (`7 days`), which uv < 0.9.17 cannot
+        // parse, replacing a working config with a broken one (issue #52
+        // class). The verdict message names the current value so the user
+        // knows their date still works.
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("exclude-newer = \"{old_date}\"\n"));
         let recs = uv::scan(f.path(), UV_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains(&old_date),
+                "message should name the working value: {msg}"
+            );
+        }
     }
 
     #[test]
@@ -1221,11 +1262,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_uv_old_version_missing_setting_is_fixable() {
+    fn scan_uv_old_version_missing_setting_is_unsupported() {
+        // DepsGuard writes a relative duration (needs uv >= 0.9.17); on older uv
+        // a missing setting is informational, not an actionable fix (issue #52).
         let f = tmp_file("");
         let recs = uv::scan(f.path(), UV_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
     }
 
     #[test]
@@ -1351,14 +1394,23 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_old_version_absolute_date_is_misconfigured() {
-        // An absolute date is never the exact rolling policy, so it is flagged
-        // regardless of pip version (the version gate only applies to relative
-        // durations that are otherwise correct).
+    fn scan_pip_old_version_absolute_date_is_unsupported_not_fixable() {
+        // A working absolute datetime on pip 26.0 must never be offered a fix:
+        // the fix writes the relative form (`P7D`), which pip < 26.1 cannot
+        // parse, replacing a working config with a broken one (issue #52
+        // class). The verdict message names the current value so the user
+        // knows their datetime still works.
         let old_date = date::date_days_ago(30);
         let f = tmp_file(&format!("[install]\nuploaded-prior-to = {old_date}\n"));
         let recs = pip::scan(f.path(), PIP_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains(&old_date),
+                "message should name the working value: {msg}"
+            );
+        }
     }
 
     #[test]
@@ -1387,11 +1439,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_pip_old_version_missing_setting_is_fixable() {
+    fn scan_pip_old_version_missing_setting_is_unsupported() {
+        // DepsGuard writes a relative duration (needs pip >= 26.1); on pip 26.0 a
+        // missing setting is informational, not an actionable fix (issue #52).
         let f = tmp_file("[install]\n");
         let recs = pip::scan(f.path(), PIP_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
     }
 
     #[test]
@@ -1478,11 +1532,42 @@ mod tests {
     }
 
     #[test]
-    fn scan_poetry_old_version_missing_setting_is_fixable() {
+    fn scan_poetry_old_version_missing_setting_is_unsupported() {
+        // solver.min-release-age needs poetry >= 2.4; on 2.3.x a missing setting
+        // is informational, not an actionable fix (issue #52).
         let f = tmp_file("[solver]\n");
         let recs = poetry::scan(f.path(), POETRY_OLD);
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+    }
+
+    // Regression for https://github.com/arnica/depsguard/issues/52:
+    // poetry 1.8.5 has no `solver.min-release-age` (added in 2.4.0). DepsGuard
+    // must NOT prompt the user to add a setting their version cannot use — a
+    // missing setting on an unsupported version is informational (`Unsupported`,
+    // "requires poetry >= 2.4"), never an actionable "ACTION NEEDED" fix.
+    #[test]
+    fn poetry_1_8_missing_setting_is_unsupported_not_actionable_issue_52() {
+        // Exactly the reported scenario: the config file does not exist at all
+        // (shown as "file missing" in the issue) on poetry 1.8.5.
+        let recs = poetry::scan(Path::new("/definitely/not/a/poetry/config.toml"), "1.8.5");
+        let rec = &recs[0];
+        assert_eq!(rec.key, "solver.min-release-age");
+        assert!(
+            rec.status.is_unsupported(),
+            "missing solver.min-release-age on poetry 1.8.5 must be Unsupported, got: {:?}",
+            rec.status
+        );
+        assert!(
+            !rec.needs_fix(),
+            "DepsGuard must not flag an unsupported feature as ACTION NEEDED"
+        );
+        if let CheckStatus::Unsupported(msg) = &rec.status {
+            assert!(
+                msg.contains("2.4") && msg.contains("1.8.5"),
+                "message should explain the version requirement: {msg}"
+            );
+        }
     }
 
     #[test]
@@ -1655,11 +1740,13 @@ mod tests {
     }
 
     #[test]
-    fn scan_yarn_old_version_missing_setting_is_fixable() {
+    fn scan_yarn_old_version_missing_setting_is_unsupported() {
+        // npmMinimalAgeGate needs yarn >= 4.10; on 4.9.x a missing setting is
+        // informational, not an actionable fix (issue #52).
         let f = tmp_file("");
         let recs = yarn::scan(f.path(), "4.9.2");
-        assert!(matches!(recs[0].status, CheckStatus::Missing));
-        assert!(recs[0].needs_fix());
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
     }
 
     #[test]
@@ -2128,8 +2215,12 @@ mod tests {
             find(&pnpm::scan_workspace(missing.path(), "11.0.0")).status,
             CheckStatus::Missing
         ));
-        // Missing on old pnpm stays fixable: harmless now, takes effect on upgrade.
-        assert!(find(&pnpm::scan_workspace(missing.path(), "10.2.0")).needs_fix());
+        // Missing on old pnpm is informational, not actionable: pnpm < 10.16
+        // doesn't read workspace settings, so offering the fix would tell the
+        // user to write a config their tool ignores (issue #52 invariant).
+        let old_missing = find(&pnpm::scan_workspace(missing.path(), "10.2.0"));
+        assert!(old_missing.status.is_unsupported());
+        assert!(!old_missing.needs_fix());
 
         let wrong = tmp_file("ignoreScripts: false\n");
         assert!(matches!(
@@ -2172,13 +2263,15 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_workspace_very_old_version_missing_settings_are_fixable() {
+    fn scan_pnpm_workspace_very_old_version_missing_settings_are_unsupported() {
+        // pnpm 10.2 predates every workspace setting; all are informational
+        // (Unsupported), never actionable fixes (issue #52).
         let f = tmp_file("");
         let recs = pnpm::scan_workspace(f.path(), "10.2.0");
         assert!(
             recs.iter()
-                .all(|r| matches!(r.status, CheckStatus::Missing)),
-            "all missing settings should remain fixable on pnpm 10.2: {:?}",
+                .all(|r| r.status.is_unsupported() && !r.needs_fix()),
+            "all settings should be Unsupported on pnpm 10.2: {:?}",
             recs.iter().map(|r| (&r.key, &r.status)).collect::<Vec<_>>()
         );
     }
@@ -2228,6 +2321,115 @@ mod tests {
         assert!(!version::version_at_least("10.0.0", 11, 10));
         assert!(version::version_at_least("4.10.0", 4, 10));
         assert!(!version::version_at_least("4.9.2", 4, 10));
+    }
+
+    // ── Version-gating guardrail (issue #52) ────────────────────────
+    //
+    // A setting the installed tool version cannot use must NEVER be reported as
+    // an actionable fix — not when the key is absent, not when the whole config
+    // file is missing. DepsGuard surfaces it as an informational `Unsupported`
+    // ("requires >= X"), so the badge is WARNING, not ACTION NEEDED, and the fix
+    // selector never offers to write a config the tool would ignore.
+    //
+    // This table-drives the invariant across every version-gated setting in the
+    // project. When you add a new gated setting (or a new manager), add a row
+    // with a version one notch below its minimum. The test fails loudly if a
+    // future change lets a missing-on-unsupported setting slip back into the
+    // "ACTION NEEDED" bucket (which is exactly how issue #52 happened).
+    #[test]
+    fn missing_setting_on_unsupported_version_is_never_actionable() {
+        type ScanFn = fn(&Path, &str) -> Vec<Recommendation>;
+        // (label, scanner, version just below the key's minimum, gated key)
+        let cases: &[(&str, ScanFn, &str, &str)] = &[
+            ("npm", npm::scan, "11.9.0", "min-release-age"),
+            (
+                "pnpm .npmrc",
+                pnpm::scan_project,
+                "10.15.0",
+                "minimum-release-age",
+            ),
+            ("bun", bun::scan, "1.2.21", "install.minimumReleaseAge"),
+            ("uv", uv::scan, "0.9.16", "exclude-newer"),
+            ("pip", pip::scan, "26.0", "install.uploaded-prior-to"),
+            ("poetry", poetry::scan, "2.3.0", "solver.min-release-age"),
+            ("yarn", yarn::scan, "4.9.0", "npmMinimalAgeGate"),
+            // pnpm global rc (v10) — each gated key one notch below its minimum.
+            (
+                "pnpm global",
+                pnpm::scan_global,
+                "10.15.0",
+                "minimum-release-age",
+            ),
+            ("pnpm global", pnpm::scan_global, "10.20.0", "trust-policy"),
+            (
+                "pnpm global",
+                pnpm::scan_global,
+                "10.25.0",
+                "block-exotic-subdeps",
+            ),
+            (
+                "pnpm global",
+                pnpm::scan_global,
+                "10.2.0",
+                "strict-dep-builds",
+            ),
+            // pnpm-workspace.yaml (camelCase keys).
+            (
+                "pnpm workspace",
+                pnpm::scan_workspace,
+                "10.15.0",
+                "minimumReleaseAge",
+            ),
+            (
+                "pnpm workspace",
+                pnpm::scan_workspace,
+                "10.20.0",
+                "trustPolicy",
+            ),
+            (
+                "pnpm workspace",
+                pnpm::scan_workspace,
+                "10.25.0",
+                "blockExoticSubdeps",
+            ),
+            (
+                "pnpm workspace",
+                pnpm::scan_workspace,
+                "10.2.0",
+                "strictDepBuilds",
+            ),
+            (
+                "pnpm workspace",
+                pnpm::scan_workspace,
+                "10.15.0",
+                "ignoreScripts",
+            ),
+        ];
+
+        let nonexistent = Path::new("/definitely/not/a/real/depsguard/config/file");
+        for &(label, scan, version, key) in cases {
+            // Two flavours of "not configured": an empty file (Missing) and no
+            // file at all (FileMissing) — the exact state issue #52 mis-reported.
+            let empty = tmp_file("");
+            for (state, path) in [("empty file", empty.path()), ("missing file", nonexistent)] {
+                let recs = scan(path, version);
+                let rec = recs.iter().find(|r| r.key == key).unwrap_or_else(|| {
+                    panic!(
+                        "{label} (v{version}, {state}): gated key `{key}` not found; got {:?}",
+                        recs.iter().map(|r| &r.key).collect::<Vec<_>>()
+                    )
+                });
+                assert!(
+                    rec.status.is_unsupported(),
+                    "{label} (v{version}, {state}): `{key}` must be Unsupported, got {:?}",
+                    rec.status
+                );
+                assert!(
+                    !rec.needs_fix(),
+                    "{label} (v{version}, {state}): `{key}` must NOT be actionable (issue #52)"
+                );
+            }
+        }
     }
 
     // ── parse_duration tests ────────────────────────────────────────
@@ -2426,18 +2628,22 @@ mod tests {
     }
 
     #[test]
-    fn scan_pnpm_global_v10_old_version_missing_gated_settings_are_fixable() {
+    fn scan_pnpm_global_v10_old_version_missing_gated_settings_are_unsupported() {
+        // On pnpm 10.16, trust-policy (needs 10.21) and block-exotic-subdeps
+        // (needs 10.26) are not yet available; a missing setting is informational,
+        // not an actionable fix (issue #52). minimum-release-age (needs 10.16) is
+        // supported here and remains a normal fixable check.
         let f = tmp_file("minimum-release-age=10080\nignore-scripts=true\n");
         let recs = pnpm::scan_global(f.path(), "10.16.0");
         let trust = recs.iter().find(|r| r.key == "trust-policy").unwrap();
-        assert!(matches!(trust.status, CheckStatus::Missing));
-        assert!(trust.needs_fix());
+        assert!(trust.status.is_unsupported());
+        assert!(!trust.needs_fix());
         let exotic = recs
             .iter()
             .find(|r| r.key == "block-exotic-subdeps")
             .unwrap();
-        assert!(matches!(exotic.status, CheckStatus::Missing));
-        assert!(exotic.needs_fix());
+        assert!(exotic.status.is_unsupported());
+        assert!(!exotic.needs_fix());
     }
 
     // ── pnpm global scan tests (v11 config.yaml format) ────────────

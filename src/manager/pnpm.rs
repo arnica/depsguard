@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{mark_unsupported, unsupported_if_configured, CheckStatus, Recommendation};
+use super::types::{gate_min_version, mark_unsupported_with_message, CheckStatus, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -45,15 +45,11 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
         ]
         .into_iter()
         .filter(|(rec, _)| matches!(rec.status, CheckStatus::Ok(_) | CheckStatus::WrongValue(_)))
-        .map(|(rec, yaml_key)| mark_unsupported(rec, redirect(yaml_key)))
+        .map(|(rec, yaml_key)| mark_unsupported_with_message(rec, redirect(yaml_key)))
         .collect();
     }
 
-    let release_age = if version_at_least(version, 10, 16) {
-        release_age
-    } else {
-        unsupported_if_configured(release_age, "pnpm", 10, 16, version)
-    };
+    let release_age = gate_min_version(release_age, "pnpm", 10, 16, version);
 
     vec![release_age, ignore_scripts]
 }
@@ -219,13 +215,13 @@ struct VersionGate<'a> {
 }
 
 impl VersionGate<'_> {
+    /// Apply this check's version floor to an already-built recommendation.
+    fn gate(&self, rec: Recommendation) -> Recommendation {
+        gate_min_version(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
+    }
+
     fn yaml(&self, key: &str, expected: &str, desc: &str, mode: YamlCheck) -> Recommendation {
-        let rec = check_yaml(self.path, key, expected, desc, mode);
-        if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            rec
-        } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
-        }
+        self.gate(check_yaml(self.path, key, expected, desc, mode))
     }
 
     fn flat_exact(
@@ -235,12 +231,7 @@ impl VersionGate<'_> {
         expected: &str,
         desc: &str,
     ) -> Recommendation {
-        let rec = check_flat(self.path, cfg, key, expected, desc);
-        if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            rec
-        } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
-        }
+        self.gate(check_flat(self.path, cfg, key, expected, desc))
     }
 
     fn flat_exact_int(
@@ -250,11 +241,6 @@ impl VersionGate<'_> {
         expected: u64,
         desc: &str,
     ) -> Recommendation {
-        let rec = check_flat_exact_int(self.path, cfg, key, expected, desc);
-        if version_at_least(self.version, self.min_ver.0, self.min_ver.1) {
-            rec
-        } else {
-            unsupported_if_configured(rec, "pnpm", self.min_ver.0, self.min_ver.1, self.version)
-        }
+        self.gate(check_flat_exact_int(self.path, cfg, key, expected, desc))
     }
 }

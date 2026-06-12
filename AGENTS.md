@@ -90,6 +90,57 @@ This project intentionally has **no external crates**. All functionality (termin
 
 - End-user documentation belongs in **`README.md`** (install, usage, troubleshooting). Maintainer-only topics (tests, releases, package automation secrets) stay here.
 
+## Version-gated settings
+
+Most cooldown/security settings only exist — or only accept the value DepsGuard
+writes — from a specific tool version onward. Getting this wrong causes the
+worst false positive: telling a user to add a setting their installed tool
+cannot use (see [#52](https://github.com/arnica/depsguard/issues/52), where
+poetry 1.8.5 was told to set `solver.min-release-age`, added in poetry 2.4).
+
+**Invariant:** when the installed version does not support a setting, the
+recommendation is `CheckStatus::Unsupported` **regardless of whether the setting
+is currently missing, wrong, or correct**. `Unsupported` is informational
+(`needs_fix()` is `false`): it renders as `ℹ requires <tool> >= X (have Y)` with
+a `WARNING` badge and is never offered in the fix selector. A missing setting on
+an unsupported version must never become `Missing`/`FileMissing` (which read as
+`ACTION NEEDED`).
+
+**Do it via the shared helpers** in `manager::types` — compute the normal
+`Recommendation`, then apply the gate. For a plain major.minor floor, prefer
+the all-in-one helper:
+
+- `gate_min_version(rec, tool, min_major, min_minor, have)` — **the default.**
+  Returns `rec` unchanged when `have >= min_major.min_minor`, otherwise an
+  `Unsupported` verdict. It does the version check *and* applies the verdict, so
+  scanners never hand-roll the comparison.
+
+When the gate is more than a major.minor floor — patch-level precision, or a
+value-form gate (pip/uv, below) — compute the condition yourself and apply the
+verdict directly with the lower-level helpers:
+
+- `mark_unsupported(rec, tool, min_major, min_minor, have)` — unconditional,
+  standard message.
+- `mark_unsupported_with_message(rec, msg)` — unconditional, custom message.
+
+All three convert *any* status to `Unsupported`. Do **not** re-introduce an
+"only-if-configured" guard (that was the #52 bug): the version check decides
+*whether* a setting is supported; the helper applies that verdict to every
+state.
+
+For settings whose feature exists earlier but whose *value form* needs a newer
+version (pip/uv relative durations vs. absolute dates), gate **every** state on
+the version floor, not just missing or new-form values: the fix always writes
+the new form, so even a configured old-form value (e.g. a working absolute
+date) must become `Unsupported` — otherwise the offered fix would replace a
+working config with a value the tool cannot parse. Give the old-form case a
+message that names the current value, so a working config is not reduced to a
+bare "requires >= X" upgrade prompt.
+
+The invariant is enforced by the table-driven
+`missing_setting_on_unsupported_version_is_never_actionable` test in
+`src/manager/mod.rs`. **Add a row there for every new version-gated setting.**
+
 ## Build & verify
 
 ```bash

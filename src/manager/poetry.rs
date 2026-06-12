@@ -4,10 +4,8 @@ use std::path::Path;
 
 use super::config::read_toml_value;
 use super::detect::get_delay_days;
-use super::types::{
-    missing_status_for_path, unsupported_if_configured, CheckStatus, Recommendation,
-};
-use super::version::{extract_version_str, version_at_least};
+use super::types::{gate_min_version, missing_status_for_path, CheckStatus, Recommendation};
+use super::version::extract_version_str;
 
 /// Minimum poetry version that supports `solver.min-release-age` (added in 2.4.0).
 const POETRY_MIN_MAJOR: u64 = 2;
@@ -38,11 +36,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
         status,
     };
 
-    let rec = if version_at_least(ver, POETRY_MIN_MAJOR, POETRY_MIN_MINOR) {
-        rec
-    } else {
-        unsupported_if_configured(rec, "poetry", POETRY_MIN_MAJOR, POETRY_MIN_MINOR, ver)
-    };
+    let rec = gate_min_version(rec, "poetry", POETRY_MIN_MAJOR, POETRY_MIN_MINOR, ver);
 
     vec![rec]
 }
