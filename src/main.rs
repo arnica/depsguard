@@ -166,7 +166,11 @@ fn main() {
     manager::set_delay_days(config.delay_days);
 
     match config.command {
-        Command::ScanOnly => run_scan_only(),
+        Command::ScanOnly => {
+            if run_scan_only() == ScanOutcome::NeedsFix {
+                std::process::exit(1);
+            }
+        }
         Command::Help => print_usage(),
         Command::Version => println!("depsguard {}", env!("CARGO_PKG_VERSION")),
         Command::Restore => run_restore(),
@@ -189,7 +193,7 @@ fn print_usage() {
 fn print_usage_short() {
     println!("  USAGE:");
     println!("    depsguard                  Interactive mode (TUI)");
-    println!("    depsguard scan             Scan only, no changes");
+    println!("    depsguard scan             Scan only, no changes (exits 1 if action needed)");
     println!("    depsguard restore          Restore config files from backup");
     println!("    depsguard --help           Show this help");
     println!("    depsguard --version        Show version");
@@ -203,8 +207,17 @@ fn print_usage_short() {
     println!();
 }
 
+/// Result of a non-interactive scan (`depsguard scan`).
+#[derive(Debug, PartialEq, Eq)]
+enum ScanOutcome {
+    /// No actionable recommendations.
+    AllClear,
+    /// One or more recommendations need user action.
+    NeedsFix,
+}
+
 /// Run the non-interactive scan-only mode (`depsguard scan`).
-fn run_scan_only() {
+fn run_scan_only() -> ScanOutcome {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
     let _ = ui::print_banner(&mut out);
@@ -212,6 +225,12 @@ fn run_scan_only() {
     let _ = ui::clear_progress(&mut out);
     let _ = writeln!(out);
     let _ = ui::print_scan_results(&mut out, &managers);
+
+    if has_needs_fix(&managers) {
+        ScanOutcome::NeedsFix
+    } else {
+        ScanOutcome::AllClear
+    }
 }
 
 /// Run the interactive TUI: scan → review → select fixes → apply.
@@ -286,6 +305,12 @@ fn run_interactive() -> io::Result<()> {
             return Ok(());
         }
     }
+}
+
+fn has_needs_fix(managers: &[ManagerInfo]) -> bool {
+    managers
+        .iter()
+        .any(|manager| manager.recommendations.iter().any(|rec| rec.needs_fix()))
 }
 
 fn has_unsupported_recommendations(managers: &[ManagerInfo]) -> bool {
@@ -740,6 +765,23 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn has_needs_fix_false_when_only_unsupported() {
+        let managers = vec![ManagerInfo {
+            kind: ManagerKind::Npm,
+            version: "10.0".into(),
+            config_path: PathBuf::from("/tmp/test"),
+            recommendations: vec![Recommendation {
+                key: "min-release-age".into(),
+                description: "test".into(),
+                expected: "7".into(),
+                status: CheckStatus::Unsupported("npm >= 11.10 required".into()),
+            }],
+            discovered: false,
+        }];
+        assert!(!has_needs_fix(&managers));
     }
 
     #[test]

@@ -59,8 +59,13 @@ fn uv_config_scan_succeeds() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     // On Linux and macOS, uv config is at ~/.config/uv/uv.toml
     // This test verifies the tool runs successfully with a fake HOME.
-    // The actual path used depends on the host OS.
-    assert!(out.status.success(), "scan should succeed: {stdout}");
+    // The actual path used depends on the host OS. Exit 1 is fine here:
+    // other managers installed on the host (npm etc.) have no config in
+    // the fake HOME, which counts as actionable findings.
+    assert!(
+        matches!(out.status.code(), Some(0 | 1)),
+        "scan should succeed: {stdout}"
+    );
 }
 
 #[test]
@@ -243,7 +248,9 @@ fn npmrc_round_trip_all_keys() {
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let _stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success());
+    // Empty npmrc means actionable findings → exit code 1 (the exact code
+    // distinguishes findings from a panic, which exits 101).
+    assert_eq!(out.status.code(), Some(1));
 
     // Write all npmrc keys
     fs::write(&npmrc, "min-release-age=7\nignore-scripts=true\n").unwrap();

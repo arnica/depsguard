@@ -146,7 +146,7 @@ The binary is `target/release/depsguard` (`.exe` on Windows). Rust **1.74+** is 
 
 ```bash
 depsguard              # interactive: scan, choose fixes, apply
-depsguard scan         # report only; no writes
+depsguard scan         # report only; no writes (exits 1 if action is needed)
 depsguard --no-search  # skip recursive file search, check local configs only
 depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
