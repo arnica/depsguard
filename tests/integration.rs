@@ -136,7 +136,12 @@ fn scan_shows_detected_managers() {
     let home = TmpHome::new("scan_detected");
     let out = run_depsguard(&["--scan"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "depsguard --scan failed: {stdout}");
+    // Exit 0 = all clear, exit 1 = actionable findings; both are valid here
+    // since a fresh HOME has findings whenever a manager is installed.
+    assert!(
+        matches!(out.status.code(), Some(0 | 1)),
+        "depsguard --scan failed: {stdout}"
+    );
     // Should detect at least one manager, or report none found gracefully
     let has_any = stdout.contains("npm")
         || stdout.contains("pnpm")
@@ -1136,7 +1141,11 @@ dependencies = ["six==1.16.0"]
 fn scan_all_managers_no_panic() {
     let home = TmpHome::new("all_no_panic");
     let out = run_depsguard(&["--scan"], home.path());
-    assert!(out.status.success(), "depsguard should not panic");
+    // Exit 1 means actionable findings, not a crash; a panic exits 101.
+    assert!(
+        matches!(out.status.code(), Some(0 | 1)),
+        "depsguard should not panic"
+    );
 }
 
 #[test]
