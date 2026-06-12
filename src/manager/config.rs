@@ -164,6 +164,7 @@ pub fn read_ini_value(path: &Path, dotted_key: &str) -> Option<String> {
 /// Read a top-level key from a simple YAML file.
 pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
+    let mut found = None;
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('#') || trimmed.is_empty() {
@@ -183,11 +184,11 @@ pub fn read_yaml_value(path: &Path, key: &str) -> Option<String> {
                     v
                 };
                 let v = v.trim().trim_matches('"').trim_matches('\'');
-                return Some(v.to_string());
+                found = Some(v.to_string());
             }
         }
     }
-    None
+    found
 }
 
 /// Check mode for YAML values.
@@ -228,6 +229,7 @@ pub fn check_yaml(
 pub fn read_json_string_value(path: &Path, key: &str) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
     let needle = format!("\"{}\"", key);
+    let mut found = None;
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("//") {
@@ -240,9 +242,9 @@ pub fn read_json_string_value(path: &Path, key: &str) -> Option<String> {
         let after = after.strip_prefix(':')?;
         let after = after.trim().trim_end_matches(',');
         let val = after.trim().trim_matches('"');
-        return Some(val.to_string());
+        found = Some(val.to_string());
     }
-    None
+    found
 }
 
 // ── Dependabot YAML ──────────────────────────────────────────────────
