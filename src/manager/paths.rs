@@ -69,6 +69,10 @@ pub fn user_config_candidates(
         // aube reads the same `.npmrc` as npm/pnpm (minimumReleaseAge key).
         ManagerKind::Npm | ManagerKind::Pnpm | ManagerKind::Aube => (vec![home.join(".npmrc")], 0),
         ManagerKind::Yarn => (vec![home.join(".yarnrc.yml")], 0),
+        // bundler global config: `~/.bundle/config` (YAML, `BUNDLE_COOLDOWN`).
+        // The default path is the same on every OS; the `$BUNDLE_USER_CONFIG` /
+        // `$BUNDLE_USER_HOME` overrides are not covered (documented limitation).
+        ManagerKind::Bundler => (vec![home.join(".bundle/config")], 0),
         ManagerKind::PnpmGlobal
         | ManagerKind::PnpmWorkspace
         | ManagerKind::Renovate

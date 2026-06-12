@@ -230,6 +230,8 @@ pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Re
             apply_yaml_fix(path, &rec.key, &rec.expected, quote)
         }
         ManagerKind::Yarn => apply_yaml_fix(path, &rec.key, &rec.expected, true),
+        // `bundle config` writes quoted values (`BUNDLE_COOLDOWN: "7"`).
+        ManagerKind::Bundler => apply_yaml_fix(path, &rec.key, &rec.expected, true),
         ManagerKind::Renovate => apply_json_fix(path, &rec.key, &rec.expected),
         ManagerKind::Dependabot => apply_dependabot_fix(path, &rec.key, &rec.expected),
     }
@@ -852,6 +854,27 @@ mod tests {
         let content = f.read();
         assert!(content.contains("[solver]"), "got: {content}");
         assert!(content.contains("min-release-age = 7"), "got: {content}");
+    }
+
+    #[test]
+    fn apply_fix_bundler_writes_quoted_yaml_key() {
+        let f = tmp_file("---\nBUNDLE_PATH: \"vendor\"\n");
+        let rec = Recommendation {
+            key: "BUNDLE_COOLDOWN".into(),
+            description: "test".into(),
+            expected: "7".into(),
+            status: crate::manager::CheckStatus::Missing,
+        };
+        apply_fix(ManagerKind::Bundler, f.path(), &rec).unwrap();
+        let content = f.read();
+        assert!(
+            content.contains("BUNDLE_COOLDOWN: \"7\""),
+            "bundle config style is a quoted value: {content}"
+        );
+        assert!(
+            content.contains("BUNDLE_PATH"),
+            "existing keys must be preserved: {content}"
+        );
     }
 
     #[test]

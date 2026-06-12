@@ -12,13 +12,13 @@
   <meta property="og:url" content="https://depsguard.com/">
   <meta property="og:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
   <meta property="og:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, poetry, and bundler configs for security best practices. Zero dependencies. MIT.">
   <meta property="og:image" content="https://depsguard.com/img/select.png">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
   <meta name="twitter:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, poetry, and bundler configs for security best practices. Zero dependencies. MIT.">
   <meta name="twitter:image" content="https://depsguard.com/img/select.png">
   <link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon/favicon.svg">
@@ -1149,7 +1149,7 @@
         </h1>
         <p class="hero-desc fade-d1">
           Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn,
-          bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.
+          bun, aube, uv, pip, poetry, and bundler configs for security best practices. Zero dependencies. MIT.
         </p>
         <div class="plat-row fade-d2">
           <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
@@ -1714,6 +1714,23 @@ scoop install depsguard</code></pre>
                   </svg></a></td>
             </tr>
             <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <path fill="#cc342d" d="M12 2 3 9l9 13 9-13z" />
+                  <path fill="#9b1c16" d="M12 2 8 9h8z" />
+                </svg> bundler</td>
+              <td><code>~/.bundle/config</code></td>
+              <td><code>BUNDLE_COOLDOWN: "7"</code></td>
+              <td>Delay new versions by 7 days <span style="color:var(--text-mute); font-size:.75rem;">(bundler &ge;
+                  4.0.13)</span></td>
+              <td><a class="doc-link" href="https://blog.rubygems.org/2026/06/03/cooldown-let-new-gems-be-vetted.html"
+                  target="_blank" rel="noopener" title="RubyGems cooldown announcement"><svg viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg></a></td>
+            </tr>
+            <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
                   <circle cx="16" cy="16" r="14" fill="#007fa0" />
                   <path fill="#fff"
@@ -1899,6 +1916,14 @@ scoop install depsguard</code></pre>
               <td><code>%APPDATA%\pypoetry\config.toml</code></td>
               <td><code>$XDG_CONFIG_HOME/pypoetry/config.toml</code> <sup style="color:var(--text-mute);">*</sup></td>
             </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
+                  <path fill="#cc342d" d="M12 2 3 9l9 13 9-13z" />
+                  <path fill="#9b1c16" d="M12 2 8 9h8z" />
+                </svg> bundler</td>
+              <td colspan="3" style="text-align:center;"><code>~/.bundle/config</code></td>
+              <td style="color:var(--text-mute);">&mdash;</td>
+            </tr>
           </tbody>
         </table>
         <p style="margin:.65rem .85rem .65rem; color:var(--text-mute); font-size:.75rem; line-height:1.55;">
@@ -2026,6 +2051,19 @@ scoop install depsguard</code></pre>
                 then remove the entry.<br>
                 <span style="color:var(--text-mute); font-size:.75rem;"><code>solver.min-release-age-exclude-source</code>
                   exempts every package from a named index instead.</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="mgr-name"><svg class="mgr-icon-sm" viewBox="0 0 24 24">
+                  <path fill="#cc342d" d="M12 2 3 9l9 13 9-13z" />
+                  <path fill="#9b1c16" d="M12 2 8 9h8z" />
+                </svg> bundler</td>
+              <td>
+                Run <code>bundle update &lt;gem&gt; --cooldown 0</code> (or prefix any command with
+                <code>BUNDLE_COOLDOWN=0</code>) for one command.<br>
+                <span style="color:var(--text-mute); font-size:.75rem;">The CLI flag has the highest precedence and
+                  disables the cooldown for every gem in that command; Bundler has no per-gem exception. Versions
+                  already in <code>Gemfile.lock</code> are honored as-is.</span>
               </td>
             </tr>
             <tr>
@@ -2178,7 +2216,7 @@ scoop install depsguard</code></pre>
         &ndash; a reference guide and companion shell helper (<code style="color:var(--text-dim)">cooldowns.sh</code>)
         focused specifically on minimum-release-age cooldowns. It complements DepsGuard: cooldowns.dev covers a
         broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard
-        covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate and Dependabot and adds other hardening settings
+        covers npm/pnpm/yarn/bun/aube/uv/pip/poetry/bundler plus Renovate and Dependabot and adds other hardening settings
         (<code style="color:var(--text-dim)">ignore-scripts</code>,
         <code style="color:var(--text-dim)">block-exotic-subdeps</code>,
         <code style="color:var(--text-dim)">trust-policy</code>,
