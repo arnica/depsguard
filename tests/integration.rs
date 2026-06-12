@@ -348,8 +348,12 @@ fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
         stdout.contains(&expected_display),
         "depsguard should use pnpm globalconfig path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
+    // pnpm <= 10 globalconfig is an ini-style `rc` file (kebab-case keys);
+    // pnpm >= 11.6 `config get globalconfig` points at `config.yaml`
+    // (camelCase keys). Accept the release-age finding in either style.
     assert!(
-        stdout.contains("minimum-release-age — file missing"),
+        stdout.contains("minimum-release-age — file missing")
+            || stdout.contains("minimumReleaseAge — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -381,8 +385,11 @@ fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
         stdout.contains(&expected_display),
         "depsguard should use pnpm globalconfig XDG path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
+    // Same as above: kebab-case `rc` keys on pnpm <= 10, camelCase
+    // `config.yaml` keys on pnpm >= 11.6.
     assert!(
-        stdout.contains("minimum-release-age — file missing"),
+        stdout.contains("minimum-release-age — file missing")
+            || stdout.contains("minimumReleaseAge — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
