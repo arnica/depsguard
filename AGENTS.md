@@ -11,6 +11,14 @@ DepsGuard is a zero-dependency Rust CLI that scans package manager configs (npm,
 - **Never push directly to `main`** without explicit permission from the user. Always use a feature branch and open a pull request.
 - Do not force-push or run destructive git operations unless explicitly asked.
 
+## AI disclosure
+
+All agent involvement in this repository must be disclosed:
+
+- **Pull requests**: every PR must state whether an AI agent or assistant produced any part of it (code, tests, docs, commit messages), naming the tool and model (e.g. "Claude Code — Claude Fable 5"). The PR template has a section for this; write "None" when no agent was used.
+- **Commits**: agent-authored or agent-assisted commits must carry a `Co-Authored-By` trailer naming the agent and model, e.g. `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- **Comments and reviews**: when an agent posts on a person's behalf, it must identify itself as an agent and name the model, e.g. "Authored by Claude (Fable 5) via Claude Code, on behalf of @user".
+
 ## Commit messages
 
 Use **Conventional Commits** (<https://www.conventionalcommits.org/>).
