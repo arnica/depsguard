@@ -81,6 +81,7 @@ pub enum ManagerKind {
     Poetry,
     Aube,
     Yarn,
+    Bundler,
     Renovate,
     Dependabot,
 }
@@ -97,6 +98,7 @@ impl ManagerKind {
         ManagerKind::Poetry,
         ManagerKind::Aube,
         ManagerKind::Yarn,
+        ManagerKind::Bundler,
     ];
 
     pub const ALL: &[ManagerKind] = &[
@@ -110,6 +112,7 @@ impl ManagerKind {
         ManagerKind::Poetry,
         ManagerKind::Aube,
         ManagerKind::Yarn,
+        ManagerKind::Bundler,
         ManagerKind::Renovate,
         ManagerKind::Dependabot,
     ];
@@ -125,6 +128,7 @@ impl ManagerKind {
             ManagerKind::Poetry => "poetry",
             ManagerKind::Aube => "aube",
             ManagerKind::Yarn => "yarn",
+            ManagerKind::Bundler => "bundler",
             ManagerKind::Renovate => "renovate",
             ManagerKind::Dependabot => "dependabot",
         }
@@ -138,6 +142,7 @@ impl ManagerKind {
             ManagerKind::Uv | ManagerKind::Pip | ManagerKind::Poetry => "🐍",
             ManagerKind::Aube => "🌅",
             ManagerKind::Yarn => "🧶",
+            ManagerKind::Bundler => "💎",
             ManagerKind::Renovate => "🔄",
             ManagerKind::Dependabot => "🤖",
         }
