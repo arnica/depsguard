@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::config::{check_flat, check_flat_exact_int, check_yaml, read_flat_config, YamlCheck};
 use super::detect::get_delay_days;
-use super::types::{gate_min_version, Recommendation};
+use super::types::{gate_min_version, mark_unsupported_with_message, CheckStatus, Recommendation};
 use super::version::version_at_least;
 
 /// Scan pnpm per-project .npmrc (flat INI format).
@@ -20,18 +20,38 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
         minutes,
         &format!("Delay new versions by {days} days"),
     );
+    let ignore_scripts = check_flat(
+        path,
+        &cfg,
+        "ignore-scripts",
+        "true",
+        "Block malicious install scripts",
+    );
+
+    // pnpm >= 11 reads only auth/registry settings from `.npmrc`. Flag keys still
+    // present as Unsupported, redirecting to the camelCase YAML key (pnpm 11
+    // ignores kebab-case keys in YAML). Absent keys are omitted: there is nothing
+    // to warn about, and the YAML scanners already recommend them where they work.
+    if version_at_least(version, 11, 0) {
+        let redirect = |yaml_key: &str| {
+            format!(
+                "ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in \
+                 pnpm-workspace.yaml or the global config.yaml"
+            )
+        };
+        return [
+            (release_age, "minimumReleaseAge"),
+            (ignore_scripts, "ignoreScripts"),
+        ]
+        .into_iter()
+        .filter(|(rec, _)| matches!(rec.status, CheckStatus::Ok(_) | CheckStatus::WrongValue(_)))
+        .map(|(rec, yaml_key)| mark_unsupported_with_message(rec, redirect(yaml_key)))
+        .collect();
+    }
+
     let release_age = gate_min_version(release_age, "pnpm", 10, 16, version);
 
-    vec![
-        release_age,
-        check_flat(
-            path,
-            &cfg,
-            "ignore-scripts",
-            "true",
-            "Block malicious install scripts",
-        ),
-    ]
+    vec![release_age, ignore_scripts]
 }
 
 /// Whether this pnpm version uses `config.yaml` (>= 11) instead of `rc`.
@@ -42,8 +62,8 @@ pub fn uses_yaml_config(version: &str) -> bool {
 /// Scan the pnpm global config file.
 ///
 /// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all settings accepted.
-/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase) — only
-///   `minimumReleaseAge` and `blockExoticSubdeps` are valid globally.
+/// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase); every hardening
+///   key we set is on pnpm's global-config allowlist (`pnpmConfigFileKeys`).
 pub fn scan_global(path: &Path, version: &str) -> Vec<Recommendation> {
     let days = get_delay_days();
     let minutes = days.saturating_mul(24).saturating_mul(60);
@@ -72,6 +92,26 @@ fn scan_global_yaml(path: &Path, version: &str, days: u64, minutes: u64) -> Vec<
             "blockExoticSubdeps",
             "true",
             "Block untrusted transitive deps",
+            YamlCheck::Exact,
+        ),
+        g((10, 21)).yaml(
+            "trustPolicy",
+            "no-downgrade",
+            "Block provenance downgrades",
+            YamlCheck::Exact,
+        ),
+        g((10, 3)).yaml(
+            "strictDepBuilds",
+            "true",
+            "Fail on unreviewed build scripts",
+            YamlCheck::Exact,
+        ),
+        // Gated for parity with scan_workspace (config.yaml is pnpm >= 11, so 10.16
+        // is always satisfied here).
+        g((10, 16)).yaml(
+            "ignoreScripts",
+            "true",
+            "Block malicious install scripts",
             YamlCheck::Exact,
         ),
     ]
@@ -152,6 +192,14 @@ pub fn scan_workspace(path: &Path, version: &str) -> Vec<Recommendation> {
             "strictDepBuilds",
             "true",
             "Fail on unreviewed build scripts",
+            YamlCheck::Exact,
+        ),
+        // The project-level home for script-blocking now that pnpm >= 11 ignores
+        // `.npmrc`.
+        g((10, 16)).yaml(
+            "ignoreScripts",
+            "true",
+            "Block malicious install scripts",
             YamlCheck::Exact,
         ),
     ]

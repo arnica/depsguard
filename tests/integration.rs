@@ -160,7 +160,12 @@ fn scan_shows_detected_managers() {
     let home = TmpHome::new("scan_detected");
     let out = run_depsguard(&["--scan"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "depsguard --scan failed: {stdout}");
+    // Exit 0 = all clear, exit 1 = actionable findings; both are valid here
+    // since a fresh HOME has findings whenever a manager is installed.
+    assert!(
+        matches!(out.status.code(), Some(0 | 1)),
+        "depsguard --scan failed: {stdout}"
+    );
     // Should detect at least one manager, or report none found gracefully
     let has_any = stdout.contains("npm")
         || stdout.contains("pnpm")
@@ -372,8 +377,12 @@ fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
         stdout.contains(&expected_display),
         "depsguard should use pnpm globalconfig path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
+    // pnpm <= 10 globalconfig is an ini-style `rc` file (kebab-case keys);
+    // pnpm >= 11.6 `config get globalconfig` points at `config.yaml`
+    // (camelCase keys). Accept the release-age finding in either style.
     assert!(
-        stdout.contains("minimum-release-age — file missing"),
+        stdout.contains("minimum-release-age — file missing")
+            || stdout.contains("minimumReleaseAge — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -405,8 +414,11 @@ fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
         stdout.contains(&expected_display),
         "depsguard should use pnpm globalconfig XDG path when ~/.npmrc is missing.\nexpected path: {expected_display}\noutput:\n{stdout}"
     );
+    // Same as above: kebab-case `rc` keys on pnpm <= 10, camelCase
+    // `config.yaml` keys on pnpm >= 11.6.
     assert!(
-        stdout.contains("minimum-release-age — file missing"),
+        stdout.contains("minimum-release-age — file missing")
+            || stdout.contains("minimumReleaseAge — file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -1175,7 +1187,11 @@ dependencies = ["six==1.16.0"]
 fn scan_all_managers_no_panic() {
     let home = TmpHome::new("all_no_panic");
     let out = run_depsguard(&["--scan"], home.path());
-    assert!(out.status.success(), "depsguard should not panic");
+    // Exit 1 means actionable findings, not a crash; a panic exits 101.
+    assert!(
+        matches!(out.status.code(), Some(0 | 1)),
+        "depsguard should not panic"
+    );
 }
 
 #[test]

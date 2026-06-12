@@ -146,7 +146,7 @@ The binary is `target/release/depsguard` (`.exe` on Windows). Rust **1.74+** is 
 
 ```bash
 depsguard              # interactive: scan, choose fixes, apply
-depsguard scan         # report only; no writes
+depsguard scan         # report only; no writes (exits 1 if action is needed)
 depsguard --no-search  # skip recursive file search, check local configs only
 depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
@@ -170,8 +170,8 @@ depsguard --help       # CLI help
 | Manager | Config | Setting | Target | Why |
 |---------|--------|---------|--------|-----|
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
-| npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk |
-| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
+| npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk (npm honors this in `.npmrc`; pnpm >= 11 reads it from `pnpm-workspace.yaml` / global `config.yaml`, not `.npmrc`) |
+| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (pnpm 10.16–10.x only; pnpm >= 11 ignores `.npmrc` — use `pnpm-workspace.yaml`) |
 | pnpm | global `rc` (pnpm <= 10) | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | global `rc` (pnpm <= 10) | `block-exotic-subdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
 | pnpm | global `rc` (pnpm <= 10) | `trust-policy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
@@ -179,11 +179,15 @@ depsguard --help       # CLI help
 | pnpm | global `rc` (pnpm <= 10) | `ignore-scripts` | `true` | Block malicious install scripts |
 | pnpm | global `config.yaml` (pnpm >= 11) | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
 | pnpm | global `config.yaml` (pnpm >= 11) | `blockExoticSubdeps` | `true` | Block untrusted transitive deps |
+| pnpm | global `config.yaml` (pnpm >= 11) | `trustPolicy` | `no-downgrade` | Block provenance downgrades |
+| pnpm | global `config.yaml` (pnpm >= 11) | `strictDepBuilds` | `true` | Fail on unreviewed build scripts |
+| pnpm | global `config.yaml` (pnpm >= 11) | `ignoreScripts` | `true` | Block malicious install scripts |
 | yarn | `.yarnrc.yml` | `npmMinimalAgeGate` | `7d` | Delay new versions by 7 days (requires yarn >= 4.10) |
 | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | `pnpm-workspace.yaml` | `strictDepBuilds` | `true` | Fail on unreviewed build scripts (requires pnpm >= 10.3) |
 | pnpm | `pnpm-workspace.yaml` | `trustPolicy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
 | pnpm | `pnpm-workspace.yaml` | `blockExoticSubdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
+| pnpm | `pnpm-workspace.yaml` | `ignoreScripts` | `true` | Block malicious install scripts (requires pnpm >= 10.16) |
 | bun | `~/.bunfig.toml` | `install.minimumReleaseAge` | `604800` (seconds) | ~7 day delay (requires bun >= 1.3) |
 | aube | `~/.npmrc` | `minimumReleaseAge` | `10080` (minutes) | Delay new versions by 7 days |
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes (requires uv >= 0.9.17) |
@@ -197,7 +201,8 @@ depsguard --help       # CLI help
 | Manager | Linux | macOS | Windows |
 |---------|-------|-------|---------|
 | npm/pnpm/aube | `~/.npmrc` | `~/.npmrc` | `%USERPROFILE%\.npmrc` |
-| pnpm global | `$XDG_CONFIG_HOME/pnpm/rc` or `~/.config/pnpm/rc` | `$XDG_CONFIG_HOME/pnpm/rc` or `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
+| pnpm global (pnpm <= 10) | `$XDG_CONFIG_HOME/pnpm/rc` or `~/.config/pnpm/rc` | `$XDG_CONFIG_HOME/pnpm/rc` or `~/Library/Preferences/pnpm/rc` | `%LOCALAPPDATA%\pnpm\config\rc` |
+| pnpm global (pnpm >= 11) | `$XDG_CONFIG_HOME/pnpm/config.yaml` or `~/.config/pnpm/config.yaml` | `$XDG_CONFIG_HOME/pnpm/config.yaml` or `~/Library/Preferences/pnpm/config.yaml` | `%LOCALAPPDATA%\pnpm\config\config.yaml` |
 | yarn | `~/.yarnrc.yml` | `~/.yarnrc.yml` | `%USERPROFILE%\.yarnrc.yml` |
 | pnpm | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` | `pnpm-workspace.yaml` |
 | bun | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `$XDG_CONFIG_HOME/.bunfig.toml` or `~/.bunfig.toml` | `%USERPROFILE%\.bunfig.toml` |
@@ -207,7 +212,7 @@ depsguard --help       # CLI help
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc`, the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. When `~/.npmrc` is missing, DepsGuard uses pnpm's global config path so fixes can create the config file directly. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
 
 ## Urgent security fix
 

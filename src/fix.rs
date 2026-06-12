@@ -927,16 +927,20 @@ mod tests {
     }
 
     #[test]
-    fn apply_fix_pnpm_workspace_unquoted() {
-        let f = tmp_file("");
-        let rec = Recommendation {
-            key: "strictDepBuilds".into(),
-            description: "test".into(),
-            expected: "true".into(),
-            status: crate::manager::CheckStatus::Missing,
-        };
-        apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
-        assert!(f.read().contains("strictDepBuilds: true"));
+    fn apply_fix_pnpm_workspace_booleans_unquoted() {
+        // YAML booleans must be written bare (`key: true`, never `key: "true"`);
+        // only trustPolicy is quoted. `contains` fails on a quoted value.
+        for key in ["strictDepBuilds", "ignoreScripts", "blockExoticSubdeps"] {
+            let f = tmp_file("");
+            let rec = Recommendation {
+                key: key.into(),
+                description: "test".into(),
+                expected: "true".into(),
+                status: crate::manager::CheckStatus::Missing,
+            };
+            apply_fix(ManagerKind::PnpmWorkspace, f.path(), &rec).unwrap();
+            assert!(f.read().contains(&format!("{key}: true")), "{key}");
+        }
     }
 
     // ── PnpmGlobal fix tests (v10 rc vs v11 yaml) ─────────────────
@@ -974,6 +978,34 @@ mod tests {
             "should use YAML format for .yaml file: {content}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn apply_fix_pnpm_global_yaml_booleans_unquoted() {
+        // YAML booleans must be written bare (`key: true`, never `key: "true"`);
+        // only trustPolicy is quoted. `contains` fails on a quoted value.
+        for key in ["strictDepBuilds", "ignoreScripts"] {
+            let dir = std::env::temp_dir().join(format!(
+                "depsguard_pnpmglobal_yaml_{key}_{}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("config.yaml");
+            fs::write(&path, "").unwrap();
+            let rec = Recommendation {
+                key: key.into(),
+                description: "test".into(),
+                expected: "true".into(),
+                status: crate::manager::CheckStatus::Missing,
+            };
+            apply_fix(ManagerKind::PnpmGlobal, &path, &rec).unwrap();
+            let content = fs::read_to_string(&path).unwrap();
+            assert!(
+                content.contains(&format!("{key}: true")),
+                "{key}: {content}"
+            );
+            let _ = fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]
