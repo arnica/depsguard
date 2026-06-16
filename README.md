@@ -81,12 +81,23 @@ sudo apt update
 sudo apt install depsguard
 ```
 
-#### macOS (Intel / Apple Silicon)
+#### macOS / Linux (Homebrew)
 
 ```bash
-# Homebrew (now in homebrew-core — no tap needed)
+# Homebrew
 brew install depsguard
 ```
+
+DepsGuard is in [homebrew-core](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/depsguard.rb), so no custom tap is required.
+
+> **Migrating from the old `arnica/depsguard` tap?** Switch to the core formula once:
+>
+> ```bash
+> brew uninstall depsguard
+> brew untap arnica/depsguard
+> brew update
+> brew install depsguard
+> ```
 
 #### Windows
 
