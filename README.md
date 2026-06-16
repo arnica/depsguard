@@ -84,8 +84,7 @@ sudo apt install depsguard
 #### macOS (Intel / Apple Silicon)
 
 ```bash
-# Homebrew tap
-brew tap arnica/depsguard https://github.com/arnica/depsguard
+# Homebrew (now in homebrew-core — no tap needed)
 brew install depsguard
 ```
 
@@ -128,9 +127,23 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 |---------|-------|-------|---------|-----------------|
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after repo setup above) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard https://github.com/arnica/depsguard ; brew install depsguard` |
+| Homebrew (homebrew-core) | yes | yes | no | `brew install depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add depsguard https://github.com/arnica/depsguard ; scoop install depsguard` |
 | WinGet | no | no | yes | `winget install Arnica.DepsGuard` |
+
+### Update to the latest version
+
+Use whichever channel you installed with:
+
+| Channel | Upgrade command |
+|---------|-----------------|
+| Homebrew | `brew update && brew upgrade depsguard` |
+| APT (custom repo) | `sudo apt update && sudo apt install --only-upgrade depsguard` |
+| crates.io | `cargo install --force depsguard` (reinstalls the latest release) |
+| Scoop | `scoop update && scoop update depsguard` |
+| WinGet | `winget upgrade Arnica.DepsGuard` |
+
+Check your installed version any time with `depsguard --version`, and see the [releases page](https://github.com/arnica/depsguard/releases) for the newest version.
 
 ### Build from source
 

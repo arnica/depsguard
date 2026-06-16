@@ -1210,12 +1210,12 @@
         </div>
         <div data-panel="macos" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" class="install-panel">
           <div class="code-wrap install-code-wrap"
-            data-copy="brew tap arnica/depsguard https://github.com/arnica/depsguard&#10;brew install depsguard">
+            data-copy="brew install depsguard">
             <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
-            <pre tabindex="0"><code>brew tap arnica/depsguard https://github.com/arnica/depsguard
-brew install depsguard</code></pre>
+            <pre tabindex="0"><code>brew install depsguard</code></pre>
           </div>
-          <p class="code-note">Homebrew tap. Works on Apple Silicon and Intel.</p>
+          <p class="code-note">Homebrew (in homebrew-core &ndash; no tap needed). Works on Apple Silicon and Intel.
+            Update later with <code>brew upgrade depsguard</code>.</p>
         </div>
         <div data-panel="linux" id="panel-linux" role="tabpanel" aria-labelledby="tab-linux" class="install-panel"
           style="display:none">
@@ -1230,7 +1230,8 @@ sudo apt update
 sudo apt install depsguard</code></pre>
           </div>
           <p class="code-note">Debian/Ubuntu via APT. Also available via <a
-              href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.</p>
+              href="https://github.com/arnica/depsguard#install">Homebrew on Linux</a>.
+            Update later with <code>sudo apt update &amp;&amp; sudo apt install --only-upgrade depsguard</code>.</p>
         </div>
         <div data-panel="windows" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" class="install-panel"
           style="display:none">
@@ -1246,6 +1247,8 @@ sudo apt install depsguard</code></pre>
             <pre tabindex="0"><code>scoop bucket add depsguard https://github.com/arnica/depsguard
 scoop install depsguard</code></pre>
           </div>
+          <p class="code-note">Update later with <code>winget upgrade Arnica.DepsGuard</code> or
+            <code>scoop update depsguard</code>.</p>
         </div>
         <div data-panel="cargo" id="panel-cargo" role="tabpanel" aria-labelledby="tab-cargo" class="install-panel"
           style="display:none">
@@ -1253,7 +1256,8 @@ scoop install depsguard</code></pre>
             <button type="button" class="copy-btn install-copy-btn" aria-label="Copy install command">Copy</button>
             <pre tabindex="0"><code>cargo install depsguard</code></pre>
           </div>
-          <p class="code-note">Requires a <a href="https://rustup.rs/">Rust toolchain</a> (1.74+).</p>
+          <p class="code-note">Requires a <a href="https://rustup.rs/">Rust toolchain</a> (1.74+).
+            Run <code>cargo install --force depsguard</code> to upgrade to the latest release.</p>
         </div>
       </div>
       <p class="install-also">
@@ -2132,6 +2136,21 @@ scoop install depsguard</code></pre>
               <li>Audit your dependency tree periodically with <code>npm ls</code> or <code>pnpm why</code>. Fewer
                 dependencies means fewer places an attacker can hide.</li>
             </ul>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <h3 class="faq-q">What should I do if I need to patch an urgent CVE?</h3>
+          <div class="faq-body">
+            <p>If the patched version is newer than your cooldown window, your package manager will refuse to install it
+              by default &ndash; that's the cooldown doing its job. To get the fix in, add a <strong>narrow,
+              package-specific exception</strong>, install the patched version, then remove the exception so the delay
+              stays in place for every other dependency. Prefer a per-package override to lowering the global cooldown.</p>
+            <p>Before you bypass the cooldown: confirm the CVE actually affects how you use the package, and check whether
+              a known-good older version is already available (a rollback may be safer). See the <a
+                href="#urgent-cve">Urgent security fix</a> section for the exact per-manager commands (npm, pnpm,
+              yarn, bun, aube, uv, pip, poetry, Renovate, Dependabot). Note that Renovate and Dependabot
+              <em>security</em> updates already bypass the cooldown automatically.</p>
           </div>
         </div>
 
