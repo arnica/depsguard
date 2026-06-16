@@ -81,13 +81,22 @@ sudo apt update
 sudo apt install depsguard
 ```
 
-#### macOS (Intel / Apple Silicon)
+#### macOS / Linux (Homebrew)
 
 ```bash
-# Homebrew tap
-brew tap arnica/depsguard https://github.com/arnica/depsguard
 brew install depsguard
 ```
+
+DepsGuard is in [homebrew-core](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/depsguard.rb), so no custom tap is required.
+
+> **Migrating from the old `arnica/depsguard` tap?** Switch to the core formula once:
+>
+> ```bash
+> brew uninstall depsguard
+> brew untap arnica/depsguard
+> brew update
+> brew install depsguard
+> ```
 
 #### Windows
 
@@ -128,7 +137,7 @@ If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their i
 |---------|-------|-------|---------|-----------------|
 | APT (custom repo) | yes | no | no | `sudo apt install depsguard` (after repo setup above) |
 | crates.io | yes | yes | yes | `cargo install depsguard` |
-| Homebrew (custom tap) | yes | yes | no | `brew tap arnica/depsguard https://github.com/arnica/depsguard ; brew install depsguard` |
+| Homebrew (homebrew-core) | yes | yes | no | `brew install depsguard` |
 | Scoop (custom bucket) | no | no | yes | `scoop bucket add depsguard https://github.com/arnica/depsguard ; scoop install depsguard` |
 | WinGet | no | no | yes | `winget install Arnica.DepsGuard` |
 

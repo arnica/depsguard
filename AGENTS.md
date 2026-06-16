@@ -161,21 +161,35 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 | `RELEASE_BOT_TOKEN` | PAT used by release workflow to push Homebrew formula updates directly to `main` |
 | `WINGATE_RELEASE_TOKEN` | Open WinGet PRs via WinGet Releaser (requires existing package id + winget-pkgs fork) |
 
-Homebrew formula is now maintained in this repository at `Formula/depsguard.rb`.
-On each release, CI renders it from `packaging/homebrew/depsguard.rb.in` and pushes
-the updated formula commit directly to `main`.
+Homebrew has two channels:
 
-Both Homebrew and Scoop manifests are maintained in this repository (`Formula/depsguard.rb` and `bucket/depsguard.json`).
-Templates live under `packaging/`; render script for Scoop is `scripts/release/publish-scoop-bucket.sh`.
+- **homebrew-core (primary)** — `depsguard` is published in
+  [Homebrew/homebrew-core](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/depsguard.rb),
+  so users just run `brew install depsguard` (no tap). Version bumps are handled by
+  Homebrew autobump: BrewTestBot opens the bump PR automatically when a new GitHub
+  tag is published, so no CI in this repo is required. Do **not** add `no_autobump!`
+  to the core formula or autobump stops.
+- **`arnica/depsguard` tap (legacy fallback)** — still maintained at
+  `Formula/depsguard.rb`, rendered from `packaging/homebrew/depsguard.rb.in` and pushed
+  to `main` by the `sync-homebrew-formula` job on each release.
+
+The Scoop manifest is maintained in this repository at `bucket/depsguard.json`
+(rendered from `packaging/scoop/depsguard.json.in` via `scripts/release/publish-scoop-bucket.sh`).
 
 ### End-user install channels (optional)
 
 Document these in your org’s internal runbooks or public docs once the repos exist; **do not** duplicate in `README.md` unless you have stable public install channels.
 
-**Homebrew (formula in this repo)**
+**Homebrew (homebrew-core, primary)**
 
-1. Keep `Formula/depsguard.rb` as the canonical formula path.
-2. Release workflow updates formula `url`/`sha256` directly on `main` for each release tag.
+1. Canonical formula lives in homebrew-core at `Formula/d/depsguard.rb`; users run `brew install depsguard`.
+2. New versions are bumped automatically by Homebrew autobump on each GitHub release tag — no action needed in this repo.
+3. To force an immediate bump instead of waiting for autobump, run `brew bump-formula-pr depsguard` locally.
+
+**Homebrew (`arnica/depsguard` tap, legacy fallback)**
+
+1. `Formula/depsguard.rb` remains the tap formula path.
+2. The `sync-homebrew-formula` release job updates its `url`/`sha256` directly on `main` for each release tag.
 3. Users tap with explicit repo URL: `brew tap <owner>/depsguard https://github.com/<owner>/depsguard`.
 
 **Scoop (bucket in this repo)**
