@@ -139,7 +139,7 @@ Use whichever channel you installed with:
 |---------|-----------------|
 | Homebrew | `brew update && brew upgrade depsguard` |
 | APT (custom repo) | `sudo apt update && sudo apt install --only-upgrade depsguard` |
-| crates.io | `cargo install depsguard` (re-run to pull the latest release) |
+| crates.io | `cargo install --force depsguard` (reinstalls the latest release) |
 | Scoop | `scoop update && scoop update depsguard` |
 | WinGet | `winget upgrade Arnica.DepsGuard` |
 
