@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The TanStack npm supply chain attack (May 2026) and how to prevent it</title>
+  <meta name="description"
+    content="In May 2026, attackers poisoned 42 TanStack Router/Start packages via a CI/CD cache-poisoning attack. What happened and the settings that reduce your exposure.">
+  <link rel="canonical" href="https://depsguard.com/tanstack-npm-attack/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://depsguard.com/tanstack-npm-attack/">
+  <meta property="og:title" content="The TanStack npm supply chain attack">
+  <meta property="og:description"
+    content="In May 2026, attackers poisoned 42 TanStack Router/Start packages via CI/CD cache poisoning. What happened and the settings that reduce exposure.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The TanStack npm supply chain attack">
+  <meta name="twitter:description"
+    content="In May 2026, attackers poisoned 42 TanStack Router/Start packages via CI/CD cache poisoning. What happened and the settings that reduce exposure.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="/img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="/img/favicon/favicon.svg">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "The TanStack npm supply chain attack",
+    "description": "What happened in the May 2026 TanStack Router/Start npm compromise and the package-manager settings that reduce exposure.",
+    "about": "Software supply chain security",
+    "url": "https://depsguard.com/tanstack-npm-attack/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="grid-bg">
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="/" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <article class="doc">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span class="sep">/</span> <a href="/guide/">Guide</a> <span class="sep">/</span>
+          <span>TanStack npm attack</span>
+        </nav>
+
+        <h1>The TanStack npm supply chain attack</h1>
+        <p class="lede">
+          On May&nbsp;11,&nbsp;2026, attackers published poisoned versions of 42 packages in the official
+          <code>@tanstack</code> scope (84 malicious versions in total), part of a wider "Mini Shai-Hulud" campaign.
+          Only the TanStack Router/Start packages were affected; the compromise was tracked as
+          <a href="https://github.com/TanStack/router/security/advisories/GHSA-g7cv-rxg3-hmpx" target="_blank"
+            rel="noopener">CVE-2026-45321 / GHSA-g7cv-rxg3-hmpx</a>.
+        </p>
+
+        <div class="note">
+          <strong>Scope:</strong> only the Router/Start monorepo was hit. TanStack <strong>Query, Table, Form, Virtual,
+          and Store were not affected</strong>. Despite some early reports, those packages were confirmed clean.
+        </div>
+
+        <h2 id="what">What happened</h2>
+        <p>
+          Unusually, this was not a stolen npm token, phishing, or a typosquat. It was a chained attack on
+          TanStack's own GitHub Actions CI/CD. An attacker abused a <code>pull_request_target</code> workflow that ran
+          untrusted fork code, poisoned the project's Actions cache across the fork/base trust boundary, and, when
+          a legitimate maintainer merge later triggered the release workflow, extracted the npm trusted-publisher
+          (OIDC) token from the runner's memory and published the malicious versions directly to the registry. Because
+          publishing used the project's legitimate publisher identity, the bad versions even carried valid provenance
+          attestations.
+        </p>
+        <p>
+          On the consumer side, the poisoned packages pulled in their payload through an injected
+          <code>optionalDependency</code> that pointed at a <strong>git URL</strong>, whose <code>package.json</code>
+          declared a <code>prepare</code> lifecycle hook. That hook executed automatically on install (via the Bun
+          runtime) and ran a credential harvester targeting cloud keys (AWS, GCP), Kubernetes and Vault tokens, npm and
+          GitHub tokens, and SSH keys, with self-propagation and editor/agent persistence.
+        </p>
+
+        <h2 id="response">Detection and response</h2>
+        <p>
+          Automated scanners (StepSecurity, Socket) flagged the packages within minutes of publication: a tarball
+          roughly 3.7&times; its normal size and an unexpected file at the package root were the tells. TanStack
+          deprecated all 84 versions within about an hour and a half, and npm removed the tarballs registry-side within a
+          few hours. If you installed any affected <code>@tanstack/*</code> Router/Start version on May&nbsp;11, rotate
+          credentials that were exposed to the install, pin to a pre-attack release, and reinstall from a clean lockfile.
+        </p>
+
+        <h2 id="prevent">The settings that reduce exposure</h2>
+        <ul>
+          <li>
+            <strong><a href="/cooldown/">Dependency cooldown</a> (minimum release age), the control that would
+            have stopped this.</strong> The malicious versions were detected and pulled within minutes to hours. Any
+            cooldown that holds back brand-new versions for a few days would have served only the known-good prior
+            releases during the dangerous window, so a cooldown-protected install would never have resolved the poisoned
+            versions.
+          </li>
+          <li>
+            <strong><a href="/block-exotic-subdeps/">Blocking exotic transitive deps</a> (block-exotic-subdeps, pnpm).</strong>
+            The payload was wired in through a transitive dependency pointing at a non-registry git source,
+            exactly the class of dependency this pnpm setting restricts.
+          </li>
+        </ul>
+        <div class="note">
+          <strong>An honest caveat about install-script blocking.</strong> Because the payload ran via a
+          <code>prepare</code> hook on a git-URL dependency (rather than a classic <code>postinstall</code> on the
+          published package), a plain <a href="/ignore-scripts/">ignore-scripts</a> setting would <em>not</em> have
+          fully prevented this particular infection. It remains worthwhile defense-in-depth, and for the other
+          packages in the same broader campaign that used a classic <code>preinstall</code> hook, it would have helped,
+          but here the decisive control is the cooldown.
+        </div>
+
+        <h2 id="harden">Harden your setup</h2>
+        <p>
+          DepsGuard checks whether a cooldown and the other built-in defenses are enabled for the package managers you
+          have installed, and turns on the missing ones, with a diff preview and a backup before any change.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
+          <a class="btn" href="/guide/">Read the hardening guide</a>
+        </div>
+
+        <h2 id="sources">Sources</h2>
+        <ul>
+          <li><a href="https://tanstack.com/blog/npm-supply-chain-compromise-postmortem" target="_blank"
+              rel="noopener">TanStack: official postmortem</a></li>
+          <li><a href="https://github.com/TanStack/router/security/advisories/GHSA-g7cv-rxg3-hmpx" target="_blank"
+              rel="noopener">GitHub Security Advisory GHSA-g7cv-rxg3-hmpx (CVE-2026-45321)</a></li>
+          <li><a href="https://socket.dev/blog/tanstack-npm-packages-compromised-mini-shai-hulud-supply-chain-attack"
+              target="_blank" rel="noopener">Socket: TanStack packages compromised</a></li>
+          <li><a href="https://www.stepsecurity.io/blog/mini-shai-hulud-is-back-a-self-spreading-supply-chain-attack-hits-the-npm-ecosystem"
+              target="_blank" rel="noopener">StepSecurity: Mini Shai-Hulud analysis</a></li>
+          <li><a href="https://www.theregister.com/cyber-crime/2026/05/12/cache-poisoning-caper-turns-tanstack-npm-packages-toxic/"
+              target="_blank" rel="noopener">The Register: cache-poisoning attack on TanStack packages</a></li>
+        </ul>
+
+        <div class="related">
+          <h2>Related</h2>
+          <ul>
+            <li><a href="/cooldown/">Dependency cooldown (minimum release age)</a></li>
+            <li><a href="/block-exotic-subdeps/">Block untrusted transitive dependencies (block-exotic-subdeps)</a></li>
+            <li><a href="/ignore-scripts/">Block install scripts with ignore-scripts</a></li>
+            <li><a href="/guide/">How to protect against npm supply chain attacks</a></li>
+            <li><a href="/shai-hulud/">Shai-Hulud npm worm</a></li>
+          </ul>
+        </div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io?utm_source=depsguard&amp;utm_medium=referral&amp;utm_campaign=community">
+            <picture>
+              <source srcset="/img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="/img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="/">Home</a>
+          <a href="/guide/">Guide</a>
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/site.js"></script>
+</body>
+
+</html>

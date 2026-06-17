@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>block-exotic-subdeps: block untrusted transitive dependencies (pnpm)</title>
+  <meta name="description"
+    content="Use block-exotic-subdeps in pnpm to block untrusted transitive dependencies from non-registry sources. What it does and how to turn it on.">
+  <link rel="canonical" href="https://depsguard.com/block-exotic-subdeps/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://depsguard.com/block-exotic-subdeps/">
+  <meta property="og:title" content="Block untrusted transitive dependencies (block-exotic-subdeps)">
+  <meta property="og:description"
+    content="Use block-exotic-subdeps in pnpm to block untrusted transitive dependencies from non-registry sources. What it does and how to turn it on.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Block untrusted transitive dependencies (block-exotic-subdeps)">
+  <meta name="twitter:description"
+    content="Use block-exotic-subdeps in pnpm to block untrusted transitive dependencies from non-registry sources. What it does and how to turn it on.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="/img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="/img/favicon/favicon.svg">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Block untrusted transitive dependencies (block-exotic-subdeps)",
+    "description": "How to use block-exotic-subdeps in pnpm to block untrusted transitive dependencies from non-registry sources such as git URLs, tarball/HTTP URLs, and local paths.",
+    "about": "Software supply chain security",
+    "url": "https://depsguard.com/block-exotic-subdeps/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="grid-bg">
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="/" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <article class="doc">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span class="sep">/</span> <a href="/guide/">Guide</a> <span class="sep">/</span>
+          <span>Block exotic subdeps</span>
+        </nav>
+
+        <h1>Block untrusted transitive dependencies (block-exotic-subdeps)</h1>
+        <p class="lede">
+          <code>block-exotic-subdeps</code> is a pnpm setting that refuses transitive dependencies pulled in from
+          non-registry sources: git URLs, tarball or HTTP URLs, and local paths. A package you add yourself is
+          your call; one smuggled deep into the tree from an arbitrary source is a far easier place to hide malicious
+          code. This setting closes that door.
+        </p>
+
+        <h2 id="what">What it does</h2>
+        <p>
+          When you add a direct dependency, you can point it anywhere you like: the npm registry, a git
+          repository, a tarball URL, a local path. That is a deliberate choice you make and can review. The risk is
+          different for <strong>transitive</strong> dependencies: packages your dependencies pull in, often several
+          levels deep, that you never named and rarely inspect.
+        </p>
+        <p>
+          pnpm calls a dependency that resolves from somewhere other than the npm registry an <em>exotic</em>
+          dependency. Exotic sources include git repositories, direct URL links to tarballs, and local file paths. A
+          direct exotic dependency is usually intentional. An <strong>exotic transitive dependency</strong> buried in
+          the tree is a common way to smuggle code in from an arbitrary, unvetted source. The registry's
+          publishing, versioning, and takedown controls never apply to it.
+        </p>
+        <p>
+          With <code>block-exotic-subdeps</code> turned on, pnpm refuses to resolve transitive dependencies from these
+          exotic sources. Your direct dependencies may still use them; everything below the top level must come from a
+          trusted source such as the configured registry.
+        </p>
+
+        <h2 id="enable">Turn it on</h2>
+        <p>
+          This is a pnpm setting available in pnpm &ge; 10.26. Where it lives depends on your pnpm version. Use the rc
+          form for older setups and the camelCase YAML key for newer ones.
+        </p>
+
+        <h3>pnpm &le; 10 (rc file)</h3>
+        <p>Add to your <code>.npmrc</code>:</p>
+        <pre><code>block-exotic-subdeps=true</code></pre>
+
+        <h3>pnpm &ge; 11 (YAML)</h3>
+        <p>
+          Add to <code>pnpm-workspace.yaml</code> (per project) or your global <code>config.yaml</code>, using the
+          camelCase key:
+        </p>
+        <pre><code>blockExoticSubdeps: true</code></pre>
+
+        <div class="note">
+          <strong>Heads up:</strong> since pnpm 11.0 this setting is <strong>on by default</strong>
+          (<code>blockExoticSubdeps: true</code>), so newer pnpm projects are already covered unless it was turned off.
+          The key is spelled <code>block-exotic-subdeps</code> in rc files and
+          <code>blockExoticSubdeps</code> in YAML. See the
+          <a href="https://pnpm.io/settings#blockexoticsubdeps" target="_blank" rel="noopener">pnpm settings
+            documentation</a> for the authoritative reference.
+        </div>
+
+        <h2 id="why">Why it matters</h2>
+        <p>
+          In the <a href="/tanstack-npm-attack/">May 2026 TanStack incident</a>, the malicious code was wired in through
+          a git-URL <code>optionalDependency</code>, exactly the kind of non-registry transitive source this
+          setting restricts. <code>block-exotic-subdeps</code> would not have stopped every step of that attack on its
+          own, but it directly narrows that class of source: a transitive dependency resolving from a git URL instead of
+          the registry is precisely what it refuses to install.
+        </p>
+        <p>
+          Like a cooldown or install-script blocking, this is one layer. It restricts <em>where</em> deep dependencies
+          may come from, not whether a registry-hosted package is safe. Pair it with the other settings in the
+          hardening guide for defense in depth.
+        </p>
+        <p>
+          npm is moving the same way: npm v12 (expected in 2026) blocks git and remote-URL dependencies by default, with
+          its <code>allow-git</code> and <code>allow-remote</code> settings defaulting to <code>none</code>. That is the
+          same class of non-registry source this pnpm setting restricts.
+        </p>
+
+        <h2 id="depsguard">Let DepsGuard set it up</h2>
+        <p>
+          DepsGuard detects your pnpm setup, checks whether <code>block-exotic-subdeps</code> is configured, and writes
+          the right key into the right file for your version, with a diff preview and a backup before any change,
+          so you can see exactly what it does before applying it.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
+          <a class="btn" href="/guide/">Read the hardening guide</a>
+        </div>
+
+        <div class="related">
+          <h2>Related</h2>
+          <ul>
+            <li><a href="/guide/">How to protect against npm supply chain attacks</a></li>
+            <li><a href="/ignore-scripts/">Block malicious install scripts with ignore-scripts</a></li>
+            <li><a href="/strict-dep-builds/">Restrict which dependencies can run builds (strict-dep-builds)</a></li>
+            <li><a href="/trust-policy/">Set a dependency trust policy</a></li>
+            <li><a href="/tanstack-npm-attack/">The TanStack npm supply chain attack</a></li>
+          </ul>
+        </div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io?utm_source=depsguard&amp;utm_medium=referral&amp;utm_campaign=community">
+            <picture>
+              <source srcset="/img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="/img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="/">Home</a>
+          <a href="/guide/">Guide</a>
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/site.js"></script>
+</body>
+
+</html>
