@@ -1608,8 +1608,10 @@ scoop install depsguard</code></pre>
           style="color:var(--text-dim)">npm install</code> that runs before it's caught pulls it in.
       </p>
       <p style="color:var(--text-dim); margin-bottom:2.5rem; line-height:1.75;">
-        Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
-        DepsGuard checks whether those settings are enabled and helps you turn them on.
+        Many modern package managers now ship with built-in defenses, and some are on by default: pnpm 11 enables a
+        24-hour cooldown and blocks exotic transitive dependencies, and npm v12 (expected in 2026) will block install
+        scripts and git or remote-URL dependencies by default. But the defaults vary by version and are often weaker
+        than they should be, so DepsGuard checks what is actually enabled and helps you turn on, or strengthen, the rest.
       </p>
 
       <h2>Supported settings</h2>

@@ -136,7 +136,9 @@
         <pre><code>blockExoticSubdeps: true</code></pre>
 
         <div class="note">
-          <strong>Heads up:</strong> the key is spelled <code>block-exotic-subdeps</code> in rc files and
+          <strong>Heads up:</strong> since pnpm 11.0 this setting is <strong>on by default</strong>
+          (<code>blockExoticSubdeps: true</code>), so newer pnpm projects are already covered unless it was turned off.
+          The key is spelled <code>block-exotic-subdeps</code> in rc files and
           <code>blockExoticSubdeps</code> in YAML. See the
           <a href="https://pnpm.io/settings#blockexoticsubdeps" target="_blank" rel="noopener">pnpm settings
             documentation</a> for the authoritative reference.
@@ -154,6 +156,11 @@
           Like a cooldown or install-script blocking, this is one layer. It restricts <em>where</em> deep dependencies
           may come from, not whether a registry-hosted package is safe. Pair it with the other settings in the
           hardening guide for defense in depth.
+        </p>
+        <p>
+          npm is moving the same way: npm v12 (expected in 2026) blocks git and remote-URL dependencies by default, with
+          its <code>allow-git</code> and <code>allow-remote</code> settings defaulting to <code>none</code>. That is the
+          same class of non-registry source this pnpm setting restricts.
         </p>
 
         <h2 id="depsguard">Let DepsGuard set it up</h2>

@@ -161,8 +161,9 @@
           <br><br>
           It is also not a complete defense. A dependency pulled from a git source can ship its own config or run a
           <code>prepare</code> hook, so pair <code>ignore-scripts</code> with restricting git and remote sources and with
-          a <a href="/cooldown/">dependency cooldown</a>. Note that npm v12 plans to block install scripts by default,
-          with an approve/deny allowlist.
+          a <a href="/cooldown/">dependency cooldown</a>. Looking ahead, npm v12 (expected in 2026) blocks dependency
+          install scripts by default, managed by an <code>npm approve-scripts</code> allowlist, so on npm v12 setting
+          <code>ignore-scripts</code> yourself is largely redundant for blocking.
         </div>
 
         <h2 id="depsguard">Let DepsGuard set it up</h2>

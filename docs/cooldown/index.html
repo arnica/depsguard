@@ -123,8 +123,10 @@
 
         <h3>pnpm</h3>
         <p>
-          The value is in <strong>minutes</strong> (10080 = 7 days). Where it lives depends on your pnpm version
-          (requires pnpm &ge; 10.16):
+          Since pnpm 11.0, pnpm enables a cooldown by default: <code>minimumReleaseAge</code> defaults to 1440 minutes
+          (24 hours). That is a good baseline, and DepsGuard recommends raising it to 7 days (10080 minutes). The value
+          is in <strong>minutes</strong>, and where it lives depends on your pnpm version (the setting needs pnpm
+          &ge; 10.16):
         </p>
         <div class="doc-table-wrap">
           <table>
