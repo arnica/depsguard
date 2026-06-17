@@ -478,8 +478,9 @@
       transform: translateY(0);
     }
 
-    /* When the "copied" toast is showing, suppress the joke caption to avoid overlap */
-    .nav-share:has(.share-toast.show) .share-caption {
+    /* When the "copied" toast is showing, suppress the joke caption to avoid
+       overlap. Toggled via a class in JS rather than :has() for broader support. */
+    .nav-share.toast-active .share-caption {
       opacity: 0;
       pointer-events: none;
     }
@@ -2528,9 +2529,12 @@ scoop install depsguard</code></pre>
     (function () {
       var btn = document.getElementById('share-native');
       if (!btn) return;
+      var navShare = document.getElementById('nav-share');
       var toast = document.getElementById('share-toast');
       var toastTimer;
-      var canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+      var canShare = typeof navigator !== 'undefined'
+        && typeof navigator.share === 'function'
+        && window.isSecureContext;
 
       if (!canShare) {
         btn.setAttribute('aria-label', 'Copy link to clipboard');
@@ -2540,11 +2544,16 @@ scoop install depsguard</code></pre>
         if (!toast) return;
         toast.textContent = msg;
         toast.classList.add('show');
+        if (navShare) navShare.classList.add('toast-active');
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1600);
+        toastTimer = setTimeout(function () {
+          toast.classList.remove('show');
+          if (navShare) navShare.classList.remove('toast-active');
+        }, 1600);
       }
 
       function legacyCopy(text) {
+        var ok = false;
         try {
           var ta = document.createElement('textarea');
           ta.value = text;
@@ -2553,20 +2562,15 @@ scoop install depsguard</code></pre>
           ta.style.left = '-9999px';
           document.body.appendChild(ta);
           ta.select();
-          document.execCommand('copy');
+          ok = document.execCommand('copy');
           document.body.removeChild(ta);
-          showToast('Link copied!');
         } catch (e) {
-          showToast('Copy failed');
+          ok = false;
         }
+        showToast(ok ? 'Link copied!' : 'Copy failed');
       }
 
-      btn.addEventListener('click', function () {
-        var url = location.href;
-        if (canShare) {
-          navigator.share({ title: document.title, url: url }).catch(function () { });
-          return;
-        }
+      function copyLink(url) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url)
             .then(function () { showToast('Link copied!'); })
@@ -2574,6 +2578,19 @@ scoop install depsguard</code></pre>
         } else {
           legacyCopy(url);
         }
+      }
+
+      btn.addEventListener('click', function () {
+        var url = location.href;
+        if (canShare) {
+          navigator.share({ title: document.title, url: url }).catch(function (err) {
+            // Dismissing the native share sheet rejects with AbortError; only fall
+            // back to copying on genuine failures, not deliberate cancellation.
+            if (!err || err.name !== 'AbortError') copyLink(url);
+          });
+          return;
+        }
+        copyLink(url);
       });
     })();
   </script>
