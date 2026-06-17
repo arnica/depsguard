@@ -314,8 +314,7 @@ main {
 
 /* Callout / aside box */
 .note {
-  border: 1px solid var(--border-hi);
-  border-left: 3px solid var(--arnica);
+  border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 8px;
   padding: .9rem 1.1rem;
