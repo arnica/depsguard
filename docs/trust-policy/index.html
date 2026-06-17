@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>trust-policy=no-downgrade: block provenance downgrades (pnpm)</title>
+  <meta name="description"
+    content="Set trust-policy to no-downgrade in pnpm to block package provenance downgrades. What it protects against and how to enable it.">
+  <link rel="canonical" href="https://depsguard.com/trust-policy/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://depsguard.com/trust-policy/">
+  <meta property="og:title" content="Block provenance downgrades (trust-policy)">
+  <meta property="og:description"
+    content="Set trust-policy to no-downgrade in pnpm to block package provenance downgrades. What it protects against and how to enable it.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Block provenance downgrades (trust-policy)">
+  <meta name="twitter:description"
+    content="Set trust-policy to no-downgrade in pnpm to block package provenance downgrades. What it protects against and how to enable it.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="/img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="/img/favicon/favicon.svg">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Block provenance downgrades (trust-policy)",
+    "description": "Set trust-policy to no-downgrade in pnpm to block package provenance downgrades. What it protects against and how to enable it.",
+    "about": "Software supply chain security",
+    "url": "https://depsguard.com/trust-policy/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="grid-bg">
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="/" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <article class="doc">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span class="sep">/</span> <a href="/guide/">Guide</a> <span class="sep">/</span>
+          <span>Trust policy</span>
+        </nav>
+
+        <h1>Block provenance downgrades (trust-policy)</h1>
+        <p class="lede">
+          <code>trust-policy=no-downgrade</code> is a pnpm setting that refuses to install a package version whose
+          trust level is weaker than a version you have already had. Once a package has shipped with
+          <strong>provenance</strong>, pnpm will not silently accept a newer release that arrives without it.
+        </p>
+
+        <h2 id="provenance">What is provenance?</h2>
+        <p>
+          Provenance is a cryptographic attestation &mdash; for example, npm/Sigstore build provenance &mdash; that
+          proves <em>where</em> and <em>how</em> a specific package version was built: which source repository, which
+          commit, and which CI workflow produced the published artifact. It links the tarball on the registry back to a
+          verifiable build, so consumers can check that a version was not hand-assembled or tampered with after the fact.
+        </p>
+        <p>
+          The catch is that provenance is opt-in per release. A maintainer may publish several versions with provenance
+          and then ship a later (or republished) version that drops it. To a normal install, that downgrade is
+          invisible: the version still resolves and installs like any other.
+        </p>
+
+        <h2 id="what">What no-downgrade does</h2>
+        <p>
+          With <code>trust-policy=no-downgrade</code>, pnpm fails the install if a package's trust level has decreased
+          compared to earlier releases. As the
+          <a href="https://pnpm.io/settings#trustpolicy" target="_blank" rel="noopener">pnpm docs</a> put it: if a
+          package was previously published by a trusted publisher but a new version now only has provenance &mdash; or no
+          trust evidence at all &mdash; installation will fail. The check is based on publication date, not semver: a
+          version cannot be installed if any earlier-published version of the same package carried stronger trust
+          evidence.
+        </p>
+        <p>
+          Conceptually, this raises the bar on provenance. An attacker who compromises a maintainer account and tries to
+          slip in a tampered build typically cannot reproduce the original signed build pipeline, so the malicious
+          version arrives with weaker (or absent) provenance. <code>no-downgrade</code> turns that gap into a blocked
+          install rather than a quiet upgrade. It is one layer, not a complete defense &mdash; it only helps for
+          packages that established a provenance baseline in the first place.
+        </p>
+
+        <h2 id="enable">Turn it on</h2>
+        <p>
+          <code>trust-policy</code> is available in pnpm &ge; 10.21. Where the key lives depends on your pnpm version.
+        </p>
+
+        <h3>pnpm &le; 10 (rc / .npmrc)</h3>
+        <p>Add to your <code>.npmrc</code>:</p>
+        <pre><code>trust-policy=no-downgrade</code></pre>
+
+        <h3>pnpm &ge; 11 (workspace / global config)</h3>
+        <p>
+          Use <code>pnpm-workspace.yaml</code> (per project) or the global <code>config.yaml</code> with the camelCase
+          key:
+        </p>
+        <pre><code>trustPolicy: "no-downgrade"</code></pre>
+
+        <h2 id="depsguard">Let DepsGuard set it up</h2>
+        <p>
+          DepsGuard checks whether your pnpm version supports <code>trust-policy</code>, sees whether it is already
+          configured, and writes the right key in the right file &mdash; with a diff preview and a backup before any
+          change &mdash; so you do not have to track which form your pnpm version expects.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
+          <a class="btn" href="/guide/">Read the hardening guide</a>
+        </div>
+
+        <h2 id="limits">Where it fits</h2>
+        <p>
+          Treat <code>trust-policy</code> as one layer among several. It only protects packages that already ship with
+          provenance, and it says nothing about brand-new packages, typosquats, or compromises that keep provenance
+          intact. Pair it with a <a href="/cooldown/">dependency cooldown</a> so freshly published versions are delayed
+          until the community has time to react, and with
+          <a href="/ignore-scripts/">install-script blocking</a> so a malicious version cannot run code at install time
+          even if it slips through. Together these settings narrow the windows an attacker has to work with.
+        </p>
+
+        <div class="related">
+          <h2>Related</h2>
+          <ul>
+            <li><a href="/guide/">How to protect against npm supply chain attacks</a></li>
+            <li><a href="/cooldown/">Dependency cooldown (minimum release age)</a></li>
+            <li><a href="/ignore-scripts/">Block malicious install scripts with ignore-scripts</a></li>
+            <li><a href="/block-exotic-subdeps/">Block exotic transitive dependencies</a></li>
+            <li><a href="/strict-dep-builds/">Strict dependency builds</a></li>
+          </ul>
+        </div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io?utm_source=depsguard&amp;utm_medium=referral&amp;utm_campaign=community">
+            <picture>
+              <source srcset="/img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="/img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="/">Home</a>
+          <a href="/guide/">Guide</a>
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var el = document.getElementById('gh-star-count');
+      if (!el) return;
+      fetch('https://api.github.com/repos/arnica/depsguard')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.stargazers_count != null) { el.textContent = d.stargazers_count; el.classList.add('visible'); } })
+        .catch(function () { });
+    })();
+  </script>
+</body>
+
+</html>

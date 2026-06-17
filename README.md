@@ -31,6 +31,7 @@ By **[[arnica](https://arnica.io?utm_source=depsguard&utm_medium=referral&utm_ca
 - [How it works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
 - [Help & feedback](#help--feedback)
+- [Guides](#guides)
 - [See also](#see-also)
 - [License](#license)
 
@@ -298,6 +299,18 @@ src/
 - [Report a bug or request a feature](https://github.com/arnica/depsguard/issues)
 - [Report a security vulnerability](https://github.com/arnica/depsguard/security/advisories/new) (see [`SECURITY.md`](SECURITY.md))
 - Development workflow for contributors lives in [`AGENTS.md`](AGENTS.md).
+
+## Guides
+
+In-depth guides on [depsguard.com](https://depsguard.com) explain each hardening setting and the supply chain attacks they defend against:
+
+- [How to protect against npm supply chain attacks](https://depsguard.com/guide/) — the full hardening guide
+- [Dependency cooldown (minimum release age)](https://depsguard.com/cooldown/)
+- [Block install scripts with ignore-scripts](https://depsguard.com/ignore-scripts/)
+- [Block untrusted transitive dependencies (block-exotic-subdeps)](https://depsguard.com/block-exotic-subdeps/)
+- [Fail on unreviewed build scripts (strict-dep-builds)](https://depsguard.com/strict-dep-builds/)
+- [Block provenance downgrades (trust-policy)](https://depsguard.com/trust-policy/)
+- Incident write-ups: [axios](https://depsguard.com/axios-npm-attack/) · [Shai-Hulud](https://depsguard.com/shai-hulud/) · [TanStack](https://depsguard.com/tanstack-npm-attack/)
 
 ## See also
 

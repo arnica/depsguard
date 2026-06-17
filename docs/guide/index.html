@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How to protect against npm supply chain attacks</title>
+  <meta name="description"
+    content="A practical guide to hardening npm, pnpm, yarn, and bun against supply chain attacks using built-in settings: cooldowns, install-script blocking, and more.">
+  <link rel="canonical" href="https://depsguard.com/guide/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://depsguard.com/guide/">
+  <meta property="og:title" content="How to protect against npm supply chain attacks">
+  <meta property="og:description"
+    content="A practical guide to hardening npm, pnpm, yarn, and bun against supply chain attacks using built-in settings: cooldowns, install-script blocking, and more.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How to protect against npm supply chain attacks">
+  <meta name="twitter:description"
+    content="A practical guide to hardening npm, pnpm, yarn, and bun against supply chain attacks using built-in settings: cooldowns, install-script blocking, and more.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="/img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="/img/favicon/favicon.svg">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "How to protect against npm supply chain attacks",
+    "description": "A practical guide to hardening npm, pnpm, yarn, and bun against supply chain attacks using built-in settings: cooldowns, install-script blocking, and more.",
+    "about": "Software supply chain security",
+    "url": "https://depsguard.com/guide/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="grid-bg">
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="/" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <article class="doc">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span class="sep">/</span> <span>Guide</span>
+        </nav>
+
+        <h1>How to protect against npm supply chain attacks</h1>
+        <p class="lede">
+          A supply chain attack usually starts when an attacker compromises a package maintainer's account, publishes a
+          poisoned version of a trusted package, and waits for automated installs to pull it in before anyone notices.
+          Modern package managers ship built-in defenses against exactly this &mdash; cooldowns, install-script blocking,
+          provenance checks &mdash; but most of them are not turned on by default. This guide covers the settings that
+          matter and how to enable them.
+        </p>
+
+        <h2 id="pattern">The pattern</h2>
+        <p>
+          Nearly every recent npm incident follows the same shape. An attacker phishes or session-hijacks a maintainer,
+          publishes a new version of a legitimate package with a malicious <code>preinstall</code>/<code>postinstall</code>
+          script or trojaned code, and that version goes live to the public registry. From there, automated installs do
+          the spreading: CI pipelines, Dependabot/Renovate updates, and developers running a routine
+          <code>npm install</code> resolve the newest version and execute the payload &mdash; often within hours, long
+          before the release is detected and yanked. The window between publish and removal is frequently just a few
+          hours, which is also where your defenses get the most leverage.
+        </p>
+
+        <h2 id="settings">The settings that help</h2>
+        <p>
+          Each of these is a built-in package-manager setting. Click through for the exact key, file, and minimum tool
+          version per manager.
+        </p>
+        <div class="card-grid">
+          <a class="card" href="/cooldown/">
+            <div class="card-title">Dependency cooldown (minimum release age)</div>
+            <div class="card-desc">Delay brand-new versions so freshly poisoned releases are pulled before you install
+              them.</div>
+          </a>
+          <a class="card" href="/ignore-scripts/">
+            <div class="card-title">Block install scripts (ignore-scripts)</div>
+            <div class="card-desc">Stop malicious preinstall/postinstall scripts from running automatically.</div>
+          </a>
+          <a class="card" href="/block-exotic-subdeps/">
+            <div class="card-title">Block untrusted transitive deps (block-exotic-subdeps)</div>
+            <div class="card-desc">Block transitive dependencies that resolve from non-registry sources (pnpm).</div>
+          </a>
+          <a class="card" href="/strict-dep-builds/">
+            <div class="card-title">Fail on unreviewed build scripts (strict-dep-builds)</div>
+            <div class="card-desc">Make installs fail on dependency build scripts you haven't approved (pnpm).</div>
+          </a>
+          <a class="card" href="/trust-policy/">
+            <div class="card-title">Block provenance downgrades (trust-policy)</div>
+            <div class="card-desc">Refuse versions that weaken package provenance (pnpm).</div>
+          </a>
+        </div>
+
+        <h2 id="incidents">Recent incidents</h2>
+        <ul>
+          <li><a href="/axios-npm-attack/">axios</a> &ndash; a poisoned release of the widely used HTTP client, live for
+            roughly three hours (March 2026).</li>
+          <li><a href="/shai-hulud/">Shai-Hulud npm worm</a> &ndash; a self-propagating worm that compromised packages
+            and stole credentials to publish further (2025).</li>
+          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a> &ndash; malicious versions of the routing
+            packages, detected within minutes (May 2026).</li>
+        </ul>
+
+        <h2 id="depsguard">Do it automatically with DepsGuard</h2>
+        <p>
+          DepsGuard scans your installed package managers, checks whether each of these settings is enabled (and
+          supported by your tool version), and applies the right ones for you &mdash; with a diff preview and a backup
+          before any change. Instead of tracking five settings across npm, pnpm, yarn, and bun by hand, you run one
+          command and review what it proposes.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
+          <a class="btn" href="/">DepsGuard home</a>
+        </div>
+
+        <h2 id="other">Other good practices</h2>
+        <p>
+          The package-manager settings above harden installs, but they are not the whole picture. A few more habits close
+          common gaps:
+        </p>
+        <ul>
+          <li>Pin GitHub Actions by commit SHA (not a tag) so a compromised tag can't silently change what runs in CI.
+          </li>
+          <li>Use <code>npm ci</code> / <code>pnpm install --frozen-lockfile</code> / <code>yarn install --immutable</code>
+            in CI so builds install exactly what the lockfile pins.</li>
+          <li>Review Dependabot/Renovate PRs &mdash; read the changelogs, diffs, and provenance &mdash; before merging,
+            rather than auto-merging dependency bumps.</li>
+          <li>Periodically audit the dependency tree (<code>npm ls</code>, <code>pnpm why</code>) to understand what you
+            actually pull in transitively.</li>
+        </ul>
+
+        <div class="related">
+          <h2>Related</h2>
+          <ul>
+            <li><a href="/cooldown/">Dependency cooldown (minimum release age)</a></li>
+            <li><a href="/ignore-scripts/">Block install scripts (ignore-scripts)</a></li>
+            <li><a href="/block-exotic-subdeps/">Block untrusted transitive deps (block-exotic-subdeps)</a></li>
+            <li><a href="/strict-dep-builds/">Fail on unreviewed build scripts (strict-dep-builds)</a></li>
+            <li><a href="/trust-policy/">Block provenance downgrades (trust-policy)</a></li>
+            <li><a href="/axios-npm-attack/">The axios npm supply chain attack</a></li>
+            <li><a href="/shai-hulud/">Shai-Hulud npm worm</a></li>
+            <li><a href="/tanstack-npm-attack/">The TanStack npm supply chain attack</a></li>
+          </ul>
+        </div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io?utm_source=depsguard&amp;utm_medium=referral&amp;utm_campaign=community">
+            <picture>
+              <source srcset="/img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="/img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="/">Home</a>
+          <a href="/guide/">Guide</a>
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var el = document.getElementById('gh-star-count');
+      if (!el) return;
+      fetch('https://api.github.com/repos/arnica/depsguard')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.stargazers_count != null) { el.textContent = d.stargazers_count; el.classList.add('visible'); } })
+        .catch(function () { });
+    })();
+  </script>
+</body>
+
+</html>

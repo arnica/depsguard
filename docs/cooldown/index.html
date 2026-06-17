@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dependency cooldown: delay new npm, pnpm, and yarn versions (min-release-age)</title>
+  <meta name="description"
+    content="Turn on a dependency cooldown (min-release-age, minimumReleaseAge, npmMinimalAgeGate) so new package versions are delayed and compromised releases are caught before you install them.">
+  <link rel="canonical" href="https://depsguard.com/cooldown/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://depsguard.com/cooldown/">
+  <meta property="og:title" content="Dependency cooldown (minimum release age)">
+  <meta property="og:description"
+    content="Delay new npm, pnpm, and yarn versions with a cooldown so freshly published, compromised releases are caught before you install them.">
+  <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Dependency cooldown (minimum release age)">
+  <meta name="twitter:description"
+    content="Delay new npm, pnpm, and yarn versions with a cooldown so freshly published, compromised releases are caught before you install them.">
+  <meta name="twitter:image" content="https://depsguard.com/img/select.png">
+  <link rel="icon" type="image/svg+xml" href="/img/favicon/favicon.svg">
+  <link rel="apple-touch-icon" href="/img/favicon/favicon.svg">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+  <meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZRM6FFZHT6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-ZRM6FFZHT6');
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Dependency cooldown (minimum release age)",
+    "description": "How to delay new npm, pnpm, and yarn package versions with a cooldown (minimum release age) so freshly published, compromised releases are caught before you install them.",
+    "about": "Software supply chain security",
+    "url": "https://depsguard.com/cooldown/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="grid-bg">
+    <nav class="nav">
+      <div class="nav-inner">
+        <!-- prettier-ignore-start -->
+        <a href="/" aria-label="DepsGuard home" class="nav-ascii"><span aria-hidden="true">     _                                          _
+  __| | ___ _ __  ___  __ _ _   _  __ _ _ __ __| |
+ / _` |/ _ \ '_ \/ __|/ _` | | | |/ _` | '__/ _` |
+| (_| |  __/ |_) \__ \ (_| | |_| | (_| | | | (_| |
+ \__,_|\___| .__/|___/\__, |\__,_|\__,_|_|  \__,_|
+           |_|        |___/</span></a>
+        <!-- prettier-ignore-end -->
+        <div class="nav-right">
+          <a href="https://github.com/arnica/depsguard" class="gh-star-widget" title="Star arnica/depsguard on GitHub">
+            <svg class="gh-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <svg class="gh-icon gh-star-icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z" />
+            </svg>
+            Star
+            <span class="gh-star-count" id="gh-star-count"></span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <article class="doc">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span class="sep">/</span> <a href="/guide/">Guide</a> <span class="sep">/</span>
+          <span>Dependency cooldown</span>
+        </nav>
+
+        <h1>Dependency cooldown (minimum release age)</h1>
+        <p class="lede">
+          A dependency cooldown &mdash; also called a <strong>minimum release age</strong> &mdash; tells your package
+          manager to ignore brand-new package versions until they have been public for a set number of days. It is one
+          of the most effective defenses against fast-moving npm supply chain attacks.
+        </p>
+
+        <h2 id="what">What is a dependency cooldown?</h2>
+        <p>
+          When an attacker compromises a maintainer account and publishes a poisoned version of a popular package, that
+          version is usually live for only a few hours before the community, registry, or automated scanners catch it and
+          pull it. A cooldown turns that short detection window into your defense: if your package manager refuses to
+          install any version younger than, say, 7 days, the malicious release is removed long before your build would
+          ever resolve it.
+        </p>
+        <p>
+          The setting goes by different names depending on the tool &mdash; <code>min-release-age</code> (npm),
+          <code>minimumReleaseAge</code> (pnpm), and <code>npmMinimalAgeGate</code> (Yarn) &mdash; but the idea is the
+          same: delay new versions, install only what has had time to be vetted.
+        </p>
+
+        <h2 id="enable">Turn it on</h2>
+        <p>
+          The exact key, file, and minimum tool version differ per package manager. Here are the settings DepsGuard
+          recommends and can apply for you.
+        </p>
+
+        <h3>npm</h3>
+        <p>Add to your <code>.npmrc</code> (requires npm &ge; 11.10; the value is in <strong>days</strong>):</p>
+        <pre><code>min-release-age=7</code></pre>
+
+        <h3>pnpm</h3>
+        <p>
+          The value is in <strong>minutes</strong> (10080 = 7 days). Where it lives depends on your pnpm version
+          (requires pnpm &ge; 10.16):
+        </p>
+        <div class="doc-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>pnpm version</th>
+                <th>File</th>
+                <th>Setting</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>10.16 &ndash; 10.x</td>
+                <td><code>.npmrc</code></td>
+                <td><code>minimum-release-age=10080</code></td>
+              </tr>
+              <tr>
+                <td>&ge; 10.16 (project)</td>
+                <td><code>pnpm-workspace.yaml</code></td>
+                <td><code>minimumReleaseAge: 10080</code></td>
+              </tr>
+              <tr>
+                <td>&ge; 11 (global)</td>
+                <td><code>config.yaml</code></td>
+                <td><code>minimumReleaseAge: 10080</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <strong>Heads up:</strong> pnpm &ge; 11 ignores <code>.npmrc</code> for these keys &mdash; use
+          <code>pnpm-workspace.yaml</code> (per project) or the global <code>config.yaml</code> with the camelCase key.
+        </div>
+
+        <h3>Yarn</h3>
+        <p>
+          Yarn Berry exposes the cooldown as <code>npmMinimalAgeGate</code> in <code>.yarnrc.yml</code>. Yarn 4.10+
+          ships it enabled by default; older 4.x releases let you set it explicitly:
+        </p>
+        <pre><code>npmMinimalAgeGate: 7d</code></pre>
+
+        <h2 id="why">Why a cooldown works</h2>
+        <p>
+          Real supply chain incidents have been live for remarkably short windows before being yanked:
+        </p>
+        <ul>
+          <li><a href="/axios-npm-attack/">axios</a> &ndash; malicious versions live for roughly 3 hours (March 2026).</li>
+          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a> &ndash; detected within minutes, deprecated within
+            ~1.5 hours (May 2026).</li>
+          <li><code>ua-parser-js</code> &ndash; compromised for about 4 hours (October 2021).</li>
+        </ul>
+        <p>
+          A 7-day cooldown skips all of these. The asymmetry favors you: an attacker cannot easily keep a malicious
+          version live for days without sharply raising the odds of detection.
+        </p>
+
+        <h2 id="depsguard">Let DepsGuard set it up</h2>
+        <p>
+          DepsGuard detects which package managers you have installed, checks whether a cooldown is configured (and
+          whether your tool version supports it), and applies the right setting in the right file &mdash; with a diff
+          preview and a backup before any change.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
+          <a class="btn" href="/guide/">Read the hardening guide</a>
+        </div>
+
+        <h2 id="limits">Limitations</h2>
+        <p>
+          A cooldown is not a complete defense. It does not help against a compromise that goes undetected for longer
+          than your quarantine window, against typosquatting, or against attacks that do not involve publishing a new
+          version. Pair it with <a href="/ignore-scripts/">install-script blocking</a> and the other settings in the
+          <a href="/guide/">hardening guide</a>. If you must pull a fresh security patch that is still inside the
+          cooldown, add a narrow, per-package exception rather than lowering the global delay.
+        </p>
+
+        <div class="related">
+          <h2>Related</h2>
+          <ul>
+            <li><a href="/guide/">How to protect against npm supply chain attacks</a></li>
+            <li><a href="/ignore-scripts/">Block malicious install scripts with ignore-scripts</a></li>
+            <li><a href="/axios-npm-attack/">The axios npm supply chain attack</a></li>
+            <li><a href="/shai-hulud/">Shai-Hulud npm worm</a></li>
+            <li><a href="/tanstack-npm-attack/">The TanStack npm supply chain attack</a></li>
+          </ul>
+        </div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Made with care by
+          <a href="https://arnica.io?utm_source=depsguard&amp;utm_medium=referral&amp;utm_campaign=community">
+            <picture>
+              <source srcset="/img/arnica-logo.svg" media="(prefers-color-scheme: dark)"><img
+                src="/img/arnica-logo-dark.svg" alt="arnica">
+            </picture>
+          </a>
+          in Atlanta
+        </div>
+        <div class="footer-right">
+          <a href="/">Home</a>
+          <a href="/guide/">Guide</a>
+          <a href="https://github.com/arnica/depsguard">GitHub</a>
+          <a href="https://github.com/arnica/depsguard/blob/main/LICENSE">MIT License</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var el = document.getElementById('gh-star-count');
+      if (!el) return;
+      fetch('https://api.github.com/repos/arnica/depsguard')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.stargazers_count != null) { el.textContent = d.stargazers_count; el.classList.add('visible'); } })
+        .catch(function () { });
+    })();
+  </script>
+</body>
+
+</html>

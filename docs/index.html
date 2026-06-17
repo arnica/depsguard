@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DepsGuard - Supply Chain Defense</title>
+  <title>DepsGuard - Guard your dependencies against supply chain attacks</title>
   <meta name="description"
     content="Guard your dependencies against supply chain attacks. Zero dependencies. One command.">
   <!-- Open Graph -->
@@ -16,7 +16,7 @@
   <meta property="og:image" content="https://depsguard.com/img/select.png">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
+  <meta name="twitter:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
   <meta name="twitter:description"
     content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
   <meta name="twitter:image" content="https://depsguard.com/img/select.png">
@@ -1237,7 +1237,134 @@
     .faq-list .faq-body li {
       margin-bottom: .35rem;
     }
+
+    /* ── Guides grid ─────────────────── */
+    .guide-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .guide-card {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 1rem 1.1rem;
+      transition: border-color .15s, transform .15s;
+    }
+
+    .guide-card:hover {
+      border-color: var(--text-mute);
+      transform: translateY(-2px);
+    }
+
+    .guide-card .gc-title {
+      display: block;
+      font-weight: 600;
+      color: var(--text-strong);
+      margin-bottom: .25rem;
+    }
+
+    .guide-card .gc-desc {
+      color: var(--text-dim);
+      font-size: .85rem;
+      line-height: 1.5;
+    }
   </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "DepsGuard",
+    "description": "DepsGuard is a free, open-source command-line tool that scans your npm, pnpm, yarn, bun, aube, uv, pip, and poetry configuration and turns on the built-in security settings that protect against supply chain attacks, such as install-script blocking and version cooldowns.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "url": "https://depsguard.com/",
+    "downloadUrl": "https://depsguard.com/#install",
+    "softwareHelp": "https://depsguard.com/guide/",
+    "license": "https://github.com/arnica/depsguard/blob/main/LICENSE",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "Arnica",
+      "url": "https://www.arnica.io/"
+    },
+    "sameAs": [
+      "https://github.com/arnica/depsguard",
+      "https://crates.io/crates/depsguard"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is DepsGuard?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DepsGuard is a free, open-source command-line tool that scans your npm, pnpm, yarn, bun, aube, uv, pip, and poetry configuration and turns on the built-in security settings that protect against supply chain attacks, such as install-script blocking and version cooldowns. It only edits config files you approve, and writes a backup before any change."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Will this protect against all supply chain attacks?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. DepsGuard focuses on one layer: delaying the adoption of brand-new package versions and disabling risky install scripts. It does not protect against compromised packages that go undetected for weeks, typosquatting, or attacks that do not involve publishing a new version."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How would this have helped during the axios compromise?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "On March 31, 2026, a compromised maintainer account published malicious versions of axios that were live for roughly 3 hours. A 7-day minimum release age (for example min-release-age=7 in .npmrc) would have refused to download the new version during that window."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why can this protect me against future attacks?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Many supply chain attacks follow the same pattern: an attacker publishes a poisoned version and relies on automated installs pulling it in before anyone notices. A minimum release age means your package manager won't install a version that hasn't been public for at least 7 days, giving that detection window time to work."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What's the difference between this and Software Composition Analysis (SCA)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SCA tools scan your existing dependencies for known vulnerabilities after installation. DepsGuard works before installation: it configures your package manager to avoid pulling in newly published versions until they have had time to be vetted. They are complementary."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What else can I do to protect myself?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Beyond package manager config: pin GitHub Actions by commit SHA instead of a tag; use npm ci, pnpm install --frozen-lockfile, or yarn install --immutable in CI; don't auto-merge Dependabot or Renovate PRs without reviewing changelogs, diffs, and provenance; and periodically audit your dependency tree with npm ls or pnpm why."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is this free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. DepsGuard is free and open source under the MIT license. The MIT license also permits commercial use, modification, and distribution."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 
 <body>
@@ -2219,9 +2346,65 @@ scoop install depsguard</code></pre>
     </section>
 
     <!-- FAQ -->
+    <!-- Guides -->
+    <section class="section section-border scroll-mt" id="guides">
+      <h2>Guides &amp; deep dives</h2>
+      <p style="color:var(--text-dim); margin-bottom:1.5rem; line-height:1.75;">
+        Detailed explanations of each hardening setting and the supply chain attacks they defend against.
+      </p>
+      <div class="guide-grid">
+        <a class="guide-card" href="/guide/">
+          <span class="gc-title">How to protect against npm supply chain attacks</span>
+          <span class="gc-desc">The full hardening guide &ndash; every setting and incident in one place.</span>
+        </a>
+        <a class="guide-card" href="/cooldown/">
+          <span class="gc-title">Dependency cooldown</span>
+          <span class="gc-desc">Delay brand-new versions (min-release-age) so poisoned releases are pulled first.</span>
+        </a>
+        <a class="guide-card" href="/ignore-scripts/">
+          <span class="gc-title">Block install scripts</span>
+          <span class="gc-desc">Stop malicious preinstall/postinstall scripts from running automatically.</span>
+        </a>
+        <a class="guide-card" href="/block-exotic-subdeps/">
+          <span class="gc-title">Block exotic transitive deps</span>
+          <span class="gc-desc">Block transitive dependencies from non-registry sources (pnpm).</span>
+        </a>
+        <a class="guide-card" href="/strict-dep-builds/">
+          <span class="gc-title">Fail on unreviewed builds</span>
+          <span class="gc-desc">Make installs fail on dependency build scripts you haven't approved (pnpm).</span>
+        </a>
+        <a class="guide-card" href="/trust-policy/">
+          <span class="gc-title">Block provenance downgrades</span>
+          <span class="gc-desc">Refuse versions that weaken package provenance (pnpm).</span>
+        </a>
+        <a class="guide-card" href="/axios-npm-attack/">
+          <span class="gc-title">The axios npm attack</span>
+          <span class="gc-desc">March 2026: malicious axios versions live for ~3 hours, and how to prevent it.</span>
+        </a>
+        <a class="guide-card" href="/shai-hulud/">
+          <span class="gc-title">Shai-Hulud npm worm</span>
+          <span class="gc-desc">The self-replicating 2025 campaign across hundreds of packages.</span>
+        </a>
+        <a class="guide-card" href="/tanstack-npm-attack/">
+          <span class="gc-title">The TanStack npm attack</span>
+          <span class="gc-desc">May 2026: 42 Router/Start packages poisoned via CI cache poisoning.</span>
+        </a>
+      </div>
+    </section>
+
     <section class="section section-border scroll-mt" id="faq">
       <h2>FAQ</h2>
       <div class="faq-list">
+
+        <div class="faq-item">
+          <h3 class="faq-q">What is DepsGuard?</h3>
+          <div class="faq-body">
+            <p>DepsGuard is a free, open-source command-line tool that scans your npm, pnpm, yarn, bun, aube, uv, pip,
+              and poetry configuration and turns on the built-in security settings that protect against supply chain
+              attacks &ndash; such as install-script blocking and version cooldowns. It never runs installs; it only
+              edits config files you approve, and it writes a backup before any change.</p>
+          </div>
+        </div>
 
         <div class="faq-item">
           <h3 class="faq-q">Will this protect against all supply chain attacks?</h3>
@@ -2631,6 +2814,59 @@ scoop install depsguard</code></pre>
       });
       var timer = document.querySelector('.ap-timer');
       if (timer) timer.setAttribute('aria-label', 'Playback time');
+    })();
+  </script>
+  <script>
+    /* GA4 interaction events via click delegation (non-invasive; no-op if gtag is blocked) */
+    (function () {
+      function track(name, params) {
+        if (typeof window.gtag === 'function') { window.gtag('event', name, params || {}); }
+      }
+      var SHARE_METHOD = {
+        'Post on X': 'x',
+        'Share on Bluesky': 'bluesky',
+        'Share on LinkedIn': 'linkedin',
+        'Post to Hacker News': 'hacker_news'
+      };
+      function managerFromCopy(text) {
+        if (!text) return 'other';
+        if (text.indexOf('brew') > -1) return 'homebrew';
+        if (text.indexOf('winget') > -1) return 'winget';
+        if (text.indexOf('scoop') > -1) return 'scoop';
+        if (text.indexOf('cargo') > -1) return 'cargo';
+        if (text.indexOf('apt') > -1) return 'apt';
+        return 'other';
+      }
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#share-native')) {
+          var canShare = typeof navigator.share === 'function' && window.isSecureContext;
+          track('share', { method: canShare ? 'native' : 'copy_link', content_type: 'website' });
+          return;
+        }
+        var shareLink = t.closest('.nav-share a[aria-label]');
+        if (shareLink) {
+          var m = SHARE_METHOD[shareLink.getAttribute('aria-label')];
+          if (m) track('share', { method: m, content_type: 'website' });
+          return;
+        }
+        var plat = t.closest('.install-btn[data-activate-tab]');
+        if (plat) {
+          track('install_select', { platform: plat.getAttribute('data-activate-tab') });
+          return;
+        }
+        var copy = t.closest('.install-copy-btn');
+        if (copy) {
+          var wrap = copy.closest('.install-code-wrap');
+          track('copy_install_command', { manager: managerFromCopy(wrap && wrap.getAttribute('data-copy')) });
+          return;
+        }
+        if (t.closest('.gh-star-widget')) {
+          track('outbound_click', { target: 'github_star' });
+          return;
+        }
+      }, true);
     })();
   </script>
 </body>
