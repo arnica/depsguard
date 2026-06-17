@@ -278,7 +278,6 @@ main {
 
 .doc p {
   margin: 0 0 1rem;
-  color: var(--text);
 }
 
 .doc p,
@@ -590,5 +589,22 @@ main {
   .footer-inner {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .card,
+  .btn,
+  .gh-star-widget {
+    transition: none;
+  }
+
+  .card:hover {
+    transform: none;
   }
 }

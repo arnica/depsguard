@@ -2784,18 +2784,7 @@ scoop install depsguard</code></pre>
       });
     })();
   </script>
-  <script>
-    (function () {
-      var el = document.getElementById('gh-star-count');
-      if (!el) return;
-      fetch('https://api.github.com/repos/arnica/depsguard')
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (d.stargazers_count != null) { el.textContent = d.stargazers_count; el.classList.add('visible'); }
-        })
-        .catch(function () { });
-    })();
-  </script>
+  <script src="/site.js"></script>
   <script>
     (function () {
       var host = location.hostname;
