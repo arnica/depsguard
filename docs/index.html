@@ -12,13 +12,13 @@
   <meta property="og:url" content="https://depsguard.com/">
   <meta property="og:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
   <meta property="og:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix package manager configs, dependency bot cooldowns, and Docker hardening findings. Zero dependencies. MIT.">
   <meta property="og:image" content="https://depsguard.com/img/select.png">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DepsGuard - Supply Chain Defense">
   <meta name="twitter:description"
-    content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
+    content="One command to scan and fix package manager configs, dependency bot cooldowns, and Docker hardening findings. Zero dependencies. MIT.">
   <meta name="twitter:image" content="https://depsguard.com/img/select.png">
   <link rel="icon" type="image/svg+xml" href="img/favicon/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon/favicon.svg">
@@ -1302,7 +1302,7 @@
         </h1>
         <p class="hero-desc fade-d1">
           Prevent the next npm supply chain compromise from impacting you. One command to scan and fix npm, pnpm, yarn,
-          bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.
+          bun, aube, uv, pip, and poetry configs, plus report-only Docker hardening findings. Zero dependencies. MIT.
         </p>
         <div class="plat-row fade-d2">
           <a href="#install" data-activate-tab="macos" class="plat-btn install-btn">
@@ -1477,7 +1477,8 @@ scoop install depsguard</code></pre>
       </p>
       <p style="color:var(--text-dim); margin-bottom:2.5rem; line-height:1.75;">
         Many modern package managers now ship with built-in defenses, but they&rsquo;re not always enabled by default.
-        DepsGuard checks whether those settings are enabled and helps you turn them on.
+        DepsGuard checks whether those settings are enabled, helps you turn them on, and reports Docker files that can
+        pull floating images or install packages before hardening is configured.
       </p>
 
       <h2>Supported settings</h2>
@@ -1922,6 +1923,27 @@ scoop install depsguard</code></pre>
                     <line x1="10" y1="14" x2="21" y2="3" />
                   </svg></a></td>
             </tr>
+            <tr>
+              <td class="mgr-name">🐳 Docker</td>
+              <td><code>Dockerfile</code>, <code>Dockerfile.*</code></td>
+              <td><code>FROM</code> image references</td>
+              <td>Flag <code>latest</code> and missing tags; warn when versioned images are not digest-pinned</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td class="mgr-name">🐳 Docker</td>
+              <td><code>docker-compose.yml</code>, <code>compose.yaml</code></td>
+              <td><code>image:</code> references</td>
+              <td>Flag <code>latest</code> and missing tags; warn when service images are not digest-pinned</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td class="mgr-name">🐳 Docker</td>
+              <td><code>Dockerfile</code>, <code>Dockerfile.*</code></td>
+              <td>package-manager installs</td>
+              <td>Report npm, pnpm, pip, uv, and poetry installs that run before matching hardening config</td>
+              <td></td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -2062,6 +2084,40 @@ scoop install depsguard</code></pre>
           <sup>*</sup> When <code>$XDG_CONFIG_HOME</code> is set, DepsGuard prefers the XDG path. For bun, each existing config file is scanned independently. For pip, uv, and poetry, it resolves a single effective config &mdash; pip/poetry use the highest-precedence file that sets the value, and uv reads the XDG file in place of <code>~/.config</code> (it does not merge both).
           If no config exists, the XDG path is used as the default for new fixes.
         </p>
+        </div>
+      </div>
+
+      <div class="user-config-block">
+        <h3 class="user-config-heading">Repo-level config locations</h3>
+        <div class="install-card" style="text-align:left;">
+          <table class="checks-table user-config-table">
+            <thead>
+              <tr>
+                <th>Manager</th>
+                <th>Files searched from current directory</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mgr-name">🐳 Docker</td>
+                <td><code>Dockerfile</code>, <code>Dockerfile.*</code>, <code>docker-compose.yml</code>,
+                  <code>docker-compose.yaml</code>, <code>compose.yml</code>, <code>compose.yaml</code></td>
+              </tr>
+              <tr>
+                <td class="mgr-name">Renovate</td>
+                <td><code>renovate.json</code>, <code>renovate.json5</code>, <code>.renovaterc</code>,
+                  <code>.renovaterc.json</code>, <code>.renovaterc.json5</code></td>
+              </tr>
+              <tr>
+                <td class="mgr-name">Dependabot</td>
+                <td><code>.github/dependabot.yml</code>, <code>.github/dependabot.yaml</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin:.65rem .85rem .65rem; color:var(--text-mute); font-size:.75rem; line-height:1.55;">
+            Docker findings are report-only: DepsGuard reports floating images and package-manager installs that run
+            before hardening config, but it does not rewrite Dockerfiles or Compose files.
+          </p>
         </div>
       </div>
     </section>
@@ -2350,7 +2406,7 @@ scoop install depsguard</code></pre>
         &ndash; a reference guide and companion shell helper (<code style="color:var(--text-dim)">cooldowns.sh</code>)
         focused specifically on minimum-release-age cooldowns. It complements DepsGuard: cooldowns.dev covers a
         broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard
-        covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate and Dependabot and adds other hardening settings
+        covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate, Dependabot, report-only Docker checks, and other hardening settings
         (<code style="color:var(--text-dim)">ignore-scripts</code>,
         <code style="color:var(--text-dim)">block-exotic-subdeps</code>,
         <code style="color:var(--text-dim)">trust-policy</code>,

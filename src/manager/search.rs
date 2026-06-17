@@ -83,9 +83,15 @@ pub(super) fn classify_file(name: &str, parent: &Path, home: &Path) -> Option<Re
                 None
             }
         }
+        "docker-compose.yml" | "docker-compose.yaml" | "compose.yml" | "compose.yaml" => {
+            Some(RepoConfigKind::DockerCompose)
+        }
+        "Dockerfile" => Some(RepoConfigKind::Dockerfile),
         _ => {
             if RENOVATE_FILENAMES.contains(&name) {
                 Some(RepoConfigKind::Renovate)
+            } else if name.starts_with("Dockerfile.") {
+                Some(RepoConfigKind::Dockerfile)
             } else {
                 None
             }

@@ -249,7 +249,14 @@ fn run_interactive() -> io::Result<()> {
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            if has_unsupported_recommendations(&managers) {
+            if has_needs_fix(&managers) {
+                writeln!(
+                    out,
+                    "  {}Some findings need manual changes — see the notes above.{}",
+                    term::BOLD,
+                    term::RESET
+                )?;
+            } else if has_unsupported_recommendations(&managers) {
                 writeln!(
                     out,
                     "  {}Some checks can't be auto-fixed here — see the notes above.{}",
@@ -727,7 +734,7 @@ mod tests {
     #[test]
     fn apply_selected_applies_selected() {
         let path = std::env::temp_dir().join(format!("depsguard_main_test_{}", std::process::id()));
-        std::fs::write(&path, "").unwrap();
+        let _ = std::fs::remove_file(&path);
 
         let managers = vec![ManagerInfo {
             kind: ManagerKind::Npm,
@@ -751,7 +758,7 @@ mod tests {
         }];
         let results = apply_selected(&items, &managers);
         assert_eq!(results.len(), 1);
-        assert!(results[0].1.is_ok());
+        assert!(results[0].1.is_ok(), "{:?}", results[0].1);
         // Clean up: remove original and any .bak files
         let _ = std::fs::remove_file(&path);
         if let Some(parent) = path.parent() {
