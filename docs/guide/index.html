@@ -93,8 +93,8 @@
         <p class="lede">
           A supply chain attack usually starts when an attacker compromises a package maintainer's account, publishes a
           poisoned version of a trusted package, and waits for automated installs to pull it in before anyone notices.
-          Modern package managers ship built-in defenses against exactly this &mdash; cooldowns, install-script blocking,
-          provenance checks &mdash; but most of them are not turned on by default. This guide covers the settings that
+          Modern package managers ship built-in defenses against exactly this: cooldowns, install-script blocking,
+          and provenance checks. Most of them are not turned on by default. This guide covers the settings that
           matter and how to enable them.
         </p>
 
@@ -104,9 +104,9 @@
           publishes a new version of a legitimate package with a malicious <code>preinstall</code>/<code>postinstall</code>
           script or trojaned code, and that version goes live to the public registry. From there, automated installs do
           the spreading: CI pipelines, Dependabot/Renovate updates, and developers running a routine
-          <code>npm install</code> resolve the newest version and execute the payload &mdash; often within hours, long
+          <code>npm install</code> resolve the newest version and execute the payload, often within hours, long
           before the release is detected and yanked. The window between publish and removal is frequently just a few
-          hours, which is also where your defenses get the most leverage.
+          hours, which is also where your defenses help the most.
         </p>
 
         <h2 id="settings">The settings that help</h2>
@@ -140,18 +140,18 @@
 
         <h2 id="incidents">Recent incidents</h2>
         <ul>
-          <li><a href="/axios-npm-attack/">axios</a> &ndash; a poisoned release of the widely used HTTP client, live for
+          <li><a href="/axios-npm-attack/">axios</a>: a poisoned release of the widely used HTTP client, live for
             roughly three hours (March 2026).</li>
-          <li><a href="/shai-hulud/">Shai-Hulud npm worm</a> &ndash; a self-propagating worm that compromised packages
+          <li><a href="/shai-hulud/">Shai-Hulud npm worm</a>: a self-propagating worm that compromised packages
             and stole credentials to publish further (2025).</li>
-          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a> &ndash; malicious versions of the routing
+          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a>: malicious versions of the routing
             packages, detected within minutes (May 2026).</li>
         </ul>
 
         <h2 id="depsguard">Do it automatically with DepsGuard</h2>
         <p>
           DepsGuard scans your installed package managers, checks whether each of these settings is enabled (and
-          supported by your tool version), and applies the right ones for you &mdash; with a diff preview and a backup
+          supported by your tool version), and applies the right ones for you, with a diff preview and a backup
           before any change. Instead of tracking five settings across npm, pnpm, yarn, and bun by hand, you run one
           command and review what it proposes.
         </p>
@@ -170,7 +170,7 @@
           </li>
           <li>Use <code>npm ci</code> / <code>pnpm install --frozen-lockfile</code> / <code>yarn install --immutable</code>
             in CI so builds install exactly what the lockfile pins.</li>
-          <li>Review Dependabot/Renovate PRs &mdash; read the changelogs, diffs, and provenance &mdash; before merging,
+          <li>Review Dependabot/Renovate PRs (read the changelogs, diffs, and provenance) before merging,
             rather than auto-merging dependency bumps.</li>
           <li>Periodically audit the dependency tree (<code>npm ls</code>, <code>pnpm why</code>) to understand what you
             actually pull in transitively.</li>

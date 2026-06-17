@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
-   site.css — shared styles for DepsGuard content pages (/guide/, setting
+   site.css: shared styles for DepsGuard content pages (/guide/, setting
    and incident pages). The homepage (index.html) keeps its own inline
    styles; this file reuses the same design tokens so the pages match.
    ------------------------------------------------------------------ */

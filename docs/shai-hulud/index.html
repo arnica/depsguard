@@ -102,30 +102,30 @@
           The campaign unfolded in two main waves (with smaller copycat bursts in between).
         </p>
 
-        <h3>Wave 1 — September 2025</h3>
+        <h3>Wave 1: September 2025</h3>
         <p>
           First disclosed around September&nbsp;15,&nbsp;2025, the initial wave began with the popular
           <code>@ctrl/tinycolor</code> package and grew to hundreds of packages (roughly 500 by several trackers). Once a
-          package was installed, the payload &mdash; triggered by a <code>postinstall</code> lifecycle script &mdash; ran
+          package was installed, the payload, triggered by a <code>postinstall</code> lifecycle script, ran
           the open-source secret scanner TruffleHog across the machine and CI environment to harvest npm tokens, GitHub
           personal access tokens, and cloud credentials. It exfiltrated what it found by creating a <em>public</em>
           GitHub repository on the victim's account and committing the stolen data, and it planted a malicious GitHub
           Actions workflow for persistence. Crucially, it then used stolen npm tokens to enumerate and republish
-          trojanized versions of the victim's other packages &mdash; the self-propagating "worm" loop.
+          trojanized versions of the victim's other packages: the self-propagating "worm" loop.
         </p>
 
-        <h3>Wave 2 — "The Second Coming," November 2025</h3>
+        <h3>Wave 2: "The Second Coming," November 2025</h3>
         <p>
-          A second, larger wave ran from roughly November&nbsp;21&ndash;24,&nbsp;2025, affecting on the order of 800
+          A second, larger wave ran from roughly November&nbsp;21 to 24,&nbsp;2025, affecting on the order of 800
           packages. It shifted execution from <code>postinstall</code> to <code>preinstall</code>, so the payload ran
           even earlier in <code>npm install</code>. It bundled the Bun runtime and a TruffleHog binary, registered
-          infected machines as self-hosted GitHub Actions runners for persistence, and &mdash; if it could not
-          exfiltrate or spread &mdash; attempted a destructive fallback that wiped the user's home directory.
+          infected machines as self-hosted GitHub Actions runners for persistence, and, if it could not
+          exfiltrate or spread, attempted a destructive fallback that wiped the user's home directory.
         </p>
 
         <div class="note">
-          <strong>Not the same as the chalk/debug incident.</strong> A separate September&nbsp;2025 npm attack &mdash;
-          the "Qix" phishing compromise of <code>chalk</code>, <code>debug</code>, and related packages &mdash; delivered
+          <strong>Not the same as the chalk/debug incident.</strong> A separate September&nbsp;2025 npm attack,
+          the "Qix" phishing compromise of <code>chalk</code>, <code>debug</code>, and related packages, delivered
           a crypto-clipper that swapped wallet addresses. It is frequently mentioned alongside Shai-Hulud because both
           hit npm the same month, but it is a different attack with different behavior.
         </div>
@@ -134,7 +134,7 @@
         <ul>
           <li>
             <strong><a href="/ignore-scripts/">Blocking install scripts</a> (ignore-scripts).</strong> Shai-Hulud's
-            entire execution depended on npm lifecycle scripts firing automatically during install &mdash;
+            entire execution depended on npm lifecycle scripts firing automatically during install:
             <code>postinstall</code> in Wave 1, <code>preinstall</code> in Wave 2. With install scripts blocked (or
             gated behind an approval allowlist), a malicious package lands as inert files in <code>node_modules</code> and
             the payload never runs: no secret scanning, no exfiltration, no re-publishing.
@@ -159,7 +159,7 @@
         <h2 id="harden">Harden your setup</h2>
         <p>
           DepsGuard checks whether install-script blocking, a cooldown, and the other built-in defenses are enabled for
-          the package managers you have installed, and turns on the missing ones &mdash; with a diff preview and a backup
+          the package managers you have installed, and turns on the missing ones, with a diff preview and a backup
           before any change.
         </p>
         <div class="cta-row">
@@ -170,15 +170,15 @@
         <h2 id="sources">Sources</h2>
         <ul>
           <li><a href="https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem"
-              target="_blank" rel="noopener">CISA &ndash; Widespread Supply Chain Compromise Impacting the npm Ecosystem (Sept 2025)</a></li>
+              target="_blank" rel="noopener">CISA: Widespread Supply Chain Compromise Impacting the npm Ecosystem (Sept 2025)</a></li>
           <li><a href="https://socket.dev/blog/tinycolor-supply-chain-attack-affects-40-packages" target="_blank"
-              rel="noopener">Socket &ndash; @ctrl/tinycolor supply chain attack (Sept 2025)</a></li>
+              rel="noopener">Socket: @ctrl/tinycolor supply chain attack (Sept 2025)</a></li>
           <li><a href="https://unit42.paloaltonetworks.com/npm-supply-chain-attack/" target="_blank" rel="noopener">Palo
-              Alto Unit&nbsp;42 &ndash; npm supply chain attack analysis</a></li>
+              Alto Unit&nbsp;42: npm supply chain attack analysis</a></li>
           <li><a href="https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/" target="_blank"
-              rel="noopener">Datadog Security Labs &ndash; Shai-Hulud 2.0 deep dive (Nov 2025)</a></li>
+              rel="noopener">Datadog Security Labs: Shai-Hulud 2.0 deep dive (Nov 2025)</a></li>
           <li><a href="https://thehackernews.com/2025/11/second-sha1-hulud-wave-affects-25000.html" target="_blank"
-              rel="noopener">The Hacker News &ndash; Second wave affects 25,000+ repositories (Nov 2025)</a></li>
+              rel="noopener">The Hacker News: Second wave affects 25,000+ repositories (Nov 2025)</a></li>
         </ul>
 
         <div class="related">

@@ -101,15 +101,15 @@
 
         <div class="note">
           <strong>Scope:</strong> only the Router/Start monorepo was hit. TanStack <strong>Query, Table, Form, Virtual,
-          and Store were not affected</strong> &mdash; despite some early reports, those packages were confirmed clean.
+          and Store were not affected</strong>. Despite some early reports, those packages were confirmed clean.
         </div>
 
         <h2 id="what">What happened</h2>
         <p>
-          Unusually, this was not a stolen npm token, phishing, or a typosquat &mdash; it was a chained attack on
+          Unusually, this was not a stolen npm token, phishing, or a typosquat. It was a chained attack on
           TanStack's own GitHub Actions CI/CD. An attacker abused a <code>pull_request_target</code> workflow that ran
-          untrusted fork code, poisoned the project's Actions cache across the fork/base trust boundary, and &mdash; when
-          a legitimate maintainer merge later triggered the release workflow &mdash; extracted the npm trusted-publisher
+          untrusted fork code, poisoned the project's Actions cache across the fork/base trust boundary, and, when
+          a legitimate maintainer merge later triggered the release workflow, extracted the npm trusted-publisher
           (OIDC) token from the runner's memory and published the malicious versions directly to the registry. Because
           publishing used the project's legitimate publisher identity, the bad versions even carried valid provenance
           attestations.
@@ -124,7 +124,7 @@
 
         <h2 id="response">Detection and response</h2>
         <p>
-          Automated scanners (StepSecurity, Socket) flagged the packages within minutes of publication &mdash; a tarball
+          Automated scanners (StepSecurity, Socket) flagged the packages within minutes of publication: a tarball
           roughly 3.7&times; its normal size and an unexpected file at the package root were the tells. TanStack
           deprecated all 84 versions within about an hour and a half, and npm removed the tarballs registry-side within a
           few hours. If you installed any affected <code>@tanstack/*</code> Router/Start version on May&nbsp;11, rotate
@@ -134,7 +134,7 @@
         <h2 id="prevent">The settings that reduce exposure</h2>
         <ul>
           <li>
-            <strong><a href="/cooldown/">Dependency cooldown</a> (minimum release age) &mdash; the control that would
+            <strong><a href="/cooldown/">Dependency cooldown</a> (minimum release age), the control that would
             have stopped this.</strong> The malicious versions were detected and pulled within minutes to hours. Any
             cooldown that holds back brand-new versions for a few days would have served only the known-good prior
             releases during the dangerous window, so a cooldown-protected install would never have resolved the poisoned
@@ -142,7 +142,7 @@
           </li>
           <li>
             <strong><a href="/block-exotic-subdeps/">Blocking exotic transitive deps</a> (block-exotic-subdeps, pnpm).</strong>
-            The payload was wired in through a transitive dependency pointing at a non-registry git source &mdash;
+            The payload was wired in through a transitive dependency pointing at a non-registry git source,
             exactly the class of dependency this pnpm setting restricts.
           </li>
         </ul>
@@ -150,15 +150,15 @@
           <strong>An honest caveat about install-script blocking.</strong> Because the payload ran via a
           <code>prepare</code> hook on a git-URL dependency (rather than a classic <code>postinstall</code> on the
           published package), a plain <a href="/ignore-scripts/">ignore-scripts</a> setting would <em>not</em> have
-          fully prevented this particular infection. It remains worthwhile defense-in-depth &mdash; and for the other
-          packages in the same broader campaign that used a classic <code>preinstall</code> hook, it would have helped
-          &mdash; but here the decisive control is the cooldown.
+          fully prevented this particular infection. It remains worthwhile defense-in-depth, and for the other
+          packages in the same broader campaign that used a classic <code>preinstall</code> hook, it would have helped,
+          but here the decisive control is the cooldown.
         </div>
 
         <h2 id="harden">Harden your setup</h2>
         <p>
           DepsGuard checks whether a cooldown and the other built-in defenses are enabled for the package managers you
-          have installed, and turns on the missing ones &mdash; with a diff preview and a backup before any change.
+          have installed, and turns on the missing ones, with a diff preview and a backup before any change.
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="/#install">Install DepsGuard</a>
@@ -168,15 +168,15 @@
         <h2 id="sources">Sources</h2>
         <ul>
           <li><a href="https://tanstack.com/blog/npm-supply-chain-compromise-postmortem" target="_blank"
-              rel="noopener">TanStack &ndash; official postmortem</a></li>
+              rel="noopener">TanStack: official postmortem</a></li>
           <li><a href="https://github.com/TanStack/router/security/advisories/GHSA-g7cv-rxg3-hmpx" target="_blank"
               rel="noopener">GitHub Security Advisory GHSA-g7cv-rxg3-hmpx (CVE-2026-45321)</a></li>
           <li><a href="https://socket.dev/blog/tanstack-npm-packages-compromised-mini-shai-hulud-supply-chain-attack"
-              target="_blank" rel="noopener">Socket &ndash; TanStack packages compromised</a></li>
+              target="_blank" rel="noopener">Socket: TanStack packages compromised</a></li>
           <li><a href="https://www.stepsecurity.io/blog/mini-shai-hulud-is-back-a-self-spreading-supply-chain-attack-hits-the-npm-ecosystem"
-              target="_blank" rel="noopener">StepSecurity &ndash; Mini Shai-Hulud analysis</a></li>
+              target="_blank" rel="noopener">StepSecurity: Mini Shai-Hulud analysis</a></li>
           <li><a href="https://www.theregister.com/cyber-crime/2026/05/12/cache-poisoning-caper-turns-tanstack-npm-packages-toxic/"
-              target="_blank" rel="noopener">The Register &ndash; cache-poisoning attack on TanStack packages</a></li>
+              target="_blank" rel="noopener">The Register: cache-poisoning attack on TanStack packages</a></li>
         </ul>
 
         <div class="related">

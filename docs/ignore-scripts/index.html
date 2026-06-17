@@ -94,12 +94,12 @@
         <p class="lede">
           npm and pnpm run lifecycle scripts automatically when you install dependencies. A poisoned package can use those
           scripts to run code the moment it lands on your machine. Turning on <code>ignore-scripts</code> disables that
-          automatic execution &mdash; one of the cheapest, highest-leverage hardening steps you can take.
+          automatic execution, one of the cheapest, highest-impact hardening steps you can take.
         </p>
 
         <h2 id="what">What ignore-scripts does</h2>
         <p>
-          During an install, npm and pnpm automatically execute the lifecycle scripts a package declares &mdash;
+          During an install, npm and pnpm automatically execute the lifecycle scripts a package declares:
           <code>preinstall</code>, <code>install</code>, <code>postinstall</code>, and for some sources
           <code>prepare</code>. These hooks exist for legitimate reasons (compiling native add-ons, downloading
           binaries), but they also hand arbitrary code execution to every dependency in your tree. A compromised package
@@ -146,7 +146,7 @@
         <p>
           Many npm worms have spread entirely through install lifecycle scripts. In the
           <a href="/shai-hulud/">Shai-Hulud campaign</a>, the payload ran from a script that fired automatically on
-          install &mdash; stealing credentials and republishing itself to other packages the victim controlled. With
+          install, stealing credentials and republishing itself to other packages the victim controlled. With
           scripts blocked, the malicious package simply sits as inert files in <code>node_modules</code>: it is
           downloaded, but the payload never executes. That breaks the attack chain at the exact point where most of
           these worms gain their first foothold.
@@ -155,7 +155,7 @@
         <h2 id="limits">Trade-offs</h2>
         <div class="note">
           <strong>Heads up:</strong> a blanket <code>ignore-scripts=true</code> breaks packages that legitimately need
-          build scripts &mdash; <code>esbuild</code>, <code>sharp</code>, <code>node-gyp</code>, and Playwright all rely
+          build scripts: <code>esbuild</code>, <code>sharp</code>, <code>node-gyp</code>, and Playwright all rely
           on install-time hooks. In practice the workable form is an allowlist or approval model: block by default,
           permit the few packages you actually trust to build.
           <br><br>
@@ -168,7 +168,7 @@
         <h2 id="depsguard">Let DepsGuard set it up</h2>
         <p>
           DepsGuard checks whether <code>ignore-scripts</code> is configured for the package managers you have installed
-          and applies it in the right file &mdash; with a diff preview and a backup before any change &mdash; so you do
+          and applies it in the right file (with a diff preview and a backup before any change), so you do
           not have to remember which key goes where.
         </p>
         <div class="cta-row">

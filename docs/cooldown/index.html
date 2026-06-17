@@ -92,7 +92,7 @@
 
         <h1>Dependency cooldown (minimum release age)</h1>
         <p class="lede">
-          A dependency cooldown &mdash; also called a <strong>minimum release age</strong> &mdash; tells your package
+          A dependency cooldown, also called a <strong>minimum release age</strong>, tells your package
           manager to ignore brand-new package versions until they have been public for a set number of days. It is one
           of the most effective defenses against fast-moving npm supply chain attacks.
         </p>
@@ -106,8 +106,8 @@
           ever resolve it.
         </p>
         <p>
-          The setting goes by different names depending on the tool &mdash; <code>min-release-age</code> (npm),
-          <code>minimumReleaseAge</code> (pnpm), and <code>npmMinimalAgeGate</code> (Yarn) &mdash; but the idea is the
+          The setting goes by different names depending on the tool: <code>min-release-age</code> (npm),
+          <code>minimumReleaseAge</code> (pnpm), and <code>npmMinimalAgeGate</code> (Yarn). The idea is the
           same: delay new versions, install only what has had time to be vetted.
         </p>
 
@@ -137,7 +137,7 @@
             </thead>
             <tbody>
               <tr>
-                <td>10.16 &ndash; 10.x</td>
+                <td>10.16 to 10.x</td>
                 <td><code>.npmrc</code></td>
                 <td><code>minimum-release-age=10080</code></td>
               </tr>
@@ -155,7 +155,7 @@
           </table>
         </div>
         <div class="note">
-          <strong>Heads up:</strong> pnpm &ge; 11 ignores <code>.npmrc</code> for these keys &mdash; use
+          <strong>Heads up:</strong> pnpm &ge; 11 ignores <code>.npmrc</code> for these keys, so use
           <code>pnpm-workspace.yaml</code> (per project) or the global <code>config.yaml</code> with the camelCase key.
         </div>
 
@@ -171,10 +171,10 @@
           Real supply chain incidents have been live for remarkably short windows before being yanked:
         </p>
         <ul>
-          <li><a href="/axios-npm-attack/">axios</a> &ndash; malicious versions live for roughly 3 hours (March 2026).</li>
-          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a> &ndash; detected within minutes, deprecated within
+          <li><a href="/axios-npm-attack/">axios</a>: malicious versions live for roughly 3 hours (March 2026).</li>
+          <li><a href="/tanstack-npm-attack/">TanStack Router/Start</a>: detected within minutes, deprecated within
             ~1.5 hours (May 2026).</li>
-          <li><code>ua-parser-js</code> &ndash; compromised for about 4 hours (October 2021).</li>
+          <li><code>ua-parser-js</code>: compromised for about 4 hours (October 2021).</li>
         </ul>
         <p>
           A 7-day cooldown skips all of these. The asymmetry favors you: an attacker cannot easily keep a malicious
@@ -184,7 +184,7 @@
         <h2 id="depsguard">Let DepsGuard set it up</h2>
         <p>
           DepsGuard detects which package managers you have installed, checks whether a cooldown is configured (and
-          whether your tool version supports it), and applies the right setting in the right file &mdash; with a diff
+          whether your tool version supports it), and applies the right setting in the right file, with a diff
           preview and a backup before any change.
         </p>
         <div class="cta-row">

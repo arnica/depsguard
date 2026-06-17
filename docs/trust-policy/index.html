@@ -99,7 +99,7 @@
 
         <h2 id="provenance">What is provenance?</h2>
         <p>
-          Provenance is a cryptographic attestation &mdash; for example, npm/Sigstore build provenance &mdash; that
+          Provenance is a cryptographic attestation, for example, npm/Sigstore build provenance, that
           proves <em>where</em> and <em>how</em> a specific package version was built: which source repository, which
           commit, and which CI workflow produced the published artifact. It links the tarball on the registry back to a
           verifiable build, so consumers can check that a version was not hand-assembled or tampered with after the fact.
@@ -115,8 +115,8 @@
           With <code>trust-policy=no-downgrade</code>, pnpm fails the install if a package's trust level has decreased
           compared to earlier releases. As the
           <a href="https://pnpm.io/settings#trustpolicy" target="_blank" rel="noopener">pnpm docs</a> put it: if a
-          package was previously published by a trusted publisher but a new version now only has provenance &mdash; or no
-          trust evidence at all &mdash; installation will fail. The check is based on publication date, not semver: a
+          package was previously published by a trusted publisher but a new version now only has provenance (or no
+          trust evidence at all), installation will fail. The check is based on publication date, not semver: a
           version cannot be installed if any earlier-published version of the same package carried stronger trust
           evidence.
         </p>
@@ -124,7 +124,7 @@
           Conceptually, this raises the bar on provenance. An attacker who compromises a maintainer account and tries to
           slip in a tampered build typically cannot reproduce the original signed build pipeline, so the malicious
           version arrives with weaker (or absent) provenance. <code>no-downgrade</code> turns that gap into a blocked
-          install rather than a quiet upgrade. It is one layer, not a complete defense &mdash; it only helps for
+          install rather than a quiet upgrade. It is one layer, not a complete defense: it only helps for
           packages that established a provenance baseline in the first place.
         </p>
 
@@ -147,8 +147,8 @@
         <h2 id="depsguard">Let DepsGuard set it up</h2>
         <p>
           DepsGuard checks whether your pnpm version supports <code>trust-policy</code>, sees whether it is already
-          configured, and writes the right key in the right file &mdash; with a diff preview and a backup before any
-          change &mdash; so you do not have to track which form your pnpm version expects.
+          configured, and writes the right key in the right file (with a diff preview and a backup before any
+          change) so you do not have to track which form your pnpm version expects.
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="/#install">Install DepsGuard</a>

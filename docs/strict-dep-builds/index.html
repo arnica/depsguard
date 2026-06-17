@@ -99,8 +99,8 @@
 
         <h2 id="what">What it does</h2>
         <p>
-          By default, pnpm does not run dependency build (lifecycle) scripts &mdash; such as <code>postinstall</code>
-          &mdash; unless they are on an approved allowlist. Without strict mode, dependencies that want to run a build
+          By default, pnpm does not run dependency build (lifecycle) scripts, such as <code>postinstall</code>,
+          unless they are on an approved allowlist. Without strict mode, dependencies that want to run a build
           script but have not been approved are simply <em>skipped</em>, often without you noticing.
         </p>
         <p>
@@ -143,7 +143,7 @@
 
         <h2 id="why">Why it matters</h2>
         <p>
-          Supply chain payloads frequently rely on build and lifecycle scripts running at install time &mdash; that is
+          Supply chain payloads frequently rely on build and lifecycle scripts running at install time. That is
           how a compromised package gets its code to execute on your machine or in CI. If an unreviewed build script is
           skipped silently, you have no signal that a dependency tried to run code; if it is allowed to run because no one
           looked, the attack succeeds.
@@ -157,7 +157,7 @@
         <h2 id="depsguard">Let DepsGuard set it up</h2>
         <p>
           DepsGuard detects your pnpm setup, checks whether <code>strict-dep-builds</code> is configured, and writes the
-          right key in the right file for your pnpm version &mdash; with a diff preview and a backup before any change, so
+          right key in the right file for your pnpm version, with a diff preview and a backup before any change, so
           you can see exactly what will be applied.
         </p>
         <div class="cta-row">

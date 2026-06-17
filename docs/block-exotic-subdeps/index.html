@@ -93,14 +93,14 @@
         <h1>Block untrusted transitive dependencies (block-exotic-subdeps)</h1>
         <p class="lede">
           <code>block-exotic-subdeps</code> is a pnpm setting that refuses transitive dependencies pulled in from
-          non-registry sources &mdash; git URLs, tarball or HTTP URLs, and local paths. A package you add yourself is
+          non-registry sources: git URLs, tarball or HTTP URLs, and local paths. A package you add yourself is
           your call; one smuggled deep into the tree from an arbitrary source is a far easier place to hide malicious
           code. This setting closes that door.
         </p>
 
         <h2 id="what">What it does</h2>
         <p>
-          When you add a direct dependency, you can point it anywhere you like &mdash; the npm registry, a git
+          When you add a direct dependency, you can point it anywhere you like: the npm registry, a git
           repository, a tarball URL, a local path. That is a deliberate choice you make and can review. The risk is
           different for <strong>transitive</strong> dependencies: packages your dependencies pull in, often several
           levels deep, that you never named and rarely inspect.
@@ -109,7 +109,7 @@
           pnpm calls a dependency that resolves from somewhere other than the npm registry an <em>exotic</em>
           dependency. Exotic sources include git repositories, direct URL links to tarballs, and local file paths. A
           direct exotic dependency is usually intentional. An <strong>exotic transitive dependency</strong> buried in
-          the tree is a common way to smuggle code in from an arbitrary, unvetted source &mdash; the registry's
+          the tree is a common way to smuggle code in from an arbitrary, unvetted source. The registry's
           publishing, versioning, and takedown controls never apply to it.
         </p>
         <p>
@@ -145,7 +145,7 @@
         <h2 id="why">Why it matters</h2>
         <p>
           In the <a href="/tanstack-npm-attack/">May 2026 TanStack incident</a>, the malicious code was wired in through
-          a git-URL <code>optionalDependency</code> &mdash; exactly the kind of non-registry transitive source this
+          a git-URL <code>optionalDependency</code>, exactly the kind of non-registry transitive source this
           setting restricts. <code>block-exotic-subdeps</code> would not have stopped every step of that attack on its
           own, but it directly narrows that class of source: a transitive dependency resolving from a git URL instead of
           the registry is precisely what it refuses to install.
@@ -159,7 +159,7 @@
         <h2 id="depsguard">Let DepsGuard set it up</h2>
         <p>
           DepsGuard detects your pnpm setup, checks whether <code>block-exotic-subdeps</code> is configured, and writes
-          the right key into the right file for your version &mdash; with a diff preview and a backup before any change,
+          the right key into the right file for your version, with a diff preview and a backup before any change,
           so you can see exactly what it does before applying it.
         </p>
         <div class="cta-row">

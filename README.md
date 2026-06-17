@@ -131,7 +131,7 @@ Requires a [Rust toolchain](https://rustup.rs/) with `cargo`.
 
 ### Package managers (when published by your vendor)
 
-If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their instructions. **Setting up or automating those channels** (Homebrew core PRs, buckets, WinGet PRs, CI secrets) is maintainer documentation — see [`AGENTS.md`](AGENTS.md) under *Release & distribution*.
+If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their instructions. **Setting up or automating those channels** (Homebrew core PRs, buckets, WinGet PRs, CI secrets) is maintainer documentation; see [`AGENTS.md`](AGENTS.md) under *Release & distribution*.
 
 #### App stores / package managers
 
@@ -196,7 +196,7 @@ depsguard --help       # CLI help
 |---------|--------|---------|--------|-----|
 | npm | `~/.npmrc` | `min-release-age` | `7` (days) | Delay brand-new releases (requires npm >= 11.10) |
 | npm/pnpm | `~/.npmrc` | `ignore-scripts` | `true` | Reduce install-script risk (npm honors this in `.npmrc`; pnpm >= 11 reads it from `pnpm-workspace.yaml` / global `config.yaml`, not `.npmrc`) |
-| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (pnpm 10.16–10.x only; pnpm >= 11 ignores `.npmrc` — use `pnpm-workspace.yaml`) |
+| pnpm | `~/.npmrc` | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (pnpm 10.16–10.x only; pnpm >= 11 ignores `.npmrc`; use `pnpm-workspace.yaml`) |
 | pnpm | global `rc` (pnpm <= 10) | `minimum-release-age` | `10080` (minutes) | Delay new versions by 7 days (requires pnpm >= 10.16) |
 | pnpm | global `rc` (pnpm <= 10) | `block-exotic-subdeps` | `true` | Block untrusted transitive deps (requires pnpm >= 10.26) |
 | pnpm | global `rc` (pnpm <= 10) | `trust-policy` | `no-downgrade` | Block provenance downgrades (requires pnpm >= 10.21) |
@@ -237,7 +237,7 @@ depsguard --help       # CLI help
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only; pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
 
 ## Urgent security fix
 
@@ -281,7 +281,7 @@ src/
   ui.rs      Banner, tables, selector
 ```
 
-- **Zero third-party crates** — intentional for a small security-adjacent tool; see `AGENTS.md` if you change that policy.
+- **Zero third-party crates**: intentional for a small security-adjacent tool; see `AGENTS.md` if you change that policy.
 - **Colors** use ANSI sequences; modern terminals on Windows (e.g. Windows Terminal) are supported.
 
 ## Troubleshooting
@@ -304,7 +304,7 @@ src/
 
 In-depth guides on [depsguard.com](https://depsguard.com) explain each hardening setting and the supply chain attacks they defend against:
 
-- [How to protect against npm supply chain attacks](https://depsguard.com/guide/) — the full hardening guide
+- [How to protect against npm supply chain attacks](https://depsguard.com/guide/) (the full hardening guide)
 - [Dependency cooldown (minimum release age)](https://depsguard.com/cooldown/)
 - [Block install scripts with ignore-scripts](https://depsguard.com/ignore-scripts/)
 - [Block untrusted transitive dependencies (block-exotic-subdeps)](https://depsguard.com/block-exotic-subdeps/)
@@ -314,9 +314,9 @@ In-depth guides on [depsguard.com](https://depsguard.com) explain each hardening
 
 ## See also
 
-- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
+- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/): a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
 
-> **Python ecosystem note:** DepsGuard scans the package managers that expose a release-age cooldown as a **persistent config setting** — `uv` (`exclude-newer`), `pip` (`uploaded-prior-to`, pip ≥ 26.1), and `poetry` (`solver.min-release-age`, poetry ≥ 2.4). `pdm` and `conda` currently offer release-age only via one-off CLI flags / unreleased proposals (nothing to scan in a config file), and `pixi`'s `exclude-newer` is project-scoped (no user-level config); these may be added later. `pipenv` and `hatch` have no cooldown setting yet.
+> **Python ecosystem note:** DepsGuard scans the package managers that expose a release-age cooldown as a **persistent config setting**: `uv` (`exclude-newer`), `pip` (`uploaded-prior-to`, pip ≥ 26.1), and `poetry` (`solver.min-release-age`, poetry ≥ 2.4). `pdm` and `conda` currently offer release-age only via one-off CLI flags / unreleased proposals (nothing to scan in a config file), and `pixi`'s `exclude-newer` is project-scoped (no user-level config); these may be added later. `pipenv` and `hatch` have no cooldown setting yet.
 
 ## License
 

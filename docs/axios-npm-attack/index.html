@@ -95,7 +95,7 @@
           On March&nbsp;31, 2026, a compromised maintainer account was used to publish malicious versions of
           <a href="https://github.com/axios/axios/issues/10636" target="_blank" rel="noopener">axios</a>, one of the most
           widely used HTTP clients on npm. The bad versions were live for roughly three hours before they were removed
-          from the registry &mdash; long enough to reach any build that resolved a fresh version in that window.
+          from the registry, long enough to reach any build that resolved a fresh version in that window.
         </p>
 
         <h2 id="what">What happened</h2>
@@ -121,7 +121,7 @@
           <li>
             <strong><a href="/cooldown/">Dependency cooldown</a> (minimum release age).</strong> If your package manager
             is told to ignore versions younger than, say, seven days, it would have refused the poisoned axios release
-            entirely &mdash; the version was pulled from the registry long before a 7-day quarantine would have let it
+            entirely. The version was pulled from the registry long before a 7-day quarantine would have let it
             through. This is the single most effective control for short-lived attacks like axios.
           </li>
           <li>
@@ -132,14 +132,14 @@
         </ul>
         <div class="note">
           A cooldown is not a cure-all: it does not help against malicious code that goes undetected for longer than the
-          quarantine window. But against fast-response incidents &mdash; where the registry, the community, or automated
-          scanners catch and remove a bad version within hours or days &mdash; it is decisive.
+          quarantine window. But against fast-response incidents, where the registry, the community, or automated
+          scanners catch and remove a bad version within hours or days, it is decisive.
         </div>
 
         <h2 id="harden">Harden your setup</h2>
         <p>
           DepsGuard checks whether a cooldown and install-script blocking are configured for the package managers you
-          actually have installed, and turns on the ones that are missing &mdash; with a diff preview and a backup before
+          actually have installed, and turns on the ones that are missing, with a diff preview and a backup before
           any change.
         </p>
         <div class="cta-row">
@@ -149,7 +149,7 @@
 
         <h2 id="sources">Source</h2>
         <p>
-          <a href="https://github.com/axios/axios/issues/10636" target="_blank" rel="noopener">axios#10636 &ndash;
+          <a href="https://github.com/axios/axios/issues/10636" target="_blank" rel="noopener">axios#10636:
             compromised releases (github.com/axios/axios)</a>
         </p>
 

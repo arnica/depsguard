@@ -1676,7 +1676,7 @@ scoop install depsguard</code></pre>
               <td><code>minimum-release-age=10080</code></td>
               <td>Delay new versions by 7 days (in minutes) <span
                   style="color:var(--text-mute); font-size:.75rem;">(pnpm 10.16–10.x; pnpm &ge; 11 ignores
-                  <code>.npmrc</code> — use <code>pnpm-workspace.yaml</code>)</span></td>
+                  <code>.npmrc</code>; use <code>pnpm-workspace.yaml</code>)</span></td>
               <td><a class="doc-link" href="https://pnpm.io/settings#minimumreleaseage"
                   target="_blank" rel="noopener" title="pnpm docs"><svg viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2080,7 +2080,7 @@ scoop install depsguard</code></pre>
                     d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z" />
                 </svg> npm</td>
               <td colspan="3" style="text-align:center;"><code>~/.npmrc</code></td>
-              <td style="color:var(--text-mute);">&mdash;</td>
+              <td style="color:var(--text-mute);">n/a</td>
             </tr>
             <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
@@ -2088,7 +2088,7 @@ scoop install depsguard</code></pre>
                   <path fill="#ffb300" d="M2 2h8v8H2zm10 0h8v8h-8zm10 0h8v8h-8zm0 10h8v8h-8z" />
                 </svg> pnpm</td>
               <td colspan="3" style="text-align:center;"><code>~/.npmrc</code> <span style="color:var(--text-mute); font-size:.75rem;">(shared with npm)</span></td>
-              <td style="color:var(--text-mute);">&mdash;</td>
+              <td style="color:var(--text-mute);">n/a</td>
             </tr>
             <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 24 24">
@@ -2097,7 +2097,7 @@ scoop install depsguard</code></pre>
                     d="M3 16.5h18M12 3.5V5M5 6.5l1 1M19 6.5l-1 1" />
                 </svg> aube</td>
               <td colspan="3" style="text-align:center;"><code>~/.npmrc</code> <span style="color:var(--text-mute); font-size:.75rem;">(shared with npm)</span></td>
-              <td style="color:var(--text-mute);">&mdash;</td>
+              <td style="color:var(--text-mute);">n/a</td>
             </tr>
             <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 32 32">
@@ -2124,7 +2124,7 @@ scoop install depsguard</code></pre>
                   src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='%230288d1'%20d='M27.575%2023.967a9.9%209.9%200%200%200-3.751%201.726a22.6%2022.6%200%200%201-5.537%202.504a1.55%201.55%200%200%201-.931.52a59%2059%200%200%201-6.11.548c-1.102.008-1.777-.282-1.965-.735a1.49%201.49%200%200%201%20.82-1.965a3.6%203.6%200%200%201-.486-.359c-.163-.162-.334-.487-.385-.367c-.213.52-.324%201.794-.897%202.366c-.786.795-2.273.53-3.153.069c-.965-.513.069-1.718.069-1.718a.69.69%200%200%201-.94-.324a4.6%204.6%200%200%201-.632-2.794a5.2%205.2%200%200%201%201.674-2.76a8.84%208.84%200%200%201%20.624-4.17a9.9%209.9%200%200%201%203-3.469S7.136%2011.015%207.82%209.177c.444-1.196.623-1.187.769-1.239a3.44%203.44%200%200%200%201.375-.811a4.99%204.99%200%200%201%204.178-1.607s1.094-3.357%202.12-2.7a17.4%2017.4%200%200%201%201.452%202.735s1.213-.71%201.35-.445a10.74%2010.74%200%200%201%20.495%205.81a13.3%2013.3%200%200%201-2.46%205.127c-.129.214%201.47.889%202.477%203.683c.932%202.554.103%204.699.248%204.938c.026.043.034.06.034.06s1.068.085%203.213-1.24a8.05%208.05%200%200%201%204.05-1.52a1.026%201.026%200%200%201%20.453%202Z'/%3E%3C/svg%3E"
                   alt=""> Yarn</td>
               <td colspan="3" style="text-align:center;"><code>~/.yarnrc.yml</code></td>
-              <td style="color:var(--text-mute);">&mdash;</td>
+              <td style="color:var(--text-mute);">n/a</td>
             </tr>
             <tr>
               <td class="mgr-name"><svg class="mgr-icon" viewBox="0 0 256 225">
@@ -2191,7 +2191,7 @@ scoop install depsguard</code></pre>
           </tbody>
         </table>
         <p style="margin:.65rem .85rem .65rem; color:var(--text-mute); font-size:.75rem; line-height:1.55;">
-          <sup>*</sup> When <code>$XDG_CONFIG_HOME</code> is set, DepsGuard prefers the XDG path. For bun, each existing config file is scanned independently. For pip, uv, and poetry, it resolves a single effective config &mdash; pip/poetry use the highest-precedence file that sets the value, and uv reads the XDG file in place of <code>~/.config</code> (it does not merge both).
+          <sup>*</sup> When <code>$XDG_CONFIG_HOME</code> is set, DepsGuard prefers the XDG path. For bun, each existing config file is scanned independently. For pip, uv, and poetry, it resolves a single effective config: pip/poetry use the highest-precedence file that sets the value, and uv reads the XDG file in place of <code>~/.config</code> (it does not merge both).
           If no config exists, the XDG path is used as the default for new fixes.
         </p>
         </div>
@@ -2360,7 +2360,7 @@ scoop install depsguard</code></pre>
       <div class="guide-grid">
         <a class="guide-card" href="/guide/">
           <span class="gc-title">How to protect against npm supply chain attacks</span>
-          <span class="gc-desc">The full hardening guide &ndash; every setting and incident in one place.</span>
+          <span class="gc-desc">The full hardening guide: every setting and incident in one place.</span>
         </a>
         <a class="guide-card" href="/cooldown/">
           <span class="gc-title">Dependency cooldown</span>
@@ -2406,7 +2406,7 @@ scoop install depsguard</code></pre>
           <div class="faq-body">
             <p>DepsGuard is a free, open-source command-line tool that scans your npm, pnpm, yarn, bun, aube, uv, pip,
               and poetry configuration and turns on the built-in security settings that protect against supply chain
-              attacks &ndash; such as install-script blocking and version cooldowns. It never runs installs; it only
+              attacks, such as install-script blocking and version cooldowns. It never runs installs; it only
               edits config files you approve, and it writes a backup before any change.</p>
           </div>
         </div>
