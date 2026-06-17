@@ -440,6 +440,7 @@ fn toggle_label(kind: crate::manager::ManagerKind) -> &'static str {
         ManagerKind::Pip => "pip.conf",
         ManagerKind::Poetry => "poetry",
         ManagerKind::Yarn => ".yarnrc.yml",
+        ManagerKind::Bundler => "bundler",
         ManagerKind::Renovate => "renovate",
         ManagerKind::Dependabot => "dependabot",
     }

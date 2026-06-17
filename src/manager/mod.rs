@@ -6,6 +6,7 @@
 
 pub mod aube;
 pub mod bun;
+pub mod bundler;
 pub mod config;
 pub mod date;
 pub mod dependabot;
@@ -157,6 +158,7 @@ fn scan_kind(kind: ManagerKind, path: &std::path::Path, version: &str) -> Vec<Re
         ManagerKind::Poetry => poetry::scan(path, version),
         ManagerKind::Aube => aube::scan(path),
         ManagerKind::Yarn => yarn::scan(path, version),
+        ManagerKind::Bundler => bundler::scan(path, version),
         ManagerKind::PnpmWorkspace | ManagerKind::Renovate | ManagerKind::Dependabot => {
             unreachable!("repo-level managers are scanned via find_repo_configs")
         }
@@ -1756,6 +1758,87 @@ mod tests {
         assert!(recs[0].status.is_ok());
     }
 
+    // ── bundler tests ───────────────────────────────────────────────
+
+    // Bundler added the `cooldown` setting (BUNDLE_COOLDOWN) in 4.0.13.
+    const BUNDLER_NEW: &str = "Bundler version 4.0.13";
+    const BUNDLER_OLD: &str = "Bundler version 4.0.12";
+
+    #[test]
+    fn scan_bundler_ok() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: \"7\"\n");
+        let recs = bundler::scan(f.path(), BUNDLER_NEW);
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_bundler_unquoted_value_ok() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: 7\n");
+        let recs = bundler::scan(f.path(), BUNDLER_NEW);
+        assert!(recs[0].status.is_ok());
+    }
+
+    #[test]
+    fn scan_bundler_too_low() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: \"1\"\n");
+        let recs = bundler::scan(f.path(), BUNDLER_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_bundler_invalid_value() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: \"banana\"\n");
+        let recs = bundler::scan(f.path(), BUNDLER_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::WrongValue(_)));
+    }
+
+    #[test]
+    fn scan_bundler_missing() {
+        let f = tmp_file("---\nBUNDLE_PATH: \"vendor\"\n");
+        let recs = bundler::scan(f.path(), BUNDLER_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::Missing));
+        assert!(recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_bundler_file_missing() {
+        let recs = bundler::scan(Path::new("/definitely/not/a/bundle/config"), BUNDLER_NEW);
+        assert!(matches!(recs[0].status, CheckStatus::FileMissing));
+    }
+
+    #[test]
+    fn scan_bundler_old_version_missing_setting_is_unsupported() {
+        // `cooldown` needs bundler >= 4.0.13; on older bundler a missing setting
+        // is informational, not an actionable fix (issue #52 invariant).
+        let f = tmp_file("");
+        let recs = bundler::scan(f.path(), BUNDLER_OLD);
+        assert!(recs[0].status.is_unsupported());
+        assert!(!recs[0].needs_fix());
+    }
+
+    #[test]
+    fn scan_bundler_old_version_configured_is_unsupported() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: \"7\"\n");
+        let recs = bundler::scan(f.path(), BUNDLER_OLD);
+        assert!(recs[0].status.is_unsupported());
+        if let CheckStatus::Unsupported(msg) = &recs[0].status {
+            assert!(
+                msg.contains("4.0.13") && msg.contains("4.0.12"),
+                "message should explain the version requirement: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundler_version_boundary_4_0_12_unsupported_4_0_13_supported() {
+        let f = tmp_file("---\nBUNDLE_COOLDOWN: \"7\"\n");
+        assert!(bundler::scan(f.path(), "4.0.12")[0].status.is_unsupported());
+        assert!(bundler::scan(f.path(), "4.0.13")[0].status.is_ok());
+        assert!(bundler::scan(f.path(), "4.1.0")[0].status.is_ok());
+        assert!(bundler::scan(f.path(), "5.0.0")[0].status.is_ok());
+    }
+
     // ── renovate tests ──────────────────────────────────────────────
 
     #[test]
@@ -2353,6 +2436,8 @@ mod tests {
             ("pip", pip::scan, "26.0", "install.uploaded-prior-to"),
             ("poetry", poetry::scan, "2.3.0", "solver.min-release-age"),
             ("yarn", yarn::scan, "4.9.0", "npmMinimalAgeGate"),
+            // bundler's gate is patch-precise: cooldown was added in 4.0.13.
+            ("bundler", bundler::scan, "4.0.12", "BUNDLE_COOLDOWN"),
             // pnpm global rc (v10) — each gated key one notch below its minimum.
             (
                 "pnpm global",

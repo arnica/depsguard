@@ -36,7 +36,7 @@ By **[[arnica](https://arnica.io?utm_source=depsguard&utm_medium=referral&utm_ca
 
 ## Overview
 
-DepsGuard looks for **npm**, **pnpm**, **yarn**, **bun**, **uv**, **pip**, **poetry**, and **aube** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It also scans for **Renovate** and **Dependabot** configs in your repos. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
+DepsGuard looks for **npm**, **pnpm**, **yarn**, **bun**, **uv**, **pip**, **poetry**, **bundler**, and **aube** on your machine, reads their config files, compares them to recommended supply-chain settings, and can **apply fixes interactively**. It also scans for **Renovate** and **Dependabot** configs in your repos. It never runs package installs; it only edits config files you approve, and it writes **backups** before any change.
 
 ### Key features
 
@@ -217,6 +217,7 @@ depsguard --help       # CLI help
 | uv | `uv.toml` | `exclude-newer` | `7 days` | Delay new publishes (requires uv >= 0.9.17) |
 | pip | `pip.conf` (`[install]`) | `uploaded-prior-to` | `P7D` (7 days) | Delay new publishes (requires pip >= 26.1) |
 | poetry | `config.toml` (`[solver]`) | `min-release-age` | `7` (days) | Delay new publishes (requires poetry >= 2.4) |
+| bundler | `~/.bundle/config` | `BUNDLE_COOLDOWN` | `7` (days) | Delay new gem versions by 7 days (requires bundler >= 4.0.13) |
 | renovate | `renovate.json` etc. | `minimumReleaseAge` | `7 days` | Delay dependency update PRs by 7 days |
 | dependabot | `.github/dependabot.yml` | `cooldown.default-days` | `7` | Delay dependency update PRs by 7 days |
 
@@ -233,10 +234,11 @@ depsguard --help       # CLI help
 | uv | `$XDG_CONFIG_HOME/uv/uv.toml` or `~/.config/uv/uv.toml` | `$XDG_CONFIG_HOME/uv/uv.toml` or `~/.config/uv/uv.toml` | `%APPDATA%\uv\uv.toml` |
 | pip | `$XDG_CONFIG_HOME/pip/pip.conf` or `~/.config/pip/pip.conf` | `~/Library/Application Support/pip/pip.conf` or `~/.config/pip/pip.conf` (or `$XDG_CONFIG_HOME/pip/pip.conf` when set) | `%APPDATA%\pip\pip.ini` |
 | poetry | `$XDG_CONFIG_HOME/pypoetry/config.toml` or `~/.config/pypoetry/config.toml` | `$XDG_CONFIG_HOME/pypoetry/config.toml` (when set) or `~/Library/Application Support/pypoetry/config.toml` | `%APPDATA%\pypoetry\config.toml` |
+| bundler | `~/.bundle/config` | `~/.bundle/config` | `%USERPROFILE%\.bundle\config` |
 | renovate | `renovate.json`, `.renovaterc`, `.github/renovate.json`, etc. | (same) | (same) |
 | dependabot | `.github/dependabot.yml` | (same) | (same) |
 
-User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`).
+User-level config files are read from their standard locations (including XDG-based paths where the tool supports them). Repo-level configs are discovered by searching downward from the current directory, skipping known large directories (`node_modules`, `.git`, `target`, `Library`, `.cache`, and others) so scans stay fast. Repo-level `.npmrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, Renovate configs, and Dependabot configs are all searched. pnpm settings can live in `~/.npmrc` (pnpm <= 10 only — pnpm >= 11 reads only auth/registry settings from `.npmrc`), the pnpm global config file (`rc` on pnpm <= 10, `config.yaml` on pnpm >= 11), or `pnpm-workspace.yaml`; DepsGuard checks all three locations independently. For pip, uv, and poetry, DepsGuard resolves the single effective user-level config and reports just that file, rather than flagging shadowed files separately. pip and poetry merge their config files by precedence (the highest-precedence file that sets the cooldown wins, or the preferred location if none do); uv reads a single user file (`$XDG_CONFIG_HOME/uv/uv.toml` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/uv/uv.toml`) rather than merging both. For bun, if multiple user-level config files exist (for example both an XDG path and a home-directory path), DepsGuard scans each existing file separately. aube reads the same `~/.npmrc` as npm/pnpm (`minimumReleaseAge`, in minutes) and is also checked on discovered repo-level `.npmrc` files; pip and poetry are scanned at their user-level config (`pip.conf` / `pypoetry/config.toml`). bundler is scanned at its global config (`~/.bundle/config`, the file written by `bundle config set --global cooldown 7`); the `$BUNDLE_USER_CONFIG`/`$BUNDLE_USER_HOME` overrides and per-source `cooldown:` declarations in a `Gemfile` are not scanned.
 
 ## Urgent security fix
 
@@ -254,6 +256,7 @@ Prefer a package-specific exception over lowering the global cooldown. That keep
 | uv | Add `"<pkg>" = false` to `exclude-newer-package` in `uv.toml` or `pyproject.toml`, run `uv add <pkg>==<ver>`, then remove the entry. `exclude-newer-package` is a separate per-package override of the global `exclude-newer` cutoff. uv's CLI accepts `--exclude-newer-package PACKAGE=DATE` but not `PACKAGE=false`. |
 | pip | Run `pip install <pkg>==<ver> --uploaded-prior-to=P0D` for one install. `P0D` disables the cooldown only for that command; pip has no per-package exclusion in config. |
 | poetry | Add `<pkg>` to `solver.min-release-age-exclude` (comma-separated) in `poetry.toml`/`config.toml`, run `poetry add <pkg>@<ver>`, then remove the entry. `solver.min-release-age-exclude-source` exempts every package from a named index instead. |
+| bundler | Run `bundle update <gem> --cooldown 0` (or prefix any command with `BUNDLE_COOLDOWN=0`) for one command. The CLI flag has the highest precedence and disables the cooldown for every gem in that command; Bundler has no per-gem exception. Versions already in `Gemfile.lock` are always honored as-is. |
 | Renovate | Security updates already bypass `minimumReleaseAge`. For a version update, add a `packageRules` entry with `matchPackageNames: ["<pkg>"]` and `minimumReleaseAge: null`. |
 | Dependabot | Security updates already bypass `cooldown`. For a version update, add `<pkg>` to `cooldown.exclude`. |
 
@@ -301,7 +304,7 @@ src/
 
 ## See also
 
-- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
+- [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/) — a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry/bundler plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
 
 > **Python ecosystem note:** DepsGuard scans the package managers that expose a release-age cooldown as a **persistent config setting** — `uv` (`exclude-newer`), `pip` (`uploaded-prior-to`, pip ≥ 26.1), and `poetry` (`solver.min-release-age`, poetry ≥ 2.4). `pdm` and `conda` currently offer release-age only via one-off CLI flags / unreleased proposals (nothing to scan in a config file), and `pixi`'s `exclude-newer` is project-scoped (no user-level config); these may be added later. `pipenv` and `hatch` have no cooldown setting yet.
 
