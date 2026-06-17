@@ -521,6 +521,7 @@
     .hero-left {
       position: relative;
       z-index: 1;
+      min-width: 0;
     }
 
     .hero h1 {
@@ -613,6 +614,7 @@
     .hero-right {
       position: relative;
       z-index: 1;
+      min-width: 0;
     }
 
     .terminal-wrap {
@@ -620,6 +622,7 @@
       overflow: hidden;
       box-shadow: 0 25px 60px -12px rgba(0, 0, 0, .6);
       border: 1px solid var(--border);
+      max-width: 100%;
     }
 
     .terminal-chrome {
@@ -1056,12 +1059,6 @@
         gap: .5rem;
       }
 
-      /* The nav row is tight on mobile; drop the star count pill to keep the
-         five share icons on screen */
-      .gh-star-count.visible {
-        display: none;
-      }
-
       .nav-share {
         gap: .2rem;
         padding-left: .45rem;
@@ -1118,6 +1115,14 @@
 
       .footer-right {
         gap: .75rem;
+      }
+    }
+
+    /* Hide the GitHub star count only on the narrowest phones, where it would
+       push the five share icons off-screen. At >=390px there is room for it. */
+    @media (max-width:389px) {
+      .gh-star-count.visible {
+        display: none;
       }
     }
 
