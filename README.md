@@ -316,8 +316,6 @@ In-depth guides on [depsguard.com](https://depsguard.com) explain each hardening
 
 - [**Dependency Cooldowns** (`cooldowns.dev`)](https://cooldowns.dev/): a reference guide and companion shell helper (`cooldowns.sh`) focused specifically on **minimum-release-age cooldowns**. Complements DepsGuard: it covers a broader set of ecosystems on the cooldown axis (pip, uv, npm, pnpm, Yarn, Bun, Deno, Cargo), while DepsGuard covers npm/pnpm/yarn/bun/aube/uv/pip/poetry plus Renovate/Dependabot and adds other hardening settings (`ignore-scripts`, `block-exotic-subdeps`, `trust-policy`, `strict-dep-builds`) with an interactive TUI, diff preview, and backup/restore.
 
-> **Python ecosystem note:** DepsGuard scans the package managers that expose a release-age cooldown as a **persistent config setting**: `uv` (`exclude-newer`), `pip` (`uploaded-prior-to`, pip ≥ 26.1), and `poetry` (`solver.min-release-age`, poetry ≥ 2.4). `pdm` and `conda` currently offer release-age only via one-off CLI flags / unreleased proposals (nothing to scan in a config file), and `pixi`'s `exclude-newer` is project-scoped (no user-level config); these may be added later. `pipenv` and `hatch` have no cooldown setting yet.
-
 ## License
 
 MIT

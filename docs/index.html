@@ -14,6 +14,7 @@
   <meta property="og:description"
     content="One command to scan and fix npm, pnpm, yarn, bun, aube, uv, pip, and poetry configs for security best practices. Zero dependencies. MIT.">
   <meta property="og:image" content="https://depsguard.com/img/select.png">
+  <meta property="og:site_name" content="DepsGuard">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DepsGuard - Guard your dependencies against supply chain attacks">
@@ -1298,7 +1299,8 @@
     "author": {
       "@type": "Organization",
       "name": "Arnica",
-      "url": "https://www.arnica.io/"
+      "url": "https://www.arnica.io/",
+      "logo": "https://depsguard.com/img/arnica-logo.svg"
     },
     "sameAs": [
       "https://github.com/arnica/depsguard",
@@ -1604,6 +1606,9 @@ scoop install depsguard</code></pre>
         <code style="color:var(--text-dim)">ua-parser-js</code>,
         <code style="color:var(--text-dim)">colors</code>, and
         <code style="color:var(--text-dim)">node-ipc</code>.
+        Bigger campaigns followed: the self-replicating <a href="/shai-hulud/" class="body-link">Shai-Hulud</a> worm
+        spread through hundreds of npm packages in 2025, and in May&nbsp;2026 attackers poisoned dozens of
+        <a href="/tanstack-npm-attack/" class="body-link">TanStack</a> packages through a compromised CI pipeline.
         The pattern is the same: an attacker publishes a poisoned version, and every <code
           style="color:var(--text-dim)">npm install</code> that runs before it's caught pulls it in.
       </p>
@@ -2546,19 +2551,6 @@ scoop install depsguard</code></pre>
         <code style="color:var(--text-dim)">trust-policy</code>,
         <code style="color:var(--text-dim)">strict-dep-builds</code>)
         with an interactive TUI, diff preview, and backup/restore.
-      </p>
-      <p style="color:var(--text-dim); line-height:1.75; margin-top:1rem;">
-        <strong>Python ecosystem:</strong> DepsGuard scans the package managers that expose a release-age cooldown as a
-        persistent config setting &ndash; <code style="color:var(--text-dim)">uv</code>
-        (<code style="color:var(--text-dim)">exclude-newer</code>), <code style="color:var(--text-dim)">pip</code>
-        (<code style="color:var(--text-dim)">uploaded-prior-to</code>, pip &ge; 26.1), and
-        <code style="color:var(--text-dim)">poetry</code> (<code style="color:var(--text-dim)">solver.min-release-age</code>,
-        poetry &ge; 2.4). <code style="color:var(--text-dim)">pdm</code> and <code style="color:var(--text-dim)">conda</code>
-        currently expose release-age only via one-off CLI flags / unreleased proposals, and
-        <code style="color:var(--text-dim)">pixi</code>'s <code style="color:var(--text-dim)">exclude-newer</code> is
-        project-scoped (no user-level config); these may be added later.
-        <code style="color:var(--text-dim)">pipenv</code> and <code style="color:var(--text-dim)">hatch</code> have no
-        cooldown setting yet.
       </p>
     </section>
 

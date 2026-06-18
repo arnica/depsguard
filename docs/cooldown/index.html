@@ -48,7 +48,8 @@
     "publisher": {
       "@type": "Organization",
       "name": "Arnica",
-      "url": "https://www.arnica.io/"
+      "url": "https://www.arnica.io/",
+      "logo": "https://depsguard.com/img/arnica-logo.svg"
     }
   }
   </script>
@@ -167,6 +168,15 @@
           ships it enabled by default; older 4.x releases let you set it explicitly:
         </p>
         <pre><code>npmMinimalAgeGate: 7d</code></pre>
+
+        <h3>Python</h3>
+        <p>
+          DepsGuard also scans the Python managers that expose a release-age cooldown as a persistent config setting:
+          <code>uv</code> (<code>exclude-newer</code>), <code>pip</code> (<code>uploaded-prior-to</code>, pip &ge; 26.1),
+          and <code>poetry</code> (<code>solver.min-release-age</code>, poetry &ge; 2.4). Tools like <code>pdm</code>,
+          <code>conda</code>, <code>pixi</code>, <code>pipenv</code>, and <code>hatch</code> do not expose a persistent
+          cooldown setting yet.
+        </p>
 
         <h2 id="why">Why a cooldown works</h2>
         <p>
