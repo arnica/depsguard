@@ -29,6 +29,7 @@ struct CliConfig {
     no_search: bool,
     delay_days: u64,
     exclude: Vec<String>,
+    only: Vec<String>,
 }
 
 /// Errors from argument parsing, with context for display.
@@ -60,6 +61,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         "--no-workspaces", // backward compat alias
         "--delay-days",
         "--exclude",
+        "--only",
         "--restore",
     ];
 
@@ -71,6 +73,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         no_search: false,
         delay_days: 7,
         exclude: Vec::new(),
+        only: Vec::new(),
     };
 
     let mut i = 1;
@@ -106,6 +109,42 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
                 }
                 config.exclude.push(val.to_lowercase());
             }
+            "--only" => {
+                // Consume all following non-flag tokens (greedy), and split each on
+                // commas so that all three forms are equivalent:
+                //   --only npm yarn pnpm
+                //   --only npm,yarn,pnpm
+                //   --only npm, yarn, pnpm
+                let raw_start = i + 1;
+                let mut raw_end = raw_start;
+                while raw_end < args.len() && !args[raw_end].starts_with('-') {
+                    raw_end += 1;
+                }
+                if raw_end == raw_start {
+                    return Err(CliError::BadValue(format!(
+                        "--only requires at least one manager name ({})",
+                        manager::ManagerKind::valid_names().join(", ")
+                    )));
+                }
+                for raw in &args[raw_start..raw_end] {
+                    for part in raw.split(',') {
+                        let name = part.trim().to_lowercase();
+                        if name.is_empty() {
+                            continue;
+                        }
+                        if manager::ManagerKind::from_name(&name).is_none() {
+                            return Err(CliError::BadValue(format!(
+                                "unknown manager '{}' (valid: {})",
+                                name,
+                                manager::ManagerKind::valid_names().join(", ")
+                            )));
+                        }
+                        config.only.push(name);
+                    }
+                }
+                // Advance past the consumed tokens (loop will add 1 more)
+                i = raw_end - 1;
+            }
             "--scan" | "-s" | "scan" => config.command = Command::ScanOnly,
             "--help" | "-h" => config.command = Command::Help,
             "--version" | "-V" => config.command = Command::Version,
@@ -121,6 +160,12 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
             _ => {}
         }
         i += 1;
+    }
+
+    if !config.only.is_empty() && !matches!(config.command, Command::ScanOnly) {
+        return Err(CliError::BadValue(
+            "--only is only valid with the `scan` subcommand".into(),
+        ));
     }
 
     Ok(config)
@@ -163,6 +208,9 @@ fn main() {
     if !config.exclude.is_empty() {
         manager::set_excluded_managers(config.exclude);
     }
+    if !config.only.is_empty() {
+        manager::set_only_managers(config.only);
+    }
     manager::set_delay_days(config.delay_days);
 
     match config.command {
@@ -203,6 +251,9 @@ fn print_usage_short() {
     println!(
         "    depsguard --exclude NAME   Skip a manager ({})",
         manager::ManagerKind::valid_names().join(", ")
+    );
+    println!(
+        "    depsguard scan --only NAMES  Scan only the named managers; space- or comma-separated"
     );
     println!();
 }
@@ -802,5 +853,64 @@ mod tests {
         }];
         let items = ui::build_fix_items(&managers);
         assert_eq!(items.len(), 1);
+    }
+
+    // ── parse_args --only tests ───────────────────────────────────────
+
+    fn strs(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn parse_args_only_space_separated() {
+        let cfg = parse_args(&strs(&["prog", "scan", "--only", "npm", "yarn"])).unwrap();
+        assert!(matches!(cfg.command, Command::ScanOnly));
+        assert_eq!(cfg.only, vec!["npm", "yarn"]);
+    }
+
+    #[test]
+    fn parse_args_only_comma_separated() {
+        let cfg = parse_args(&strs(&["prog", "scan", "--only", "npm,yarn,pnpm"])).unwrap();
+        assert_eq!(cfg.only, vec!["npm", "yarn", "pnpm"]);
+    }
+
+    #[test]
+    fn parse_args_only_mixed_comma_and_space() {
+        let cfg = parse_args(&strs(&["prog", "scan", "--only", "npm,", "yarn,", "pnpm"])).unwrap();
+        assert_eq!(cfg.only, vec!["npm", "yarn", "pnpm"]);
+    }
+
+    #[test]
+    fn parse_args_only_repeatable() {
+        let cfg = parse_args(&strs(&["prog", "scan", "--only", "npm", "--only", "yarn"])).unwrap();
+        assert_eq!(cfg.only, vec!["npm", "yarn"]);
+    }
+
+    #[test]
+    fn parse_args_only_unknown_name_is_error() {
+        let result = parse_args(&strs(&["prog", "scan", "--only", "notamanager"]));
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("notamanager"),
+            "expected manager name in error: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_args_only_without_scan_is_error() {
+        let result = parse_args(&strs(&["prog", "--only", "npm"]));
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("scan"),
+            "expected 'scan' in error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_args_only_requires_a_value() {
+        let result = parse_args(&strs(&["prog", "scan", "--only"]));
+        assert!(result.is_err());
     }
 }

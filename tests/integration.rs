@@ -1261,3 +1261,98 @@ fn config_with_existing_content_is_preserved() {
     assert!(content.contains("registry=https://registry.npmjs.org"));
     assert!(content.contains("always-auth=true"));
 }
+
+// ── --only tests ──────────────────────────────────────────────────────
+
+#[test]
+fn scan_only_restricts_to_named_manager() {
+    if !has_command("npm") {
+        return;
+    }
+    let home = TmpHome::new("only_npm");
+    // Run with --only npm: only npm should appear in output.
+    let out = run_depsguard(&["--scan", "--no-search", "--only", "npm"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("npm"),
+        "expected npm in --only npm output:\n{stdout}"
+    );
+    // pnpm should not appear when npm is the only requested manager.
+    assert!(
+        !stdout.contains("pnpm"),
+        "pnpm should be absent with --only npm:\n{stdout}"
+    );
+}
+
+#[test]
+fn scan_only_space_separated_multiple_managers() {
+    if !has_command("npm") {
+        return;
+    }
+    let home = TmpHome::new("only_npm_bun");
+    // Space-separated: --only npm bun
+    let out = run_depsguard(
+        &["--scan", "--no-search", "--only", "npm", "bun"],
+        home.path(),
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // npm must appear; pnpm must not
+    assert!(
+        stdout.contains("npm"),
+        "expected npm in --only npm bun output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("pnpm"),
+        "pnpm should be absent with --only npm bun:\n{stdout}"
+    );
+}
+
+#[test]
+fn scan_only_comma_separated() {
+    if !has_command("npm") {
+        return;
+    }
+    let home = TmpHome::new("only_comma");
+    // Comma-separated: --only npm,bun
+    let out = run_depsguard(&["--scan", "--no-search", "--only", "npm,bun"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("npm"),
+        "expected npm in --only npm,bun output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("pnpm"),
+        "pnpm should be absent with --only npm,bun:\n{stdout}"
+    );
+}
+
+#[test]
+fn scan_only_unknown_manager_exits_nonzero() {
+    let home = TmpHome::new("only_unknown");
+    let out = run_depsguard(&["--scan", "--only", "notamanager"], home.path());
+    assert!(
+        !out.status.success(),
+        "expected nonzero exit for unknown --only manager"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("notamanager"),
+        "expected manager name in error output:\n{stderr}"
+    );
+}
+
+#[test]
+fn only_without_scan_exits_with_error() {
+    let home = TmpHome::new("only_no_scan");
+    // --only without scan subcommand should error
+    let out = run_depsguard(&["--only", "npm"], home.path());
+    assert!(
+        !out.status.success(),
+        "expected nonzero exit when --only used without scan"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("scan"),
+        "expected 'scan' in error message:\n{stderr}"
+    );
+}

@@ -28,8 +28,8 @@ pub mod yarn;
 
 pub use date::days_to_ymd;
 pub use detect::{
-    detect_version, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
-    skip_search_enabled,
+    detect_version, is_excluded, set_delay_days, set_excluded_managers, set_only_managers,
+    set_skip_search, skip_search_enabled,
 };
 pub use paths::{config_path, display_path, home_dir};
 pub use types::{CheckStatus, ManagerInfo, ManagerKind, Recommendation, RepoConfigKind, TargetOs};

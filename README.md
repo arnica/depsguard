@@ -175,12 +175,17 @@ depsguard scan         # report only; no writes (exits 1 if action is needed)
 depsguard --no-search  # skip recursive file search, check local configs only
 depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
+
+# Scan only specific managers (space-separated, comma-separated, or mixed):
+depsguard scan --only npm
+depsguard scan --only npm yarn pnpm
+depsguard scan --only npm,yarn,pnpm
 ```
 
 ### How to use
 
 1. **Install** – pick your platform [above](#install).
-2. **Run** `depsguard` to launch the interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix selector. Repo-level config discovery starts from the current directory and searches downward. Use `depsguard scan` for a read-only report, or `depsguard --no-search` to skip the recursive file search and only check user-level configs.
+2. **Run** `depsguard` to launch the interactive TUI. It scans your system and shows a table of findings. Press any key to continue to the fix selector. Repo-level config discovery starts from the current directory and searches downward. Use `depsguard scan` for a read-only report, `depsguard --no-search` to skip the recursive file search and only check user-level configs, or `depsguard scan --only <names>` to restrict the scan to one or more specific managers (e.g. `depsguard scan --only npm pnpm`).
    > **Note:** some settings require a minimum version. If your version is too old you'll see:
    > `ℹ min-release-age – requires npm ≥ 11.10 (have 10.2.0)`.
    > Upgrade with `npm install -g npm@latest` and re-run.
