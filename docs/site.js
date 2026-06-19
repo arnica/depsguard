@@ -7,7 +7,7 @@
   if (!el) return;
 
   var KEY = 'dg-star-count';
-  var TTL = 6 * 60 * 60 * 1000; // 6 hours
+  var TTL = 10 * 60 * 1000; // 10 minutes
 
   function show(n) {
     el.textContent = n;
