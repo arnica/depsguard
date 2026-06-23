@@ -27,6 +27,7 @@ struct CliConfig {
     command: Command,
     no_color: bool,
     no_search: bool,
+    verbose: bool,
     delay_days: u64,
     exclude: Vec<String>,
 }
@@ -58,6 +59,8 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         "--no-color",
         "--no-search",
         "--no-workspaces", // backward compat alias
+        "--verbose",
+        "-v",
         "--delay-days",
         "--exclude",
         "--restore",
@@ -69,6 +72,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         command: Command::Interactive,
         no_color: false,
         no_search: false,
+        verbose: false,
         delay_days: 7,
         exclude: Vec::new(),
     };
@@ -79,6 +83,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         match arg {
             "--no-color" => config.no_color = true,
             "--no-search" | "--no-workspaces" => config.no_search = true,
+            "--verbose" | "-v" => config.verbose = true,
             "--delay-days" => {
                 i += 1;
                 let val = args
@@ -167,7 +172,7 @@ fn main() {
 
     match config.command {
         Command::ScanOnly => {
-            if run_scan_only() == ScanOutcome::NeedsFix {
+            if run_scan_only(config.verbose) == ScanOutcome::NeedsFix {
                 std::process::exit(1);
             }
         }
@@ -175,7 +180,7 @@ fn main() {
         Command::Version => println!("depsguard {}", env!("CARGO_PKG_VERSION")),
         Command::Restore => run_restore(),
         Command::Interactive => {
-            if let Err(e) = run_interactive() {
+            if let Err(e) = run_interactive(config.verbose) {
                 print_error(&e.to_string());
                 std::process::exit(1);
             }
@@ -199,6 +204,7 @@ fn print_usage_short() {
     println!("    depsguard --version        Show version");
     println!("    depsguard --no-color       Disable colored output");
     println!("    depsguard --no-search      Skip repo config file discovery");
+    println!("    depsguard --verbose        Show per-setting scan details");
     println!("    depsguard --delay-days N   Set release delay (default: 7)");
     println!(
         "    depsguard --exclude NAME   Skip a manager ({})",
@@ -217,14 +223,19 @@ enum ScanOutcome {
 }
 
 /// Run the non-interactive scan-only mode (`depsguard scan`).
-fn run_scan_only() -> ScanOutcome {
+fn run_scan_only(verbose: bool) -> ScanOutcome {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
     let _ = ui::print_banner(&mut out);
     let managers = manager::scan_all_with_progress(progress_callback);
     let _ = ui::clear_progress(&mut out);
     let _ = writeln!(out);
-    let _ = ui::print_scan_results(&mut out, &managers);
+    let mode = if verbose {
+        ui::ScanDisplay::Verbose
+    } else {
+        ui::ScanDisplay::Compact
+    };
+    let _ = ui::print_scan_results(&mut out, &managers, mode);
 
     if has_needs_fix(&managers) {
         ScanOutcome::NeedsFix
@@ -234,9 +245,14 @@ fn run_scan_only() -> ScanOutcome {
 }
 
 /// Run the interactive TUI: scan → review → select fixes → apply.
-fn run_interactive() -> io::Result<()> {
+fn run_interactive(verbose: bool) -> io::Result<()> {
     let stdout = io::stdout();
     let mut out = term::ColorWriter::new(stdout.lock());
+    let mode = if verbose {
+        ui::ScanDisplay::Verbose
+    } else {
+        ui::ScanDisplay::Compact
+    };
 
     loop {
         // Phase 1 — Scan results are printed to the normal screen so the
@@ -245,7 +261,7 @@ fn run_interactive() -> io::Result<()> {
         let managers = manager::scan_all_with_progress(progress_callback);
         ui::clear_progress(&mut out)?;
         writeln!(out)?;
-        ui::print_scan_results(&mut out, &managers)?;
+        ui::print_scan_results(&mut out, &managers, mode)?;
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
@@ -782,6 +798,23 @@ mod tests {
             discovered: false,
         }];
         assert!(!has_needs_fix(&managers));
+    }
+
+    #[test]
+    fn parse_args_accepts_verbose_flags() {
+        let args = vec![
+            "depsguard".to_string(),
+            "scan".to_string(),
+            "-v".to_string(),
+        ];
+        let config = parse_args(&args).unwrap();
+        assert!(matches!(config.command, Command::ScanOnly));
+        assert!(config.verbose);
+
+        let args = vec!["depsguard".to_string(), "--verbose".to_string()];
+        let config = parse_args(&args).unwrap();
+        assert!(matches!(config.command, Command::Interactive));
+        assert!(config.verbose);
     }
 
     #[test]
