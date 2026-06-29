@@ -727,7 +727,7 @@ mod tests {
     #[test]
     fn apply_selected_applies_selected() {
         let path = std::env::temp_dir().join(format!("depsguard_main_test_{}", std::process::id()));
-        std::fs::write(&path, "").unwrap();
+        let _ = std::fs::remove_file(&path);
 
         let managers = vec![ManagerInfo {
             kind: ManagerKind::Npm,
@@ -751,7 +751,7 @@ mod tests {
         }];
         let results = apply_selected(&items, &managers);
         assert_eq!(results.len(), 1);
-        assert!(results[0].1.is_ok());
+        assert!(results[0].1.is_ok(), "{:?}", results[0].1);
         // Clean up: remove original and any .bak files
         let _ = std::fs::remove_file(&path);
         if let Some(parent) = path.parent() {

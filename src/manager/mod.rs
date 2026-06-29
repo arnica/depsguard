@@ -2175,6 +2175,15 @@ mod tests {
         );
     }
 
+    #[test]
+    fn read_yaml_value_uses_last_duplicate_key() {
+        let f = tmp_file("ignoreScripts: true\nignoreScripts: false\n");
+        assert_eq!(
+            read_yaml_value(f.path(), "ignoreScripts"),
+            Some("false".into())
+        );
+    }
+
     // ── pnpm-workspace scanning tests ───────────────────────────────
 
     #[test]
@@ -2494,6 +2503,15 @@ mod tests {
         let f = tmp_file("{\n  \"note\": \"minimumReleaseAge is important\"\n}\n");
         let val = read_json_string_value(f.path(), "minimumReleaseAge");
         assert_eq!(val, None);
+    }
+
+    #[test]
+    fn read_json_uses_last_duplicate_key() {
+        let f = tmp_file(
+            "{\n  \"minimumReleaseAge\": \"7 days\",\n  \"minimumReleaseAge\": \"0 days\"\n}\n",
+        );
+        let val = read_json_string_value(f.path(), "minimumReleaseAge");
+        assert_eq!(val, Some("0 days".into()));
     }
 
     // ── dependabot entries tests ────────────────────────────────────

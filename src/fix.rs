@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::manager::{self, ManagerKind, Recommendation};
@@ -97,6 +97,66 @@ fn hex_val(b: u8) -> Option<u8> {
     }
 }
 
+fn restore_path_is_within_home(path: &Path) -> bool {
+    restore_path_is_within_home_for(path, &manager::home_dir())
+}
+
+fn restore_path_is_within_home_for(path: &Path, home: &Path) -> bool {
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return false;
+    }
+    path.starts_with(home)
+}
+
+fn nearest_existing_ancestor(path: &Path) -> Option<PathBuf> {
+    let mut current = Some(path);
+    while let Some(candidate) = current {
+        if candidate.exists() {
+            return Some(candidate.to_path_buf());
+        }
+        current = candidate.parent();
+    }
+    None
+}
+
+fn validate_restore_destination(original: &Path) -> io::Result<()> {
+    if !restore_path_is_within_home(original) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "restore target is outside the home directory",
+        ));
+    }
+
+    if fs::symlink_metadata(original)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "restore target is a symlink",
+        ));
+    }
+
+    let home = manager::home_dir();
+    if let (Ok(home_real), Some(existing)) = (
+        fs::canonicalize(&home),
+        original.parent().and_then(nearest_existing_ancestor),
+    ) {
+        let existing_real = fs::canonicalize(existing)?;
+        if !existing_real.starts_with(home_real) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "restore target parent escapes the home directory",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Backup a config file before modifying it. Only backs up once per path per session.
 /// Backups are stored in `~/.depsguard/backups/` with the original path encoded in the filename.
 pub fn backup_file(path: &Path, backed_up: &mut HashSet<PathBuf>) -> io::Result<()> {
@@ -149,8 +209,7 @@ pub fn list_backups() -> (Vec<(PathBuf, PathBuf)>, usize) {
                     .all(|c| c.is_ascii_digit() || c == 'T' || c == '-')
             {
                 let original = decode_path(encoded);
-                // Agentic Rule (ARNIE_PATH_BOUNDARY_CHECKING): reject paths outside home directory
-                if original.starts_with(manager::home_dir()) {
+                if restore_path_is_within_home(&original) {
                     results.push((original, p));
                 } else {
                     stale += 1;
@@ -177,6 +236,7 @@ pub fn list_backups() -> (Vec<(PathBuf, PathBuf)>, usize) {
 
 /// Restore a single backup file to its original location.
 pub fn restore_backup(backup: &Path, original: &Path) -> io::Result<()> {
+    validate_restore_destination(original)?;
     if let Some(parent) = original.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -373,7 +433,6 @@ fn apply_yaml_fix(path: &Path, key: &str, value: &str, quote: bool) -> io::Resul
             if k.trim() == key {
                 *line = target_line.clone();
                 found = true;
-                break;
             }
         }
     }
@@ -448,7 +507,6 @@ fn apply_json_fix(path: &Path, key: &str, value: &str) -> io::Result<String> {
                 let comma = if needs_comma { "," } else { "" };
                 *line = format!("{indent}\"{key}\": {target_value}{comma}");
                 found = true;
-                break;
             }
         }
     }
@@ -896,6 +954,15 @@ mod tests {
     }
 
     #[test]
+    fn yaml_fix_updates_duplicate_target_keys() {
+        let f = tmp_file("ignoreScripts: false\nignoreScripts: false\n");
+        apply_yaml_fix(f.path(), "ignoreScripts", "true", false).unwrap();
+        let content = f.read();
+        assert_eq!(content.matches("ignoreScripts: true").count(), 2);
+        assert!(!content.contains("ignoreScripts: false"));
+    }
+
+    #[test]
     fn yaml_fix_quoted_value() {
         let f = tmp_file("");
         apply_yaml_fix(f.path(), "trustPolicy", "no-downgrade", true).unwrap();
@@ -1072,6 +1139,21 @@ mod tests {
     }
 
     #[test]
+    fn json_fix_updates_duplicate_target_keys() {
+        let f = tmp_file(
+            "{\n  \"minimumReleaseAge\": \"0 days\",\n  \"minimumReleaseAge\": \"1 day\"\n}\n",
+        );
+        apply_json_fix(f.path(), "minimumReleaseAge", "7 days").unwrap();
+        let content = f.read();
+        assert_eq!(
+            content.matches("\"minimumReleaseAge\": \"7 days\"").count(),
+            2
+        );
+        assert!(!content.contains("0 days"));
+        assert!(!content.contains("1 day"));
+    }
+
+    #[test]
     fn json_fix_creates_empty_file() {
         let f = tmp_file("");
         apply_json_fix(f.path(), "minimumReleaseAge", "7 days").unwrap();
@@ -1198,5 +1280,15 @@ mod tests {
         assert!(!encoded.contains('\\'));
         let decoded = super::decode_path(&encoded);
         assert_eq!(decoded, path);
+    }
+
+    #[test]
+    fn restore_path_within_home_rejects_parent_dir_escape() {
+        let home = Path::new("/tmp/depsguard-home");
+        let escaped = home.join("../outside/.npmrc");
+        let inside = home.join(".npmrc");
+
+        assert!(!super::restore_path_is_within_home_for(&escaped, home));
+        assert!(super::restore_path_is_within_home_for(&inside, home));
     }
 }
