@@ -1,12 +1,12 @@
 Package: depsguard
-Version: 0.1.38
+Version: 0.1.39
 Architecture: amd64
 Maintainer: Arnica <engineering@arnica.io>
-Filename: pool/main/d/depsguard/depsguard_0.1.38_amd64.deb
-Size: 251088
-MD5sum: 417f227788d3592fbc9019dd863babea
-SHA1: 98d6e2f154d1d63c9cf0d23c32457cbbc504723f
-SHA256: 956c70031d86d33c84e9b3b44f297b385af49b24247b408617969ecdf67bbeec
+Filename: pool/main/d/depsguard/depsguard_0.1.39_amd64.deb
+Size: 251098
+MD5sum: a7332d8abd98c76f6ac0eea8c915a032
+SHA1: 5bd8e851283f3664c62f1b83f9bce4cf30022ea0
+SHA256: cdae19f6394ef7f65198d84eab2af0f4c769f2e5cb36dc658d4602a57e24fd95
 Section: utils
 Priority: optional
 Description: Harden package manager configs against supply chain attacks
