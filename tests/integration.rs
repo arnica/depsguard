@@ -191,6 +191,7 @@ fn help_flag_works() {
     assert!(out.status.success());
     assert!(stdout.contains("USAGE"));
     assert!(stdout.contains("depsguard scan"));
+    assert!(stdout.contains("--verbose"));
 }
 
 #[test]
@@ -244,7 +245,7 @@ fn npm_config_fix_and_rescan() {
     // Write the expected config manually (simulating what the fix would do)
     fs::write(&npmrc, "min-release-age=7\nignore-scripts=true\n").unwrap();
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("npm"), "npm not detected");
     // ignore-scripts should show as configured
@@ -264,6 +265,7 @@ fn npm_scan_distinguishes_missing_file_from_empty_file() {
     let missing_out = run_depsguard(
         &[
             "--scan",
+            "--verbose",
             "--no-search",
             "--exclude",
             "pnpm",
@@ -287,6 +289,7 @@ fn npm_scan_distinguishes_missing_file_from_empty_file() {
     let empty_out = run_depsguard(
         &[
             "--scan",
+            "--verbose",
             "--no-search",
             "--exclude",
             "pnpm",
@@ -369,7 +372,7 @@ fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
         return;
     };
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     let expected_display = display_under_home(&globalconfig, home.path());
 
@@ -403,7 +406,7 @@ fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
     };
 
     let out = run_depsguard_with_env(
-        &["--scan", "--no-search"],
+        &["--scan", "--verbose", "--no-search"],
         home.path(),
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
@@ -438,7 +441,7 @@ fn pnpm_config_fix_and_rescan() {
     )
     .unwrap();
 
-    let out = run_depsguard(&["--scan"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("pnpm"), "pnpm not detected");
 }
@@ -679,7 +682,7 @@ fn pnpm_scan_detects_minimum_release_age_in_npmrc() {
     )
     .unwrap();
 
-    let out = run_depsguard(&["--scan"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("minimum-release-age"),
@@ -698,7 +701,7 @@ fn pnpm_scan_detects_global_rc_in_library_preferences() {
     fs::create_dir_all(rc.parent().unwrap()).unwrap();
     fs::write(&rc, "minimum-release-age=10080\n").unwrap();
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("✓ minimum-release-age — 10080")
@@ -720,7 +723,7 @@ fn pnpm_scan_detects_global_rc_in_xdg_config_home() {
     fs::write(&rc, "minimum-release-age=10080\n").unwrap();
 
     let out = run_depsguard_with_env(
-        &["--scan", "--no-search"],
+        &["--scan", "--verbose", "--no-search"],
         home.path(),
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
@@ -777,7 +780,7 @@ fn bun_config_fix_and_rescan_from_xdg() {
     fs::write(&bunfig, "[install]\nminimumReleaseAge = 604800\n").unwrap();
 
     let out = run_depsguard_with_env(
-        &["--scan", "--no-search"],
+        &["--scan", "--verbose", "--no-search"],
         home.path(),
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
@@ -805,7 +808,7 @@ fn bun_scan_checks_both_user_configs_when_both_exist() {
     fs::write(&home_bunfig, "").unwrap();
 
     let out = run_depsguard_with_env(
-        &["--scan", "--no-search"],
+        &["--scan", "--verbose", "--no-search"],
         home.path(),
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
@@ -887,7 +890,7 @@ fn pip_scan_detects_manager() {
         return;
     }
     let home = TmpHome::new("pip_detect");
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     // pip is detected regardless of version (a recent pip shows the missing
     // `uploaded-prior-to`; an older pip shows the version requirement).
@@ -916,7 +919,7 @@ fn pip_scan_resolves_effective_config_across_legacy_and_current() {
     fs::write(&current, "[install]\nuploaded-prior-to = P7D\n").unwrap();
     fs::write(&legacy, "[install]\n").unwrap(); // exists but no cooldown key
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     assert!(
@@ -944,7 +947,7 @@ fn poetry_scan_detects_manager() {
         return;
     }
     let home = TmpHome::new("poetry_detect");
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("poetry"), "poetry not detected:\n{stdout}");
     assert!(
@@ -959,7 +962,7 @@ fn aube_scan_detects_manager() {
         return;
     }
     let home = TmpHome::new("aube_detect");
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("aube"), "aube not detected:\n{stdout}");
     assert!(
@@ -992,7 +995,7 @@ fn uv_config_fix_and_rescan() {
     // Exact policy: the default target is 7 days, so write the matching rolling value.
     fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("uv"), "uv not detected");
     assert!(
@@ -1017,6 +1020,7 @@ fn uv_scan_distinguishes_missing_file_from_empty_file() {
     let missing_out = run_depsguard(
         &[
             "--scan",
+            "--verbose",
             "--no-search",
             "--exclude",
             "npm",
@@ -1042,6 +1046,7 @@ fn uv_scan_distinguishes_missing_file_from_empty_file() {
     let empty_out = run_depsguard(
         &[
             "--scan",
+            "--verbose",
             "--no-search",
             "--exclude",
             "npm",
@@ -1079,7 +1084,7 @@ fn uv_config_fix_and_rescan_from_xdg() {
     fs::write(&uv_config, "exclude-newer = \"7 days\"\n").unwrap();
 
     let out = run_depsguard_with_env(
-        &["--scan", "--no-search"],
+        &["--scan", "--verbose", "--no-search"],
         home.path(),
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
@@ -1249,7 +1254,7 @@ fn config_with_existing_content_is_preserved() {
 
     // Scan: depsguard should see both npm-managed keys as OK while preserving
     // the user's existing registry/auth settings
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     // ignore-scripts should show as configured; min-release-age may be OK or unsupported
     assert!(

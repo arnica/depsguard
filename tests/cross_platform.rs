@@ -255,7 +255,7 @@ fn npmrc_round_trip_all_keys() {
     // Write all npmrc keys
     fs::write(&npmrc, "min-release-age=7\nignore-scripts=true\n").unwrap();
 
-    let out = run_depsguard(&["--scan", "--no-search"], home.path());
+    let out = run_depsguard(&["--scan", "--verbose", "--no-search"], home.path());
     let stdout2 = String::from_utf8_lossy(&out.stdout);
     if stdout2.contains("npm") {
         // ignore-scripts should always show as OK when set

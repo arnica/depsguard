@@ -160,8 +160,21 @@ fn status_rank(s: &CheckStatus) -> u8 {
     }
 }
 
+/// How much detail to show in scan results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanDisplay {
+    /// One line per config file: manager(s), path, and overall status.
+    Compact,
+    /// Include the per-setting rows after each config file summary.
+    Verbose,
+}
+
 /// Render a summary of scan results grouped by config file, with status badges.
-pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::Result<()> {
+pub fn print_scan_results(
+    w: &mut impl Write,
+    managers: &[ManagerInfo],
+    display: ScanDisplay,
+) -> io::Result<()> {
     if managers.is_empty() {
         writeln!(
             w,
@@ -254,12 +267,15 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             format!("{BG_GREEN}{BOLD} SECURE {RESET}")
         };
 
+        let config_path = display_path(&managers[group[0]].config_path);
+        if display == ScanDisplay::Compact {
+            writeln!(w, "  {header}  {DIM}Config: {config_path}{RESET}  {badge}")?;
+            writeln!(w)?;
+            continue;
+        }
+
         writeln!(w, "  {header}  {badge}")?;
-        writeln!(
-            w,
-            "     {DIM}Config: {}{RESET}",
-            display_path(&managers[group[0]].config_path)
-        )?;
+        writeln!(w, "     {DIM}Config: {config_path}{RESET}")?;
 
         // Show each key once via its highest-ranked manager (see status_rank).
         // First appearance sets display order; ties keep the first-seen manager.
@@ -1125,7 +1141,7 @@ mod tests {
     #[test]
     fn scan_results_empty() {
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[]).unwrap();
+        print_scan_results(&mut buf, &[], ScanDisplay::Compact).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("No supported package managers found"));
     }
@@ -1142,7 +1158,7 @@ mod tests {
             status: CheckStatus::Ok("20160".into()),
         }]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(
             s.contains("20160"),
@@ -1158,17 +1174,28 @@ mod tests {
     fn scan_results_all_ok() {
         let mgr = make_manager(vec![make_rec("key", CheckStatus::Ok("ok_val".into()))]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("SECURE"));
         assert!(s.contains("npm"));
     }
 
     #[test]
+    fn scan_results_compact_hides_per_setting_details() {
+        let mgr = make_manager(vec![make_rec("key", CheckStatus::Missing)]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Compact).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("Config:"));
+        assert!(s.contains("ACTION NEEDED"));
+        assert!(!s.contains("key"));
+    }
+
+    #[test]
     fn scan_results_needs_fix() {
         let mgr = make_manager(vec![make_rec("key", CheckStatus::Missing)]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("ACTION NEEDED"));
         assert!(s.contains("not set"));
@@ -1178,7 +1205,7 @@ mod tests {
     fn scan_results_file_missing() {
         let mgr = make_manager(vec![make_rec("key", CheckStatus::FileMissing)]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("ACTION NEEDED"));
         assert!(s.contains("file missing"));
@@ -1188,7 +1215,7 @@ mod tests {
     fn scan_results_wrong_value() {
         let mgr = make_manager(vec![make_rec("key", CheckStatus::WrongValue("bad".into()))]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("bad"));
         assert!(s.contains("expected"));
@@ -1201,7 +1228,7 @@ mod tests {
             CheckStatus::Unsupported("requires npm ≥ 11.10 (have 10.8.0)".into()),
         )]);
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[mgr]).unwrap();
+        print_scan_results(&mut buf, &[mgr], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("WARNING"));
         assert!(s.contains("1 warning"));
@@ -1235,7 +1262,7 @@ mod tests {
             discovered: true,
         };
         let mut buf = Vec::new();
-        print_scan_results(&mut buf, &[npm, pnpm]).unwrap();
+        print_scan_results(&mut buf, &[npm, pnpm], ScanDisplay::Verbose).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(
             s.contains("pnpm-workspace.yaml"),
