@@ -689,35 +689,59 @@ fn pnpm_scan_detects_minimum_release_age_in_npmrc() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn pnpm_scan_detects_global_rc_in_library_preferences() {
+fn pnpm_scan_detects_global_config_in_library_preferences() {
     if !has_command("pnpm") {
         return;
     }
-    let home = TmpHome::new("pnpm_global_rc");
-    let rc = home.path().join("Library/Preferences/pnpm/rc");
-    fs::create_dir_all(rc.parent().unwrap()).unwrap();
-    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+    let home = TmpHome::new("pnpm_global_config");
+    let (path, key, content) = if pnpm_at_least(11, 0) {
+        (
+            home.path().join("Library/Preferences/pnpm/config.yaml"),
+            "minimumReleaseAge",
+            "minimumReleaseAge: 10080\n",
+        )
+    } else {
+        (
+            home.path().join("Library/Preferences/pnpm/rc"),
+            "minimum-release-age",
+            "minimum-release-age=10080\n",
+        )
+    };
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, content).unwrap();
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected = format!("{key} — 10080");
     assert!(
-        stdout.contains("✓ minimum-release-age — 10080")
-            || stdout.contains("\u{2713} minimum-release-age — 10080"),
-        "depsguard should detect pnpm global rc in Library/Preferences:\n{stdout}"
+        stdout.contains(&expected),
+        "depsguard should detect pnpm global config in Library/Preferences:\n{stdout}"
     );
 }
 
 #[cfg(target_os = "macos")]
 #[test]
-fn pnpm_scan_detects_global_rc_in_xdg_config_home() {
+fn pnpm_scan_detects_global_config_in_xdg_config_home() {
     if !has_command("pnpm") {
         return;
     }
     let home = TmpHome::new("pnpm_global_xdg");
     let xdg = home.path().join("xdg");
-    let rc = xdg.join("pnpm/rc");
-    fs::create_dir_all(rc.parent().unwrap()).unwrap();
-    fs::write(&rc, "minimum-release-age=10080\n").unwrap();
+    let (path, key, content) = if pnpm_at_least(11, 0) {
+        (
+            xdg.join("pnpm/config.yaml"),
+            "minimumReleaseAge",
+            "minimumReleaseAge: 10080\n",
+        )
+    } else {
+        (
+            xdg.join("pnpm/rc"),
+            "minimum-release-age",
+            "minimum-release-age=10080\n",
+        )
+    };
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, content).unwrap();
 
     let out = run_depsguard_with_env(
         &["--scan", "--no-search"],
@@ -725,10 +749,10 @@ fn pnpm_scan_detects_global_rc_in_xdg_config_home() {
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected = format!("{key} — 10080");
     assert!(
-        stdout.contains("✓ minimum-release-age — 10080")
-            || stdout.contains("\u{2713} minimum-release-age — 10080"),
-        "depsguard should detect pnpm global rc in XDG_CONFIG_HOME:\n{stdout}"
+        stdout.contains(&expected),
+        "depsguard should detect pnpm global config in XDG_CONFIG_HOME:\n{stdout}"
     );
 }
 
@@ -1260,4 +1284,90 @@ fn config_with_existing_content_is_preserved() {
     let content = fs::read_to_string(&npmrc).unwrap();
     assert!(content.contains("registry=https://registry.npmjs.org"));
     assert!(content.contains("always-auth=true"));
+}
+
+// ── JSON output (`--format json`) ───────────────────────────────────
+
+/// stdout is exactly one JSON object — no banner, no progress, no ANSI — so a
+/// consumer can pipe it straight into a parser.
+#[test]
+fn scan_format_json_emits_only_json_on_stdout() {
+    let home = TmpHome::new("json_stdout");
+    let out = run_depsguard(&["scan", "--format", "json", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let trimmed = stdout.trim();
+    assert!(
+        trimmed.starts_with('{') && trimmed.ends_with('}'),
+        "stdout should be a single JSON object:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "stdout should contain no ANSI escape sequences:\n{stdout}"
+    );
+    assert!(
+        trimmed.contains(r#""schema_version":"1.0""#),
+        "missing schema_version:\n{stdout}"
+    );
+    assert!(
+        trimmed.contains(r#""tool":"depsguard""#),
+        "missing tool field:\n{stdout}"
+    );
+    assert!(
+        trimmed.contains("\"summary\":"),
+        "missing summary:\n{stdout}"
+    );
+    assert!(
+        trimmed.contains("\"managers\":"),
+        "missing managers:\n{stdout}"
+    );
+}
+
+/// Exit code matches the text `scan` for the same HOME (R10 parity), so CI
+/// gating behaves identically whichever format is used.
+#[test]
+fn scan_format_json_exit_code_matches_text_scan() {
+    let home = TmpHome::new("json_parity");
+    let text = run_depsguard(&["scan", "--no-search"], home.path());
+    let json = run_depsguard(&["scan", "--no-search", "--format", "json"], home.path());
+    assert_eq!(
+        text.status.code(),
+        json.status.code(),
+        "JSON scan exit code must match text scan exit code"
+    );
+}
+
+/// `--format json` without the `scan` subcommand still produces the JSON report
+/// rather than entering the interactive TUI (which would block on input).
+#[test]
+fn format_json_without_scan_still_reports() {
+    let home = TmpHome::new("json_no_scan");
+    let out = run_depsguard(&["--format", "json", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.trim().starts_with('{') && stdout.contains(r#""schema_version":"1.0""#),
+        "expected JSON report without the `scan` subcommand:\n{stdout}"
+    );
+}
+
+/// `restore --format json` is rejected at parse time (non-zero, error on
+/// stderr, nothing on stdout) instead of dropping the format or blocking on
+/// stdin.
+#[test]
+fn restore_with_format_json_is_rejected() {
+    let home = TmpHome::new("json_restore_conflict");
+    let out = run_depsguard(&["restore", "--format", "json"], home.path());
+    assert!(
+        !out.status.success(),
+        "restore --format json should exit non-zero"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.trim().is_empty(),
+        "no JSON should be emitted for the rejected combination:\n{stdout}"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("restore"),
+        "error should name the restore conflict:\n{stderr}"
+    );
 }

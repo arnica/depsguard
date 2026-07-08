@@ -160,27 +160,36 @@ fn status_rank(s: &CheckStatus) -> u8 {
     }
 }
 
-/// Render a summary of scan results grouped by config file, with status badges.
-pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::Result<()> {
-    if managers.is_empty() {
-        writeln!(
-            w,
-            "\n  {YELLOW}{BOLD}No supported package managers found.{RESET}"
-        )?;
-        writeln!(
-            w,
-            "  {DIM}Install npm, pnpm, bun, or uv to get started.{RESET}\n"
-        )?;
-        return Ok(());
-    }
+/// Collapsed status counts for a scan summary. Each `(config_path, key)` is
+/// reduced to its most-significant status across managers (see `status_rank`),
+/// so a key shared by managers is counted once and the counts match the badges.
+pub(crate) struct SummaryCounts {
+    pub(crate) ok: usize,
+    pub(crate) missing: usize,
+    pub(crate) file_missing: usize,
+    pub(crate) wrong_value: usize,
+    pub(crate) unsupported: usize,
+    pub(crate) unique_configs: usize,
+}
 
-    // Count issues, collapsing each (config_path, key) to its most-significant
-    // status across managers (see status_rank) so the summary matches the badges.
-    let mut ok_count = 0usize;
-    let mut missing_count = 0usize;
-    let mut file_missing_count = 0usize;
-    let mut wrong_count = 0usize;
-    let mut unsupported_count = 0usize;
+impl SummaryCounts {
+    pub(crate) fn total_errors(&self) -> usize {
+        self.missing + self.file_missing + self.wrong_value
+    }
+}
+
+/// Compute the collapsed summary counts. This is the single source of truth for
+/// both the text report (`print_scan_results`) and the JSON report
+/// (`crate::json::render_scan_json`) so the two never drift.
+pub(crate) fn summary_counts(managers: &[ManagerInfo]) -> SummaryCounts {
+    let mut counts = SummaryCounts {
+        ok: 0,
+        missing: 0,
+        file_missing: 0,
+        wrong_value: 0,
+        unsupported: 0,
+        unique_configs: 0,
+    };
     let mut best: std::collections::HashMap<(&Path, &str), &CheckStatus> =
         std::collections::HashMap::new();
     for mgr in managers {
@@ -196,18 +205,45 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
     }
     for status in best.values() {
         match status {
-            CheckStatus::Ok(_) => ok_count += 1,
-            CheckStatus::Missing => missing_count += 1,
-            CheckStatus::FileMissing => file_missing_count += 1,
-            CheckStatus::WrongValue(_) => wrong_count += 1,
-            CheckStatus::Unsupported(_) => unsupported_count += 1,
+            CheckStatus::Ok(_) => counts.ok += 1,
+            CheckStatus::Missing => counts.missing += 1,
+            CheckStatus::FileMissing => counts.file_missing += 1,
+            CheckStatus::WrongValue(_) => counts.wrong_value += 1,
+            CheckStatus::Unsupported(_) => counts.unsupported += 1,
         }
     }
-    let total_errors = missing_count + file_missing_count + wrong_count;
-    let unique_configs = {
+    counts.unique_configs = {
         let s: std::collections::HashSet<_> = managers.iter().map(|m| &m.config_path).collect();
         s.len()
     };
+    counts
+}
+
+/// Render a summary of scan results grouped by config file, with status badges.
+pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::Result<()> {
+    if managers.is_empty() {
+        writeln!(
+            w,
+            "\n  {YELLOW}{BOLD}No supported package managers found.{RESET}"
+        )?;
+        writeln!(
+            w,
+            "  {DIM}Install npm, pnpm, bun, or uv to get started.{RESET}\n"
+        )?;
+        return Ok(());
+    }
+
+    // Collapse each (config_path, key) to its most-significant status and count
+    // the survivors (see summary_counts / status_rank) so the summary matches
+    // the badges. The same counts feed `--format json` (see crate::json).
+    let counts = summary_counts(managers);
+    let ok_count = counts.ok;
+    let missing_count = counts.missing;
+    let file_missing_count = counts.file_missing;
+    let wrong_count = counts.wrong_value;
+    let unsupported_count = counts.unsupported;
+    let total_errors = counts.total_errors();
+    let unique_configs = counts.unique_configs;
 
     writeln!(w, "  {BOLD}{WHITE}Detected locations:{RESET}\n")?;
 

@@ -24,6 +24,7 @@ By **[[arnica](https://arnica.io?utm_source=depsguard&utm_medium=referral&utm_ca
 - [Overview](#overview)
 - [Install](#install)
 - [Usage](#usage)
+- [JSON output](#json-output)
 - [What gets checked](#what-gets-checked)
 - [Config file locations](#config-file-locations)
 - [Urgent security fix](#urgent-security-fix)
@@ -172,6 +173,7 @@ The binary is `target/release/depsguard` (`.exe` on Windows). Rust **1.74+** is 
 ```bash
 depsguard              # interactive: scan, choose fixes, apply
 depsguard scan         # report only; no writes (exits 1 if action is needed)
+depsguard scan --format json  # machine-readable JSON for CI/automation
 depsguard --no-search  # skip recursive file search, check local configs only
 depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
@@ -189,6 +191,64 @@ depsguard --help       # CLI help
 5. **Apply** – press `Enter` to apply the selected fixes. A timestamped backup is created before any file is written.
 6. **Rescan** – DepsGuard automatically reruns the scan after applying, so you can verify everything is green.
 7. **Restore** – run `depsguard restore` at any time to roll back from the backup list. Press `q` or `Esc` to quit.
+
+## JSON output
+
+For CI and automation, `depsguard scan --format json` (or `-f json`) prints a single JSON document to stdout instead of the human-readable report. The banner and progress output are suppressed, so stdout is always a parseable JSON object. The exit code is unchanged from the text `scan`: `0` when nothing needs fixing, `1` when any recommendation needs action — the same gate either way.
+
+```bash
+depsguard scan --format json | jq '.summary'
+```
+
+`--format json` cannot be combined with `restore` (an interactive command); doing so exits non-zero with an error rather than hanging.
+
+### Schema
+
+```json
+{
+  "schema_version": "1.0",
+  "tool": "depsguard",
+  "tool_version": "0.1.38",
+  "summary": {
+    "needs_fix": true,
+    "unique_configs": 2,
+    "counts": {
+      "ok": 4, "missing": 2, "file_missing": 1,
+      "wrong_value": 0, "unsupported": 1, "total_errors": 3
+    }
+  },
+  "managers": [
+    {
+      "name": "npm",
+      "version": "11.17.0",
+      "config_path": "/home/alice/.npmrc",
+      "discovered": false,
+      "recommendations": [
+        {
+          "key": "min-release-age",
+          "description": "Delay new versions by 7 days",
+          "expected": "7",
+          "needs_fix": true,
+          "status": { "state": "missing" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `config_path` is the raw absolute path (not `~`-collapsed), so it is unambiguous for a consumer whose `$HOME` differs from the runner's.
+- `status.state` is one of `ok`, `missing`, `file_missing`, `wrong_value`, `unsupported`. A `value` field accompanies `ok` and `wrong_value` (the configured value); a `message` field accompanies `unsupported` (why the setting is unavailable); `missing` and `file_missing` carry neither.
+- `summary.counts` collapse each `(config_path, key)` to its most-significant status, so they match the badges in the text report.
+
+### Schema stability
+
+The `schema_version` follows a simple policy so automation can depend on it:
+
+- **Minor bump** (`1.0` → `1.1`): backward-compatible additions — new fields or new optional keys. Consumers should ignore unknown fields.
+- **Major bump** (`1.0` → `2.0`): a field is removed or its meaning changes.
+
+Pin on the major version and tolerate unknown fields.
 
 ## What gets checked
 

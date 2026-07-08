@@ -1,4 +1,5 @@
 mod fix;
+mod json;
 mod manager;
 mod term;
 mod ui;
@@ -13,7 +14,7 @@ use ui::SelectItem;
 // ── CLI argument parsing ──────────────────────────────────────────────
 
 /// The subcommand to execute.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Command {
     Interactive,
     ScanOnly,
@@ -22,13 +23,22 @@ enum Command {
     Restore,
 }
 
+/// Output format for the scan report.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum OutputFormat {
+    Text,
+    Json,
+}
+
 /// Parsed CLI configuration.
+#[derive(Debug)]
 struct CliConfig {
     command: Command,
     no_color: bool,
     no_search: bool,
     delay_days: u64,
     exclude: Vec<String>,
+    format: OutputFormat,
 }
 
 /// Errors from argument parsing, with context for display.
@@ -61,6 +71,8 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         "--delay-days",
         "--exclude",
         "--restore",
+        "--format",
+        "-f",
     ];
 
     const SUBCOMMANDS: &[&str] = &["restore", "scan"];
@@ -71,6 +83,7 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         no_search: false,
         delay_days: 7,
         exclude: Vec::new(),
+        format: OutputFormat::Text,
     };
 
     let mut i = 1;
@@ -106,6 +119,26 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
                 }
                 config.exclude.push(val.to_lowercase());
             }
+            "--format" | "-f" => {
+                i += 1;
+                let val = args.get(i).ok_or_else(|| {
+                    CliError::BadValue("--format requires a value (text, json)".into())
+                })?;
+                if val.starts_with('-') {
+                    return Err(CliError::BadValue(
+                        "--format requires a value (text, json)".into(),
+                    ));
+                }
+                config.format = match val.to_lowercase().as_str() {
+                    "text" => OutputFormat::Text,
+                    "json" => OutputFormat::Json,
+                    other => {
+                        return Err(CliError::BadValue(format!(
+                            "unknown format '{other}' (valid: text, json)"
+                        )));
+                    }
+                };
+            }
             "--scan" | "-s" | "scan" => config.command = Command::ScanOnly,
             "--help" | "-h" => config.command = Command::Help,
             "--version" | "-V" => config.command = Command::Version,
@@ -121,6 +154,15 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
             _ => {}
         }
         i += 1;
+    }
+
+    // JSON output is read-only and would block on stdin if `restore` ran
+    // interactively, so reject the combination up front (exits non-zero) rather
+    // than silently dropping the format or hanging a CI wrapper.
+    if config.format == OutputFormat::Json && matches!(config.command, Command::Restore) {
+        return Err(CliError::BadValue(
+            "--format json cannot be combined with restore (restore is interactive)".into(),
+        ));
     }
 
     Ok(config)
@@ -165,6 +207,18 @@ fn main() {
     }
     manager::set_delay_days(config.delay_days);
 
+    // JSON output is mutually exclusive with the interactive TUI, so requesting
+    // it runs the read-only report path regardless of Interactive/ScanOnly.
+    // Help/Version keep precedence; restore + json was rejected in parse_args.
+    if config.format == OutputFormat::Json
+        && matches!(config.command, Command::Interactive | Command::ScanOnly)
+    {
+        if run_scan_json() == ScanOutcome::NeedsFix {
+            std::process::exit(1);
+        }
+        return;
+    }
+
     match config.command {
         Command::ScanOnly => {
             if run_scan_only() == ScanOutcome::NeedsFix {
@@ -194,6 +248,7 @@ fn print_usage_short() {
     println!("  USAGE:");
     println!("    depsguard                  Interactive mode (TUI)");
     println!("    depsguard scan             Scan only, no changes (exits 1 if action needed)");
+    println!("    depsguard scan --format json  Scan and emit machine-readable JSON");
     println!("    depsguard restore          Restore config files from backup");
     println!("    depsguard --help           Show this help");
     println!("    depsguard --version        Show version");
@@ -225,6 +280,21 @@ fn run_scan_only() -> ScanOutcome {
     let _ = ui::clear_progress(&mut out);
     let _ = writeln!(out);
     let _ = ui::print_scan_results(&mut out, &managers);
+
+    if has_needs_fix(&managers) {
+        ScanOutcome::NeedsFix
+    } else {
+        ScanOutcome::AllClear
+    }
+}
+
+/// Run scan-only mode emitting a JSON document (`--format json`). Quiet by
+/// design: no banner and a no-op progress callback, so the only thing on stdout
+/// is the JSON document and the stream is always parseable. Exit-code semantics
+/// match `run_scan_only`.
+fn run_scan_json() -> ScanOutcome {
+    let managers = manager::scan_all_with_progress(|_, _| {});
+    println!("{}", json::render_scan_json(&managers));
 
     if has_needs_fix(&managers) {
         ScanOutcome::NeedsFix
@@ -727,7 +797,7 @@ mod tests {
     #[test]
     fn apply_selected_applies_selected() {
         let path = std::env::temp_dir().join(format!("depsguard_main_test_{}", std::process::id()));
-        std::fs::write(&path, "").unwrap();
+        let _ = std::fs::remove_file(&path);
 
         let managers = vec![ManagerInfo {
             kind: ManagerKind::Npm,
@@ -752,6 +822,8 @@ mod tests {
         let results = apply_selected(&items, &managers);
         assert_eq!(results.len(), 1);
         assert!(results[0].1.is_ok());
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("ignore-scripts=true"));
         // Clean up: remove original and any .bak files
         let _ = std::fs::remove_file(&path);
         if let Some(parent) = path.parent() {
@@ -782,6 +854,61 @@ mod tests {
             discovered: false,
         }];
         assert!(!has_needs_fix(&managers));
+    }
+
+    fn args(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn parse_format_json_for_scan() {
+        let config = parse_args(&args(&["depsguard", "scan", "--format", "json"])).unwrap();
+        assert_eq!(config.command, Command::ScanOnly);
+        assert_eq!(config.format, OutputFormat::Json);
+    }
+
+    #[test]
+    fn parse_format_json_short_alias() {
+        let config = parse_args(&args(&["depsguard", "scan", "-f", "json"])).unwrap();
+        assert_eq!(config.command, Command::ScanOnly);
+        assert_eq!(config.format, OutputFormat::Json);
+    }
+
+    #[test]
+    fn parse_format_defaults_to_text() {
+        let config = parse_args(&args(&["depsguard", "scan"])).unwrap();
+        assert_eq!(config.format, OutputFormat::Text);
+    }
+
+    #[test]
+    fn parse_format_accepts_explicit_text() {
+        let config = parse_args(&args(&["depsguard", "scan", "--format", "text"])).unwrap();
+        assert_eq!(config.command, Command::ScanOnly);
+        assert_eq!(config.format, OutputFormat::Text);
+    }
+
+    #[test]
+    fn parse_format_rejects_unknown_value() {
+        let err = parse_args(&args(&["depsguard", "scan", "--format", "xml"])).unwrap_err();
+        assert!(err.to_string().contains("text, json"));
+    }
+
+    #[test]
+    fn parse_format_requires_value() {
+        let err = parse_args(&args(&["depsguard", "scan", "--format"])).unwrap_err();
+        assert!(err.to_string().contains("--format requires a value"));
+    }
+
+    #[test]
+    fn parse_format_rejects_following_flag_as_missing_value() {
+        let err = parse_args(&args(&["depsguard", "scan", "--format", "--no-search"])).unwrap_err();
+        assert!(err.to_string().contains("--format requires a value"));
+    }
+
+    #[test]
+    fn parse_restore_with_format_json_is_rejected() {
+        let err = parse_args(&args(&["depsguard", "restore", "--format", "json"])).unwrap_err();
+        assert!(err.to_string().contains("restore"));
     }
 
     #[test]
