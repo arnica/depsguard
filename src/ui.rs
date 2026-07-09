@@ -1,4 +1,4 @@
-// TUI rendering — ASCII art banner, status table, interactive selector.
+// TUI rendering (ASCII art banner, status table, interactive selector).
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::manager::{self, CheckStatus, ManagerInfo};
 use crate::term::{BG_GREEN, BG_RED, BOLD, CYAN, DIM, GREEN, RED, RESET, WHITE, YELLOW};
 
-/// Return "1 config" or "3 configs" — simple singular/plural.
+/// Return "1 config" or "3 configs" (simple singular/plural).
 fn plural(n: usize, singular: &str, plural_form: &str) -> String {
     if n == 1 {
         format!("{n} {singular}")
@@ -22,9 +22,9 @@ pub fn display_path(path: &Path) -> String {
 
 // ── Banner ────────────────────────────────────────────────────────────
 
-/// Arnica brand color — ANSI 256-color 73 (closest to #44bea4)
+/// Arnica brand color, ANSI 256-color 73 (closest to #44bea4)
 const ARNICA: &str = "\x1b[38;5;73m";
-/// DepsGuard brand color #ebb838 — ANSI 256-color 178 (closest match)
+/// DepsGuard brand color #ebb838, ANSI 256-color 178 (closest match)
 const GOLD: &str = "\x1b[38;5;178m";
 
 const BOX_WIDTH: usize = 66; // inner width between │ chars
@@ -343,7 +343,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             };
             writeln!(
                 w,
-                "     {color}{icon}{RESET} {prefix}{color}{}{RESET} {DIM}—{RESET} {detail} {DIM}· {}{RESET}",
+                "     {color}{icon}{RESET} {prefix}{color}{}{RESET}{DIM},{RESET} {detail} {DIM}· {}{RESET}",
                 rec.key, rec.description
             )?;
         }
@@ -726,7 +726,7 @@ pub fn print_selector(
         "  press {YELLOW}d{RESET} to preview the exact changes first"
     )?;
     writeln!(w)?;
-    // Then the rest of the controls — same bright key / dim label styling as the
+    // Then the rest of the controls, same bright key / dim label styling as the
     // toggle row below (keys must NOT be wrapped in DIM or they render faded).
     writeln!(
         w,
@@ -843,7 +843,7 @@ enum DiffOp {
     Insert(usize),
 }
 
-/// Myers diff algorithm — produces the shortest edit script (SES).
+/// Myers diff algorithm, produces the shortest edit script (SES).
 /// Same algorithm as `git diff`. O(ND) time where D is the edit distance.
 fn myers_diff<'a>(old: &[&'a str], new: &[&'a str]) -> Vec<DiffOp> {
     let n = old.len();
@@ -1263,8 +1263,8 @@ mod tests {
             recommendations: vec![make_rec(
                 "ignore-scripts",
                 CheckStatus::Unsupported(
-                    "ignored in .npmrc by pnpm \u{2265} 11 — set ignoreScripts in \
-                     pnpm-workspace.yaml or the global config.yaml"
+                    "ignored in .npmrc by pnpm \u{2265} 11 (set ignoreScripts in \
+                     pnpm-workspace.yaml or the global config.yaml)"
                         .into(),
                 ),
             )],

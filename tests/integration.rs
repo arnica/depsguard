@@ -77,7 +77,7 @@ fn tool_at_least(cmd: &str, major: u32, minor: u32) -> bool {
 
 /// Whether the installed `uv` supports relative `exclude-newer` durations
 /// (added in uv 0.9.17). DepsGuard writes a relative value (e.g. `7 days`), so
-/// on older uv that value — and a config we would fill with it — is reported as
+/// on older uv that value (and a config we would fill with it) is reported as
 /// version-unsupported rather than an actionable fix (issue #52). Tests that
 /// assert the *supported* behaviour skip on older uv; the unsupported path is
 /// covered exhaustively by the unit tests. Needs patch precision, so it parses
@@ -381,8 +381,8 @@ fn pnpm_scan_uses_cli_globalconfig_when_npmrc_missing() {
     // pnpm >= 11.6 `config get globalconfig` points at `config.yaml`
     // (camelCase keys). Accept the release-age finding in either style.
     assert!(
-        stdout.contains("minimum-release-age — file missing")
-            || stdout.contains("minimumReleaseAge — file missing"),
+        stdout.contains("minimum-release-age, file missing")
+            || stdout.contains("minimumReleaseAge, file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -417,8 +417,8 @@ fn pnpm_scan_uses_cli_globalconfig_xdg_when_npmrc_missing() {
     // Same as above: kebab-case `rc` keys on pnpm <= 10, camelCase
     // `config.yaml` keys on pnpm >= 11.6.
     assert!(
-        stdout.contains("minimum-release-age — file missing")
-            || stdout.contains("minimumReleaseAge — file missing"),
+        stdout.contains("minimum-release-age, file missing")
+            || stdout.contains("minimumReleaseAge, file missing"),
         "expected pnpm minimum-release-age finding:\n{stdout}"
     );
 }
@@ -712,7 +712,7 @@ fn pnpm_scan_detects_global_config_in_library_preferences() {
 
     let out = run_depsguard(&["--scan", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let expected = format!("{key} — 10080");
+    let expected = format!("{key}, 10080");
     assert!(
         stdout.contains(&expected),
         "depsguard should detect pnpm global config in Library/Preferences:\n{stdout}"
@@ -749,7 +749,7 @@ fn pnpm_scan_detects_global_config_in_xdg_config_home() {
         &[("XDG_CONFIG_HOME", xdg.as_os_str())],
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let expected = format!("{key} — 10080");
+    let expected = format!("{key}, 10080");
     assert!(
         stdout.contains(&expected),
         "depsguard should detect pnpm global config in XDG_CONFIG_HOME:\n{stdout}"
@@ -844,12 +844,12 @@ fn bun_scan_checks_both_user_configs_when_both_exist() {
         "expected home bunfig path:\n{stdout}"
     );
     assert!(
-        stdout.contains("✓ install.minimumReleaseAge — 604800")
-            || stdout.contains("\u{2713} install.minimumReleaseAge — 604800"),
+        stdout.contains("✓ install.minimumReleaseAge, 604800")
+            || stdout.contains("\u{2713} install.minimumReleaseAge, 604800"),
         "expected configured bun entry:\n{stdout}"
     );
     assert!(
-        stdout.contains("install.minimumReleaseAge — not set"),
+        stdout.contains("install.minimumReleaseAge, not set"),
         "expected missing bun entry for the second config:\n{stdout}"
     );
 }
@@ -930,7 +930,7 @@ fn pip_scan_resolves_effective_config_across_legacy_and_current() {
     }
     // Reproduces the reported false positive: the current ~/.config/pip/pip.conf is
     // secure while the legacy ~/.pip/pip.conf lacks the key. pip's current file
-    // overrides the legacy one, so the effective posture is secure — and DepsGuard
+    // overrides the legacy one, so the effective posture is secure, and DepsGuard
     // must report a single entry, not flag the shadowed legacy file.
     let home = TmpHome::new("pip_effective");
     let current = home.path().join(".config/pip/pip.conf");
@@ -1288,7 +1288,7 @@ fn config_with_existing_content_is_preserved() {
 
 // ── JSON output (`--format json`) ───────────────────────────────────
 
-/// stdout is exactly one JSON object — no banner, no progress, no ANSI — so a
+/// stdout is exactly one JSON object, no banner, no progress, no ANSI, so a
 /// consumer can pipe it straight into a parser.
 #[test]
 fn scan_format_json_emits_only_json_on_stdout() {
@@ -1378,7 +1378,7 @@ fn restore_with_format_json_is_rejected() {
 
 // ── NDJSON output (`--format ndjson`) ───────────────────────────────
 
-/// stdout is pure NDJSON — no banner, no progress, no ANSI — so a consumer can
+/// stdout is pure NDJSON: no banner, no progress, no ANSI, so a consumer can
 /// pipe it straight into a line-oriented parser.
 #[test]
 fn scan_format_ndjson_emits_only_ndjson_on_stdout() {
@@ -1396,7 +1396,7 @@ fn scan_format_ndjson_emits_only_ndjson_on_stdout() {
             line.starts_with('{') && line.ends_with('}'),
             "each line should be a standalone JSON object:\n{stdout}"
         );
-        assert!(line.contains(r#""schema_version":"1.0""#));
+        assert!(line.contains(r#""schema_version":"1.1""#));
         assert!(line.contains(r#""scanned_at":"#));
     }
     assert!(

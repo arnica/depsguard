@@ -349,7 +349,7 @@ fn run_interactive() -> io::Result<()> {
     let mut out = term::ColorWriter::new(stdout.lock());
 
     loop {
-        // Phase 1 — Scan results are printed to the normal screen so the
+        // Phase 1. Scan results are printed to the normal screen so the
         // user can scroll back through them with the trackpad.
         ui::print_banner(&mut out)?;
         let managers = manager::scan_all_with_progress(progress_callback);
@@ -362,7 +362,7 @@ fn run_interactive() -> io::Result<()> {
             if has_unsupported_recommendations(&managers) {
                 writeln!(
                     out,
-                    "  {}Some checks can't be auto-fixed here — see the notes above.{}",
+                    "  {}Some checks can't be auto-fixed here (see the notes above).{}",
                     term::BOLD,
                     term::RESET
                 )?;
@@ -401,7 +401,7 @@ fn run_interactive() -> io::Result<()> {
             return Ok(());
         }
 
-        // Phase 2 — Selection runs in the alternate screen buffer.
+        // Phase 2. Selection runs in the alternate screen buffer.
         // ScreenGuard restores mouse, cursor, and buffer state on drop.
         let go_back = {
             term::enter_alt_screen(&mut out)?;

@@ -88,7 +88,7 @@ pub fn user_config_candidates(
         }
         // uv reads a single user-level `uv.toml`: `$XDG_CONFIG_HOME/uv/uv.toml`
         // when XDG is set, otherwise `~/.config/uv/uv.toml`. XDG *replaces*
-        // `~/.config` — uv does not read both — so we list only the effective one.
+        // `~/.config` (uv does not read both), so we list only the effective one.
         ManagerKind::Uv => match os {
             TargetOs::Windows => (vec![appdata.join("uv/uv.toml")], 0),
             TargetOs::MacOs | TargetOs::Linux => {

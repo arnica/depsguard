@@ -51,7 +51,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     // requires pip >= 26.1, so on older pip every state is version-gated
     // (issue #52): a missing setting would be filled with a value the tool
     // can't parse, a configured relative duration is already unusable, and a
-    // configured absolute datetime — which does work on pip 26.0 — must not be
+    // configured absolute datetime (which does work on pip 26.0) must not be
     // offered a fix that replaces it with the unsupported relative form. The
     // absolute-datetime case keeps a message naming the current value, since
     // the value itself works and only the recommended form needs the upgrade.
@@ -65,7 +65,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
             Some(v) if configured_non_relative => mark_unsupported_with_message(
                 rec,
                 format!(
-                    "set to {v} — relative durations require pip \u{2265} \
+                    "set to {v}, relative durations require pip \u{2265} \
                      {PIP_MIN_MAJOR}.{PIP_MIN_MINOR} (have {ver})"
                 ),
             ),

@@ -15,7 +15,7 @@ DepsGuard is a zero-dependency Rust CLI that scans package manager configs (npm,
 
 All agent involvement in this repository must be disclosed:
 
-- **Pull requests**: every PR must state whether an AI agent or assistant produced any part of it (code, tests, docs, commit messages), naming the tool and model (e.g. "Claude Code — Claude Fable 5"). The PR template has a section for this; write "None" when no agent was used.
+- **Pull requests**: every PR must state whether an AI agent or assistant produced any part of it (code, tests, docs, commit messages), naming the tool and model (e.g. "Claude Code (Claude Fable 5)"). The PR template has a section for this; write "None" when no agent was used.
 - **Commits**: agent-authored or agent-assisted commits must carry a `Co-Authored-By` trailer naming the agent and model, e.g. `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
 - **Comments and reviews**: when an agent posts on a person's behalf, it must identify itself as an agent and name the model, e.g. "Authored by Claude (Fable 5) via Claude Code, on behalf of @user".
 
@@ -68,7 +68,7 @@ This project intentionally has **no external crates**. All functionality (termin
 ### Naming and structure
 
 - Follow Rust naming conventions: `snake_case` for functions/variables, `CamelCase` for types, `SCREAMING_SNAKE_CASE` for constants.
-- Keep modules focused — see the **How it works** section in `README.md` for module responsibilities.
+- Keep modules focused (see the **How it works** section in `README.md` for module responsibilities).
 - Prefer small, composable functions over long procedural blocks.
 
 ### Testing
@@ -92,8 +92,8 @@ This project intentionally has **no external crates**. All functionality (termin
 
 ## Version-gated settings
 
-Most cooldown/security settings only exist — or only accept the value DepsGuard
-writes — from a specific tool version onward. Getting this wrong causes the
+Most cooldown/security settings only exist (or only accept the value DepsGuard
+writes) from a specific tool version onward. Getting this wrong causes the
 worst false positive: telling a user to add a setting their installed tool
 cannot use (see [#52](https://github.com/arnica/depsguard/issues/52), where
 poetry 1.8.5 was told to set `solver.min-release-age`, added in poetry 2.4).
@@ -106,22 +106,22 @@ a `WARNING` badge and is never offered in the fix selector. A missing setting on
 an unsupported version must never become `Missing`/`FileMissing` (which read as
 `ACTION NEEDED`).
 
-**Do it via the shared helpers** in `manager::types` — compute the normal
+**Do it via the shared helpers** in `manager::types`. Compute the normal
 `Recommendation`, then apply the gate. For a plain major.minor floor, prefer
 the all-in-one helper:
 
-- `gate_min_version(rec, tool, min_major, min_minor, have)` — **the default.**
+- `gate_min_version(rec, tool, min_major, min_minor, have)`, **the default.**
   Returns `rec` unchanged when `have >= min_major.min_minor`, otherwise an
   `Unsupported` verdict. It does the version check *and* applies the verdict, so
   scanners never hand-roll the comparison.
 
-When the gate is more than a major.minor floor — patch-level precision, or a
-value-form gate (pip/uv, below) — compute the condition yourself and apply the
+When the gate is more than a major.minor floor (patch-level precision, or a
+value-form gate, pip/uv below), compute the condition yourself and apply the
 verdict directly with the lower-level helpers:
 
-- `mark_unsupported(rec, tool, min_major, min_minor, have)` — unconditional,
+- `mark_unsupported(rec, tool, min_major, min_minor, have)`, unconditional,
   standard message.
-- `mark_unsupported_with_message(rec, msg)` — unconditional, custom message.
+- `mark_unsupported_with_message(rec, msg)`, unconditional, custom message.
 
 All three convert *any* status to `Unsupported`. Do **not** re-introduce an
 "only-if-configured" guard (that was the #52 bug): the version check decides
@@ -132,7 +132,7 @@ For settings whose feature exists earlier but whose *value form* needs a newer
 version (pip/uv relative durations vs. absolute dates), gate **every** state on
 the version floor, not just missing or new-form values: the fix always writes
 the new form, so even a configured old-form value (e.g. a working absolute
-date) must become `Unsupported` — otherwise the offered fix would replace a
+date) must become `Unsupported`, otherwise the offered fix would replace a
 working config with a value the tool cannot parse. Give the old-form case a
 message that names the current value, so a working config is not reduced to a
 bare "requires >= X" upgrade prompt.
@@ -163,13 +163,13 @@ The workflow creates a release tag, publishes artifacts, and runs optional publi
 
 Homebrew has two channels:
 
-- **homebrew-core (primary)** — `depsguard` is published in
+- **homebrew-core (primary)**, `depsguard` is published in
   [Homebrew/homebrew-core](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/depsguard.rb),
   so users just run `brew install depsguard` (no tap). Version bumps are handled by
   Homebrew autobump: BrewTestBot opens the bump PR automatically when a new GitHub
   tag is published, so no CI in this repo is required. Do **not** add `no_autobump!`
   to the core formula or autobump stops.
-- **`arnica/depsguard` tap (legacy fallback)** — still maintained at
+- **`arnica/depsguard` tap (legacy fallback)**, still maintained at
   `Formula/depsguard.rb`, rendered from `packaging/homebrew/depsguard.rb.in` and pushed
   to `main` by the `sync-homebrew-formula` job on each release.
 
@@ -183,7 +183,7 @@ Document these in your org’s internal runbooks or public docs once the repos e
 **Homebrew (homebrew-core, primary)**
 
 1. Canonical formula lives in homebrew-core at `Formula/d/depsguard.rb`; users run `brew install depsguard`.
-2. New versions are bumped automatically by Homebrew autobump on each GitHub release tag — no action needed in this repo.
+2. New versions are bumped automatically by Homebrew autobump on each GitHub release tag (no action needed in this repo).
 3. To force an immediate bump instead of waiting for autobump, run `brew bump-formula-pr depsguard` locally.
 
 **Homebrew (`arnica/depsguard` tap, legacy fallback)**

@@ -331,7 +331,7 @@ extern "C" {
 mod raw {
     use std::io;
 
-    // Minimal termios FFI — no libc crate needed.
+    // Minimal termios FFI, no libc crate needed.
     // Field types must match the OS ABI exactly to avoid UB.
 
     // Linux: tcflag_t = u32, cc_t = u8, speed_t = u32, NCCS = 32
@@ -546,7 +546,7 @@ pub fn read_key() -> io::Result<Key> {
             b' ' => Key::Space,
             13 | 10 => Key::Enter,
             2 => Key::PageUp,    // Ctrl+B
-            3 => Key::Char('q'), // Ctrl+C — quit (ISIG is cleared in raw mode)
+            3 => Key::Char('q'), // Ctrl+C, quit (ISIG is cleared in raw mode)
             6 => Key::PageDown,  // Ctrl+F
             4 => Key::PageDown,  // Ctrl+D
             21 => Key::PageUp,   // Ctrl+U
@@ -554,7 +554,7 @@ pub fn read_key() -> io::Result<Key> {
         });
     }
 
-    // ESC received — read next bytes to disambiguate escape sequences.
+    // ESC received, read next bytes to disambiguate escape sequences.
     let mut seq = [0u8; 2];
     let n = stdin.read(&mut seq)?;
     if n == 0 {
@@ -572,7 +572,7 @@ pub fn read_key() -> io::Result<Key> {
             last[0]
         };
 
-        // SGR mouse event: ESC [ < Cb ; Cx ; Cy M/m — consume and discard
+        // SGR mouse event: ESC [ < Cb ; Cx ; Cy M/m, consume and discard
         if letter == b'<' {
             let mut b = [0u8; 1];
             loop {
@@ -586,7 +586,7 @@ pub fn read_key() -> io::Result<Key> {
             return Ok(Key::Unknown);
         }
 
-        // Basic mouse event: ESC [ M followed by 3 bytes — consume and discard.
+        // Basic mouse event: ESC [ M followed by 3 bytes, consume and discard.
         // Must use read_exact; plain read() may return fewer than 3 bytes.
         if letter == b'M' {
             let mut buf = [0u8; 3];

@@ -35,8 +35,8 @@ pub fn scan_project(path: &Path, version: &str) -> Vec<Recommendation> {
     if version_at_least(version, 11, 0) {
         let redirect = |yaml_key: &str| {
             format!(
-                "ignored in .npmrc by pnpm \u{2265} 11 — set {yaml_key} in \
-                 pnpm-workspace.yaml or the global config.yaml"
+                "ignored in .npmrc by pnpm \u{2265} 11 (set {yaml_key} in \
+                 pnpm-workspace.yaml or the global config.yaml)"
             )
         };
         return [
@@ -61,7 +61,7 @@ pub fn uses_yaml_config(version: &str) -> bool {
 
 /// Scan the pnpm global config file.
 ///
-/// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case) — all settings accepted.
+/// - pnpm <= 10: reads `<configDir>/rc` (INI, kebab-case), all settings accepted.
 /// - pnpm >= 11: reads `<configDir>/config.yaml` (YAML, camelCase); every hardening
 ///   key we set is on pnpm's global-config allowlist (`pnpmConfigFileKeys`).
 pub fn scan_global(path: &Path, version: &str) -> Vec<Recommendation> {

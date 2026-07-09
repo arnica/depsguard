@@ -182,10 +182,10 @@ fn status_json(status: &CheckStatus) -> Json {
 }
 
 /// Render scan results as NDJSON: one line per (manager, recommendation)
-/// finding, followed by one summary trailer line. Schema 1.0, independent of
-/// the blob format's version counter (see README). Every line carries the same
+/// finding, followed by one summary trailer line. Shares the blob format's
+/// `schema_version` counter (see README). Every line carries the same
 /// envelope and `scanned_at` so it stands alone; finding lines are raw
-/// (uncollapsed) even when managers share a `(config_path, key)` — the summary
+/// (uncollapsed) even when managers share a `(config_path, key)`, the summary
 /// line's counts are what collapse to the most-significant status.
 pub fn render_scan_ndjson(managers: &[ManagerInfo], scanned_at: &str) -> String {
     let mut lines: Vec<String> = managers
@@ -204,7 +204,7 @@ pub fn render_scan_ndjson(managers: &[ManagerInfo], scanned_at: &str) -> String 
 fn envelope(record_type: &str, scanned_at: &str) -> Vec<(&'static str, Json)> {
     vec![
         ("record_type", Json::str(record_type)),
-        ("schema_version", Json::str("1.0")),
+        ("schema_version", Json::str("1.1")),
         ("tool", Json::str("depsguard")),
         ("tool_version", Json::str(env!("CARGO_PKG_VERSION"))),
         ("scanned_at", Json::str(scanned_at)),
@@ -581,7 +581,7 @@ mod tests {
         );
         let s = render_scan_ndjson(&[m], "2026-07-09T14:00:00Z");
         for line in s.split('\n') {
-            assert!(line.contains(r#""schema_version":"1.0""#));
+            assert!(line.contains(r#""schema_version":"1.1""#));
             assert!(line.contains(r#""tool":"depsguard""#));
             assert!(line.contains(&format!(
                 r#""tool_version":"{}""#,

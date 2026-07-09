@@ -123,7 +123,7 @@ pub fn read_toml_value(path: &Path, dotted_key: &str) -> Option<String> {
 /// Matches configparser's default semantics, which differ from TOML:
 /// - both `=` and `:` are key/value delimiters (first one wins);
 /// - only whole-line comments are recognized (`#` or `;` at the start of a
-///   line); inline comments are NOT stripped — the value is the full remainder
+///   line); inline comments are NOT stripped, the value is the full remainder
 ///   of the line, so `key = P7D ; note` has the literal value `P7D ; note`;
 /// - values are not unquoted.
 ///

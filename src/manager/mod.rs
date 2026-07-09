@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn resolve_effective_higher_value_wins_even_if_insecure() {
         // A higher-precedence file that SETS the key overrides a lower one, even
-        // with a bad value — so the scanner correctly flags it.
+        // with a bad value, so the scanner correctly flags it.
         let current = tmp_file("[install]\nuploaded-prior-to = 2099-01-01\n");
         let legacy = tmp_file("[install]\nuploaded-prior-to = P7D\n");
         let cands = vec![current.path().to_path_buf(), legacy.path().to_path_buf()];
@@ -959,7 +959,7 @@ mod tests {
     #[test]
     fn scan_npm_old_version_missing_release_age_is_unsupported() {
         // A setting the installed version cannot use must never be an actionable
-        // fix, even when absent — DepsGuard reports it as Unsupported (issue #52).
+        // fix, even when absent (DepsGuard reports it as Unsupported, issue #52).
         let f = tmp_file("ignore-scripts=true\n");
         let recs = npm::scan(f.path(), "10.8.0");
         assert!(recs[0].status.is_unsupported());
@@ -1405,7 +1405,7 @@ mod tests {
     #[test]
     fn scan_pip_inline_comment_is_not_stripped() {
         // configparser does NOT strip inline comments, so the value is literally
-        // `P7D # note` (invalid) — must be flagged, never treated as a clean P7D
+        // `P7D # note` (invalid), must be flagged, never treated as a clean P7D
         // (which would be a false SECURE).
         let f = tmp_file("[install]\nuploaded-prior-to = P7D # note\n");
         let recs = pip::scan(f.path(), PIP_NEW);
@@ -1566,7 +1566,7 @@ mod tests {
 
     // Regression for https://github.com/arnica/depsguard/issues/52:
     // poetry 1.8.5 has no `solver.min-release-age` (added in 2.4.0). DepsGuard
-    // must NOT prompt the user to add a setting their version cannot use — a
+    // must NOT prompt the user to add a setting their version cannot use. A
     // missing setting on an unsupported version is informational (`Unsupported`,
     // "requires poetry >= 2.4"), never an actionable "ACTION NEEDED" fix.
     #[test]
@@ -2349,7 +2349,7 @@ mod tests {
     // ── Version-gating guardrail (issue #52) ────────────────────────
     //
     // A setting the installed tool version cannot use must NEVER be reported as
-    // an actionable fix — not when the key is absent, not when the whole config
+    // an actionable fix, not when the key is absent, not when the whole config
     // file is missing. DepsGuard surfaces it as an informational `Unsupported`
     // ("requires >= X"), so the badge is WARNING, not ACTION NEEDED, and the fix
     // selector never offers to write a config the tool would ignore.
@@ -2376,7 +2376,7 @@ mod tests {
             ("pip", pip::scan, "26.0", "install.uploaded-prior-to"),
             ("poetry", poetry::scan, "2.3.0", "solver.min-release-age"),
             ("yarn", yarn::scan, "4.9.0", "npmMinimalAgeGate"),
-            // pnpm global rc (v10) — each gated key one notch below its minimum.
+            // pnpm global rc (v10), each gated key one notch below its minimum.
             (
                 "pnpm global",
                 pnpm::scan_global,
@@ -2432,7 +2432,7 @@ mod tests {
         let nonexistent = Path::new("/definitely/not/a/real/depsguard/config/file");
         for &(label, scan, version, key) in cases {
             // Two flavours of "not configured": an empty file (Missing) and no
-            // file at all (FileMissing) — the exact state issue #52 mis-reported.
+            // file at all (FileMissing), the exact state issue #52 mis-reported.
             let empty = tmp_file("");
             for (state, path) in [("empty file", empty.path()), ("missing file", nonexistent)] {
                 let recs = scan(path, version);

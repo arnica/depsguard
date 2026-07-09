@@ -212,9 +212,9 @@ pub enum RepoConfigKind {
 /// This is the canonical way to gate a setting whose feature simply does not
 /// exist before `min_major.min_minor`. Keeping the version check and the
 /// `Unsupported` verdict in one place means a setting the tool can't use is never
-/// reported as an actionable fix — the inconsistency behind issue #52, where a
+/// reported as an actionable fix (the inconsistency behind issue #52, where a
 /// *missing* setting on an old version was treated as fixable while a configured
-/// one was marked unsupported.
+/// one was marked unsupported).
 ///
 /// Scanners whose gate is more than a plain version floor (e.g. pip/uv, where
 /// only the relative-duration *value form* needs a newer release) compute their

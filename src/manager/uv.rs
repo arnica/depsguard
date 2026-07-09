@@ -53,7 +53,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
     // requires uv >= 0.9.17, so on older uv every state is version-gated
     // (issue #52): a missing setting would be filled with a value the tool
     // can't parse, a configured relative duration is already unusable, and a
-    // configured absolute RFC-3339 date — which does work on older uv — must
+    // configured absolute RFC-3339 date (which does work on older uv) must
     // not be offered a fix that replaces it with the unsupported relative
     // form. The absolute-date case keeps a message naming the current value,
     // since the value itself works and only the recommended form needs the
@@ -66,7 +66,7 @@ pub fn scan(path: &Path, version: &str) -> Vec<Recommendation> {
             .is_some_and(|v| parse_relative_days(v).is_none());
         let msg = match val.as_deref() {
             Some(v) if configured_non_relative => format!(
-                "set to {v} — relative durations require uv \u{2265} \
+                "set to {v}, relative durations require uv \u{2265} \
                  {UV_MIN_MAJOR}.{UV_MIN_MINOR}.{UV_MIN_PATCH} (have {ver})"
             ),
             _ => format!(
