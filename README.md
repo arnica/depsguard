@@ -206,9 +206,10 @@ depsguard scan --format json | jq '.summary'
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "tool": "depsguard",
   "tool_version": "0.1.38",
+  "scanned_at": "2026-07-09T14:00:00Z",
   "summary": {
     "needs_fix": true,
     "unique_configs": 2,
@@ -237,6 +238,7 @@ depsguard scan --format json | jq '.summary'
 }
 ```
 
+- `scanned_at` is the run's start time, ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`), captured once and identical across the document.
 - `config_path` is the raw absolute path (not `~`-collapsed), so it is unambiguous for a consumer whose `$HOME` differs from the runner's.
 - `status.state` is one of `ok`, `missing`, `file_missing`, `wrong_value`, `unsupported`. A `value` field accompanies `ok` and `wrong_value` (the configured value); a `message` field accompanies `unsupported` (why the setting is unavailable); `missing` and `file_missing` carry neither.
 - `summary.counts` collapse each `(config_path, key)` to its most-significant status, so they match the badges in the text report.

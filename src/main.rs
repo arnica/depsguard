@@ -172,6 +172,15 @@ fn print_error(msg: &str) {
     eprintln!("{}{}Error:{} {msg}", term::RED, term::BOLD, term::RESET);
 }
 
+/// Current time as Unix epoch seconds, captured once per scan run so every
+/// output line stamps the same `scanned_at`.
+fn now_epoch_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 fn progress_callback(label: &str, _frac: f32) {
     let stdout = io::stdout();
     let mut w = term::ColorWriter::new(stdout.lock());
@@ -294,7 +303,8 @@ fn run_scan_only() -> ScanOutcome {
 /// match `run_scan_only`.
 fn run_scan_json() -> ScanOutcome {
     let managers = manager::scan_all_with_progress(|_, _| {});
-    println!("{}", json::render_scan_json(&managers));
+    let scanned_at = manager::date::format_timestamp(now_epoch_secs());
+    println!("{}", json::render_scan_json(&managers, &scanned_at));
 
     if has_needs_fix(&managers) {
         ScanOutcome::NeedsFix

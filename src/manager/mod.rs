@@ -644,6 +644,29 @@ mod tests {
         assert_eq!(date::epoch_to_date(1704067200), "2024-01-01T00:00:00Z");
     }
 
+    #[test]
+    fn format_timestamp_known_epoch() {
+        // 2024-01-01T00:00:00Z
+        assert_eq!(date::format_timestamp(1704067200), "2024-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn format_timestamp_leap_year() {
+        // 2024-02-29T12:30:45Z (2024 is a leap year)
+        assert_eq!(date::format_timestamp(1709209845), "2024-02-29T12:30:45Z");
+    }
+
+    #[test]
+    fn format_timestamp_midnight() {
+        assert_eq!(date::format_timestamp(1704067200), "2024-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn format_timestamp_end_of_day() {
+        // 2024-01-01T23:59:59Z
+        assert_eq!(date::format_timestamp(1704153599), "2024-01-01T23:59:59Z");
+    }
+
     // ── CheckStatus tests ───────────────────────────────────────────
 
     #[test]

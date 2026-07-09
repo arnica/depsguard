@@ -1305,12 +1305,16 @@ fn scan_format_json_emits_only_json_on_stdout() {
         "stdout should contain no ANSI escape sequences:\n{stdout}"
     );
     assert!(
-        trimmed.contains(r#""schema_version":"1.0""#),
+        trimmed.contains(r#""schema_version":"1.1""#),
         "missing schema_version:\n{stdout}"
     );
     assert!(
         trimmed.contains(r#""tool":"depsguard""#),
         "missing tool field:\n{stdout}"
+    );
+    assert!(
+        trimmed.contains(r#""scanned_at":"#),
+        "missing scanned_at field:\n{stdout}"
     );
     assert!(
         trimmed.contains("\"summary\":"),
@@ -1344,7 +1348,7 @@ fn format_json_without_scan_still_reports() {
     let out = run_depsguard(&["--format", "json", "--no-search"], home.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.trim().starts_with('{') && stdout.contains(r#""schema_version":"1.0""#),
+        stdout.trim().starts_with('{') && stdout.contains(r#""schema_version":"1.1""#),
         "expected JSON report without the `scan` subcommand:\n{stdout}"
     );
 }

@@ -82,10 +82,11 @@ fn write_escaped(f: &mut std::fmt::Formatter<'_>, s: &str) -> std::fmt::Result {
     f.write_str("\"")
 }
 
-/// Render scan results as the schema 1.0 JSON document (the documented contract
+/// Render scan results as the schema 1.1 JSON document (the documented contract
 /// lives in `README.md`). Returns a complete JSON object with no trailing
-/// newline.
-pub fn render_scan_json(managers: &[ManagerInfo]) -> String {
+/// newline. `scanned_at` is captured once by the caller (see
+/// `crate::manager::date::format_timestamp`) so this stays pure/testable.
+pub fn render_scan_json(managers: &[ManagerInfo], scanned_at: &str) -> String {
     // Same collapsed counts the text summary uses, from one shared source, so
     // the two reports never drift (see `crate::ui::summary_counts`).
     let counts = crate::ui::summary_counts(managers);
@@ -112,9 +113,10 @@ pub fn render_scan_json(managers: &[ManagerInfo]) -> String {
     let managers_json = Json::Array(managers.iter().map(manager_json).collect());
 
     let doc = obj(vec![
-        ("schema_version", Json::str("1.0")),
+        ("schema_version", Json::str("1.1")),
         ("tool", Json::str("depsguard")),
         ("tool_version", Json::str(env!("CARGO_PKG_VERSION"))),
+        ("scanned_at", Json::str(scanned_at)),
         ("summary", summary),
         ("managers", managers_json),
     ]);
@@ -245,15 +247,16 @@ mod tests {
 
     #[test]
     fn report_has_schema_envelope() {
-        let s = render_scan_json(&[]);
-        assert!(s.contains(r#""schema_version":"1.0""#));
+        let s = render_scan_json(&[], "2024-01-01T00:00:00Z");
+        assert!(s.contains(r#""schema_version":"1.1""#));
         assert!(s.contains(r#""tool":"depsguard""#));
+        assert!(s.contains(r#""scanned_at":"2024-01-01T00:00:00Z""#));
         assert!(s.contains(r#""managers":[]"#));
     }
 
     #[test]
     fn empty_managers_is_all_clear() {
-        let s = render_scan_json(&[]);
+        let s = render_scan_json(&[], "2024-01-01T00:00:00Z");
         assert!(s.contains(r#""needs_fix":false"#));
         assert!(s.contains(r#""unique_configs":0"#));
         assert!(s.contains(r#""total_errors":0"#));
@@ -273,7 +276,7 @@ mod tests {
                 rec("e", CheckStatus::Unsupported("requires npm >= 11".into())),
             ],
         );
-        let s = render_scan_json(&[m]);
+        let s = render_scan_json(&[m], "2024-01-01T00:00:00Z");
         assert!(s.contains(r#"{"state":"ok","value":"true"}"#));
         assert!(s.contains(r#"{"state":"missing"}"#));
         assert!(s.contains(r#"{"state":"file_missing"}"#));
@@ -298,7 +301,7 @@ mod tests {
             false,
             vec![rec("k", CheckStatus::Missing)],
         );
-        let s = render_scan_json(&[m1, m2]);
+        let s = render_scan_json(&[m1, m2], "2024-01-01T00:00:00Z");
         assert!(s.contains(r#""missing":1"#));
         assert!(s.contains(r#""ok":0"#));
         assert!(s.contains(r#""unique_configs":1"#));
@@ -313,7 +316,7 @@ mod tests {
             false,
             vec![rec("k", CheckStatus::WrongValue("a\"b".into()))],
         );
-        let s = render_scan_json(&[m]);
+        let s = render_scan_json(&[m], "2024-01-01T00:00:00Z");
         assert!(s.contains(r#""value":"a\"b""#));
     }
 }

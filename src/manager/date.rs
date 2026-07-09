@@ -18,6 +18,20 @@ pub fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     (y as u64, mon, d)
 }
 
+/// Format a Unix epoch timestamp as ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`).
+///
+/// Std-lib only (no `chrono`); reuses `days_to_ymd` for the calendar part.
+pub fn format_timestamp(epoch_secs: u64) -> String {
+    let (year, month, day) = days_to_ymd(epoch_secs / 86400);
+    let secs_of_day = epoch_secs % 86400;
+    let (hour, minute, second) = (
+        secs_of_day / 3600,
+        (secs_of_day % 3600) / 60,
+        secs_of_day % 60,
+    );
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
 #[cfg(test)]
 pub fn date_days_ago(days: u64) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
