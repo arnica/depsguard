@@ -155,25 +155,107 @@ fn recommendation_json(rec: &Recommendation) -> Json {
     ])
 }
 
-/// Map a `CheckStatus` to its JSON object. `value` accompanies `ok`/`wrong_value`;
-/// `message` accompanies `unsupported`; `missing`/`file_missing` carry neither.
-fn status_json(status: &CheckStatus) -> Json {
+/// Map a `CheckStatus` to its state name plus an optional value/message: `value`
+/// accompanies `ok`/`wrong_value`; `message` accompanies `unsupported`;
+/// `missing`/`file_missing` carry neither. Shared by the blob's nested `status`
+/// object and NDJSON's flattened `status_value`/`status_message` fields.
+fn status_fields(status: &CheckStatus) -> (&'static str, Option<&str>, Option<&str>) {
     match status {
-        CheckStatus::Ok(v) => obj(vec![
-            ("state", Json::str("ok")),
-            ("value", Json::str(v.clone())),
-        ]),
-        CheckStatus::Missing => obj(vec![("state", Json::str("missing"))]),
-        CheckStatus::FileMissing => obj(vec![("state", Json::str("file_missing"))]),
-        CheckStatus::WrongValue(v) => obj(vec![
-            ("state", Json::str("wrong_value")),
-            ("value", Json::str(v.clone())),
-        ]),
-        CheckStatus::Unsupported(m) => obj(vec![
-            ("state", Json::str("unsupported")),
-            ("message", Json::str(m.clone())),
-        ]),
+        CheckStatus::Ok(v) => ("ok", Some(v.as_str()), None),
+        CheckStatus::Missing => ("missing", None, None),
+        CheckStatus::FileMissing => ("file_missing", None, None),
+        CheckStatus::WrongValue(v) => ("wrong_value", Some(v.as_str()), None),
+        CheckStatus::Unsupported(m) => ("unsupported", None, Some(m.as_str())),
     }
+}
+
+fn status_json(status: &CheckStatus) -> Json {
+    let (state, value, message) = status_fields(status);
+    let mut fields = vec![("state", Json::str(state))];
+    if let Some(v) = value {
+        fields.push(("value", Json::str(v)));
+    }
+    if let Some(m) = message {
+        fields.push(("message", Json::str(m)));
+    }
+    obj(fields)
+}
+
+/// Render scan results as NDJSON: one line per (manager, recommendation)
+/// finding, followed by one summary trailer line. Schema 1.0, independent of
+/// the blob format's version counter (see README). Every line carries the same
+/// envelope and `scanned_at` so it stands alone; finding lines are raw
+/// (uncollapsed) even when managers share a `(config_path, key)` — the summary
+/// line's counts are what collapse to the most-significant status.
+pub fn render_scan_ndjson(managers: &[ManagerInfo], scanned_at: &str) -> String {
+    let mut lines: Vec<String> = managers
+        .iter()
+        .flat_map(|mgr| {
+            mgr.recommendations
+                .iter()
+                .map(move |rec| finding_line(mgr, rec, scanned_at).to_string())
+        })
+        .collect();
+    lines.push(summary_line(managers, scanned_at).to_string());
+    lines.join("\n")
+}
+
+/// The four fields every NDJSON line carries, identical across a run.
+fn envelope(record_type: &str, scanned_at: &str) -> Vec<(&'static str, Json)> {
+    vec![
+        ("record_type", Json::str(record_type)),
+        ("schema_version", Json::str("1.0")),
+        ("tool", Json::str("depsguard")),
+        ("tool_version", Json::str(env!("CARGO_PKG_VERSION"))),
+        ("scanned_at", Json::str(scanned_at)),
+    ]
+}
+
+fn finding_line(mgr: &ManagerInfo, rec: &Recommendation, scanned_at: &str) -> Json {
+    let mut fields = envelope("finding", scanned_at);
+    fields.push(("manager", Json::str(mgr.kind.name())));
+    fields.push(("manager_version", Json::str(mgr.version.clone())));
+    fields.push((
+        "config_path",
+        Json::str(mgr.config_path.to_string_lossy().into_owned()),
+    ));
+    fields.push(("discovered", Json::Bool(mgr.discovered)));
+    fields.push(("key", Json::str(rec.key.clone())));
+    fields.push(("description", Json::str(rec.description.clone())));
+    fields.push(("expected", Json::str(rec.expected.clone())));
+    fields.push(("needs_fix", Json::Bool(rec.needs_fix())));
+    let (state, value, message) = status_fields(&rec.status);
+    fields.push(("status", Json::str(state)));
+    if let Some(v) = value {
+        fields.push(("status_value", Json::str(v)));
+    }
+    if let Some(m) = message {
+        fields.push(("status_message", Json::str(m)));
+    }
+    obj(fields)
+}
+
+fn summary_line(managers: &[ManagerInfo], scanned_at: &str) -> Json {
+    let counts = crate::ui::summary_counts(managers);
+    let needs_fix = managers
+        .iter()
+        .any(|m| m.recommendations.iter().any(|r| r.needs_fix()));
+
+    let mut fields = envelope("summary", scanned_at);
+    fields.push(("needs_fix", Json::Bool(needs_fix)));
+    fields.push(("unique_configs", Json::Int(counts.unique_configs as i64)));
+    fields.push((
+        "counts",
+        obj(vec![
+            ("ok", Json::Int(counts.ok as i64)),
+            ("missing", Json::Int(counts.missing as i64)),
+            ("file_missing", Json::Int(counts.file_missing as i64)),
+            ("wrong_value", Json::Int(counts.wrong_value as i64)),
+            ("unsupported", Json::Int(counts.unsupported as i64)),
+            ("total_errors", Json::Int(counts.total_errors() as i64)),
+        ]),
+    ));
+    obj(fields)
 }
 
 #[cfg(test)]
@@ -318,5 +400,219 @@ mod tests {
         );
         let s = render_scan_json(&[m], "2024-01-01T00:00:00Z");
         assert!(s.contains(r#""value":"a\"b""#));
+    }
+
+    // ── U2: NDJSON renderer ─────────────────────────────────────────
+
+    fn is_single_json_object(line: &str) -> bool {
+        line.starts_with('{') && line.ends_with('}') && !line.contains('\n')
+    }
+
+    #[test]
+    fn ndjson_emits_one_finding_line_per_recommendation_plus_summary_trailer() {
+        let m1 = mgr(
+            ManagerKind::Npm,
+            "/a",
+            false,
+            vec![
+                rec("k1", CheckStatus::Ok("v".into())),
+                rec("k2", CheckStatus::Missing),
+            ],
+        );
+        let m2 = mgr(
+            ManagerKind::Pnpm,
+            "/b",
+            false,
+            vec![
+                rec("k3", CheckStatus::Ok("v".into())),
+                rec("k4", CheckStatus::Missing),
+            ],
+        );
+        let s = render_scan_ndjson(&[m1, m2], "2024-01-01T00:00:00Z");
+        let lines: Vec<&str> = s.split('\n').collect();
+        assert_eq!(lines.len(), 5);
+        for line in &lines {
+            assert!(
+                is_single_json_object(line),
+                "not a standalone object: {line}"
+            );
+        }
+        assert_eq!(
+            lines[..4]
+                .iter()
+                .filter(|l| l.contains(r#""record_type":"finding""#))
+                .count(),
+            4
+        );
+        assert!(lines[4].contains(r#""record_type":"summary""#));
+    }
+
+    #[test]
+    fn ndjson_empty_managers_emits_summary_line_only() {
+        let s = render_scan_ndjson(&[], "2024-01-01T00:00:00Z");
+        let lines: Vec<&str> = s.split('\n').collect();
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains(r#""record_type":"summary""#));
+        assert!(lines[0].contains(r#""unique_configs":0"#));
+    }
+
+    #[test]
+    fn ndjson_manager_with_no_recommendations_has_no_finding_line() {
+        let m = mgr(ManagerKind::Renovate, "/repo/renovate.json", true, vec![]);
+        let s = render_scan_ndjson(&[m], "2024-01-01T00:00:00Z");
+        let lines: Vec<&str> = s.split('\n').collect();
+        assert_eq!(lines.len(), 1, "no recommendations means no finding lines");
+        assert!(lines[0].contains(r#""record_type":"summary""#));
+        assert!(
+            lines[0].contains(r#""unique_configs":1"#),
+            "config_path still counted even with zero recommendations"
+        );
+    }
+
+    #[test]
+    fn ndjson_shared_config_and_key_emits_both_finding_lines_raw() {
+        // N3a: finding lines are raw/uncollapsed even when two managers share a
+        // (config_path, key); only the summary collapses to most-significant.
+        let m1 = mgr(
+            ManagerKind::Npm,
+            "/shared",
+            false,
+            vec![rec("k", CheckStatus::Ok("v".into()))],
+        );
+        let m2 = mgr(
+            ManagerKind::Pnpm,
+            "/shared",
+            false,
+            vec![rec("k", CheckStatus::Missing)],
+        );
+        let s = render_scan_ndjson(&[m1, m2], "2024-01-01T00:00:00Z");
+        let lines: Vec<&str> = s.split('\n').collect();
+        assert_eq!(lines.len(), 3, "both finding lines plus one summary");
+        assert!(lines[0].contains(r#""manager":"npm""#) && lines[0].contains(r#""status":"ok""#));
+        assert!(
+            lines[1].contains(r#""manager":"pnpm""#) && lines[1].contains(r#""status":"missing""#)
+        );
+        assert!(lines[2].contains(r#""missing":1"#));
+        assert!(lines[2].contains(r#""ok":0"#));
+        assert!(lines[2].contains(r#""unique_configs":1"#));
+    }
+
+    #[test]
+    fn ndjson_status_states_map_to_flat_fields() {
+        let m = mgr(
+            ManagerKind::Npm,
+            "/cfg",
+            false,
+            vec![
+                rec("a", CheckStatus::Ok("true".into())),
+                rec("b", CheckStatus::Missing),
+                rec("c", CheckStatus::FileMissing),
+                rec("d", CheckStatus::WrongValue("0".into())),
+                rec("e", CheckStatus::Unsupported("requires npm >= 11".into())),
+            ],
+        );
+        let s = render_scan_ndjson(&[m], "2024-01-01T00:00:00Z");
+        let lines: Vec<&str> = s.split('\n').collect();
+        assert!(
+            lines[0].contains(r#""status":"ok""#) && lines[0].contains(r#""status_value":"true""#)
+        );
+        assert!(
+            lines[1].contains(r#""status":"missing""#)
+                && !lines[1].contains("status_value")
+                && !lines[1].contains("status_message")
+        );
+        assert!(
+            lines[2].contains(r#""status":"file_missing""#)
+                && !lines[2].contains("status_value")
+                && !lines[2].contains("status_message")
+        );
+        assert!(
+            lines[3].contains(r#""status":"wrong_value""#)
+                && lines[3].contains(r#""status_value":"0""#)
+        );
+        assert!(
+            lines[4].contains(r#""status":"unsupported""#)
+                && lines[4].contains(r#""status_message":"requires npm >= 11""#)
+        );
+    }
+
+    #[test]
+    fn ndjson_summary_counts_match_blob_counts() {
+        let m1 = mgr(
+            ManagerKind::Npm,
+            "/a",
+            false,
+            vec![rec("k1", CheckStatus::Ok("v".into()))],
+        );
+        let m2 = mgr(
+            ManagerKind::Pnpm,
+            "/b",
+            false,
+            vec![rec("k2", CheckStatus::Missing)],
+        );
+        let managers = [m1, m2];
+        let blob = render_scan_json(&managers, "2024-01-01T00:00:00Z");
+        let ndjson = render_scan_ndjson(&managers, "2024-01-01T00:00:00Z");
+        let summary_line = ndjson.split('\n').last().unwrap();
+        for fragment in [
+            r#""ok":1"#,
+            r#""missing":1"#,
+            r#""file_missing":0"#,
+            r#""wrong_value":0"#,
+            r#""unsupported":0"#,
+            r#""total_errors":1"#,
+            r#""unique_configs":2"#,
+        ] {
+            assert!(blob.contains(fragment), "blob missing {fragment}");
+            assert!(
+                summary_line.contains(fragment),
+                "summary missing {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn ndjson_every_line_shares_identical_envelope() {
+        let m = mgr(
+            ManagerKind::Npm,
+            "/cfg",
+            false,
+            vec![rec("k", CheckStatus::Missing)],
+        );
+        let s = render_scan_ndjson(&[m], "2026-07-09T14:00:00Z");
+        for line in s.split('\n') {
+            assert!(line.contains(r#""schema_version":"1.0""#));
+            assert!(line.contains(r#""tool":"depsguard""#));
+            assert!(line.contains(&format!(
+                r#""tool_version":"{}""#,
+                env!("CARGO_PKG_VERSION")
+            )));
+            assert!(line.contains(r#""scanned_at":"2026-07-09T14:00:00Z""#));
+        }
+    }
+
+    #[test]
+    fn ndjson_has_no_trailing_blank_line() {
+        let m = mgr(
+            ManagerKind::Npm,
+            "/cfg",
+            false,
+            vec![rec("k", CheckStatus::Missing)],
+        );
+        let s = render_scan_ndjson(&[m], "2024-01-01T00:00:00Z");
+        assert!(!s.ends_with('\n'));
+        assert!(s.split('\n').all(|l| !l.is_empty()));
+    }
+
+    #[test]
+    fn ndjson_escapes_values() {
+        let m = mgr(
+            ManagerKind::Npm,
+            "/cfg",
+            false,
+            vec![rec("k", CheckStatus::WrongValue("a\"b".into()))],
+        );
+        let s = render_scan_ndjson(&[m], "2024-01-01T00:00:00Z");
+        assert!(s.contains(r#""status_value":"a\"b""#));
     }
 }
