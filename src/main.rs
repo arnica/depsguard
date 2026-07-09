@@ -28,6 +28,7 @@ enum Command {
 enum OutputFormat {
     Text,
     Json,
+    Ndjson,
 }
 
 /// Parsed CLI configuration.
@@ -122,19 +123,20 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
             "--format" | "-f" => {
                 i += 1;
                 let val = args.get(i).ok_or_else(|| {
-                    CliError::BadValue("--format requires a value (text, json)".into())
+                    CliError::BadValue("--format requires a value (text, json, ndjson)".into())
                 })?;
                 if val.starts_with('-') {
                     return Err(CliError::BadValue(
-                        "--format requires a value (text, json)".into(),
+                        "--format requires a value (text, json, ndjson)".into(),
                     ));
                 }
                 config.format = match val.to_lowercase().as_str() {
                     "text" => OutputFormat::Text,
                     "json" => OutputFormat::Json,
+                    "ndjson" => OutputFormat::Ndjson,
                     other => {
                         return Err(CliError::BadValue(format!(
-                            "unknown format '{other}' (valid: text, json)"
+                            "unknown format '{other}' (valid: text, json, ndjson)"
                         )));
                     }
                 };
@@ -156,13 +158,20 @@ fn parse_args(args: &[String]) -> Result<CliConfig, CliError> {
         i += 1;
     }
 
-    // JSON output is read-only and would block on stdin if `restore` ran
+    // JSON/NDJSON output is read-only and would block on stdin if `restore` ran
     // interactively, so reject the combination up front (exits non-zero) rather
     // than silently dropping the format or hanging a CI wrapper.
-    if config.format == OutputFormat::Json && matches!(config.command, Command::Restore) {
-        return Err(CliError::BadValue(
-            "--format json cannot be combined with restore (restore is interactive)".into(),
-        ));
+    if matches!(config.format, OutputFormat::Json | OutputFormat::Ndjson)
+        && matches!(config.command, Command::Restore)
+    {
+        return Err(CliError::BadValue(format!(
+            "--format {} cannot be combined with restore (restore is interactive)",
+            if config.format == OutputFormat::Json {
+                "json"
+            } else {
+                "ndjson"
+            }
+        )));
     }
 
     Ok(config)
@@ -216,13 +225,19 @@ fn main() {
     }
     manager::set_delay_days(config.delay_days);
 
-    // JSON output is mutually exclusive with the interactive TUI, so requesting
-    // it runs the read-only report path regardless of Interactive/ScanOnly.
-    // Help/Version keep precedence; restore + json was rejected in parse_args.
-    if config.format == OutputFormat::Json
+    // JSON/NDJSON output is mutually exclusive with the interactive TUI, so
+    // requesting it runs the read-only report path regardless of
+    // Interactive/ScanOnly. Help/Version keep precedence; restore + json/ndjson
+    // was rejected in parse_args.
+    if matches!(config.format, OutputFormat::Json | OutputFormat::Ndjson)
         && matches!(config.command, Command::Interactive | Command::ScanOnly)
     {
-        if run_scan_json() == ScanOutcome::NeedsFix {
+        let outcome = if config.format == OutputFormat::Json {
+            run_scan_json()
+        } else {
+            run_scan_ndjson()
+        };
+        if outcome == ScanOutcome::NeedsFix {
             std::process::exit(1);
         }
         return;
@@ -258,6 +273,7 @@ fn print_usage_short() {
     println!("    depsguard                  Interactive mode (TUI)");
     println!("    depsguard scan             Scan only, no changes (exits 1 if action needed)");
     println!("    depsguard scan --format json  Scan and emit machine-readable JSON");
+    println!("    depsguard scan --format ndjson  Scan and emit newline-delimited JSON");
     println!("    depsguard restore          Restore config files from backup");
     println!("    depsguard --help           Show this help");
     println!("    depsguard --version        Show version");
@@ -305,6 +321,20 @@ fn run_scan_json() -> ScanOutcome {
     let managers = manager::scan_all_with_progress(|_, _| {});
     let scanned_at = manager::date::format_timestamp(now_epoch_secs());
     println!("{}", json::render_scan_json(&managers, &scanned_at));
+
+    if has_needs_fix(&managers) {
+        ScanOutcome::NeedsFix
+    } else {
+        ScanOutcome::AllClear
+    }
+}
+
+/// Run scan-only mode emitting NDJSON (`--format ndjson`). Quiet by design, same
+/// as `run_scan_json`: no banner/progress, stdout carries only the NDJSON lines.
+fn run_scan_ndjson() -> ScanOutcome {
+    let managers = manager::scan_all_with_progress(|_, _| {});
+    let scanned_at = manager::date::format_timestamp(now_epoch_secs());
+    println!("{}", json::render_scan_ndjson(&managers, &scanned_at));
 
     if has_needs_fix(&managers) {
         ScanOutcome::NeedsFix
@@ -885,6 +915,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_format_ndjson_for_scan() {
+        let config = parse_args(&args(&["depsguard", "scan", "--format", "ndjson"])).unwrap();
+        assert_eq!(config.command, Command::ScanOnly);
+        assert_eq!(config.format, OutputFormat::Ndjson);
+    }
+
+    #[test]
+    fn parse_format_ndjson_short_alias() {
+        let config = parse_args(&args(&["depsguard", "scan", "-f", "ndjson"])).unwrap();
+        assert_eq!(config.format, OutputFormat::Ndjson);
+    }
+
+    #[test]
     fn parse_format_defaults_to_text() {
         let config = parse_args(&args(&["depsguard", "scan"])).unwrap();
         assert_eq!(config.format, OutputFormat::Text);
@@ -900,7 +943,7 @@ mod tests {
     #[test]
     fn parse_format_rejects_unknown_value() {
         let err = parse_args(&args(&["depsguard", "scan", "--format", "xml"])).unwrap_err();
-        assert!(err.to_string().contains("text, json"));
+        assert!(err.to_string().contains("text, json, ndjson"));
     }
 
     #[test]
@@ -918,6 +961,12 @@ mod tests {
     #[test]
     fn parse_restore_with_format_json_is_rejected() {
         let err = parse_args(&args(&["depsguard", "restore", "--format", "json"])).unwrap_err();
+        assert!(err.to_string().contains("restore"));
+    }
+
+    #[test]
+    fn parse_restore_with_format_ndjson_is_rejected() {
+        let err = parse_args(&args(&["depsguard", "restore", "--format", "ndjson"])).unwrap_err();
         assert!(err.to_string().contains("restore"));
     }
 

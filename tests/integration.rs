@@ -1375,3 +1375,67 @@ fn restore_with_format_json_is_rejected() {
         "error should name the restore conflict:\n{stderr}"
     );
 }
+
+// ── NDJSON output (`--format ndjson`) ───────────────────────────────
+
+/// stdout is pure NDJSON — no banner, no progress, no ANSI — so a consumer can
+/// pipe it straight into a line-oriented parser.
+#[test]
+fn scan_format_ndjson_emits_only_ndjson_on_stdout() {
+    let home = TmpHome::new("ndjson_stdout");
+    let out = run_depsguard(&["scan", "--format", "ndjson", "--no-search"], home.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "stdout should contain no ANSI escape sequences:\n{stdout}"
+    );
+    let lines: Vec<&str> = stdout.trim().split('\n').collect();
+    assert!(!lines.is_empty());
+    for line in &lines {
+        assert!(
+            line.starts_with('{') && line.ends_with('}'),
+            "each line should be a standalone JSON object:\n{stdout}"
+        );
+        assert!(line.contains(r#""schema_version":"1.0""#));
+        assert!(line.contains(r#""scanned_at":"#));
+    }
+    assert!(
+        lines.last().unwrap().contains(r#""record_type":"summary""#),
+        "last line should be the summary trailer:\n{stdout}"
+    );
+}
+
+/// Exit code matches the text `scan` for the same HOME (R10/N8 parity).
+#[test]
+fn scan_format_ndjson_exit_code_matches_text_scan() {
+    let home = TmpHome::new("ndjson_parity");
+    let text = run_depsguard(&["scan", "--no-search"], home.path());
+    let ndjson = run_depsguard(&["scan", "--no-search", "--format", "ndjson"], home.path());
+    assert_eq!(
+        text.status.code(),
+        ndjson.status.code(),
+        "NDJSON scan exit code must match text scan exit code"
+    );
+}
+
+/// `restore --format ndjson` is rejected at parse time, mirroring the
+/// `--format json` + `restore` rejection.
+#[test]
+fn restore_with_format_ndjson_is_rejected() {
+    let home = TmpHome::new("ndjson_restore_conflict");
+    let out = run_depsguard(&["restore", "--format", "ndjson"], home.path());
+    assert!(
+        !out.status.success(),
+        "restore --format ndjson should exit non-zero"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.trim().is_empty(),
+        "no NDJSON should be emitted for the rejected combination:\n{stdout}"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("restore"),
+        "error should name the restore conflict:\n{stderr}"
+    );
+}
