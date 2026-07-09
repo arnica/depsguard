@@ -25,6 +25,7 @@ By **[[arnica](https://arnica.io?utm_source=depsguard&utm_medium=referral&utm_ca
 - [Install](#install)
 - [Usage](#usage)
 - [JSON output](#json-output)
+- [NDJSON output](#ndjson-output)
 - [What gets checked](#what-gets-checked)
 - [Config file locations](#config-file-locations)
 - [Urgent security fix](#urgent-security-fix)
@@ -173,7 +174,8 @@ The binary is `target/release/depsguard` (`.exe` on Windows). Rust **1.74+** is 
 ```bash
 depsguard              # interactive: scan, choose fixes, apply
 depsguard scan         # report only; no writes (exits 1 if action is needed)
-depsguard scan --format json  # machine-readable JSON for CI/automation
+depsguard scan --format json    # machine-readable JSON for CI/automation
+depsguard scan --format ndjson  # newline-delimited JSON for log pipelines/ingest
 depsguard --no-search  # skip recursive file search, check local configs only
 depsguard restore      # restore from a previous backup
 depsguard --help       # CLI help
@@ -251,6 +253,53 @@ The `schema_version` follows a simple policy so automation can depend on it:
 - **Major bump** (`1.0` → `2.0`): a field is removed or its meaning changes.
 
 Pin on the major version and tolerate unknown fields.
+
+## NDJSON output
+
+For log pipelines and ES/Splunk-style ingest, `depsguard scan --format ndjson` (or `-f ndjson`) prints newline-delimited JSON to stdout: one line per `(manager, recommendation)` finding, followed by one summary trailer line. Each line is a standalone JSON object, so a filestream + `json` processor can ingest it with no `foreach`/flatten step and no nested mapping — unlike the blob format's `managers[].recommendations[]` nesting. Same suppression and exit-code behavior as `--format json`: no banner/progress on stdout, `0`/`1` exit gate, and `--format ndjson` cannot be combined with `restore`.
+
+```bash
+depsguard scan --format ndjson | jq -c .
+```
+
+```json
+{"record_type":"finding","schema_version":"1.0","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","manager":"pnpm","manager_version":"11.10.0","config_path":"/Users/x/Library/Preferences/pnpm/config.yaml","discovered":false,"key":"ignoreScripts","description":"Block malicious install scripts","expected":"true","needs_fix":true,"status":"missing"}
+{"record_type":"summary","schema_version":"1.0","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","needs_fix":true,"unique_configs":8,"counts":{"ok":15,"missing":2,"file_missing":0,"wrong_value":0,"unsupported":2,"total_errors":2}}
+```
+
+### Fields
+
+Every line carries the same envelope: `record_type` (`finding` or `summary`), `schema_version`, `tool`, `tool_version`, `scanned_at`. NDJSON's `schema_version` is its own counter starting at `1.0`, independent of the blob format's version.
+
+Finding lines add: `manager`, `manager_version`, `config_path`, `discovered`, `key`, `description`, `expected`, `needs_fix`, `status` (the state name as a plain string: `ok`, `missing`, `file_missing`, `wrong_value`, `unsupported`), `status_value` (present for `ok`/`wrong_value` — the configured value), `status_message` (present for `unsupported` — why the setting is unavailable). Unlike the blob format's nested `status: { "state": ... }` object, these are flattened top-level keys so the ES field mapping stays flat.
+
+Summary lines add: `needs_fix`, `unique_configs`, `counts` (`ok`/`missing`/`file_missing`/`wrong_value`/`unsupported`/`total_errors`) — the same `counts` shape and the same underlying computation as the blob and text reports, so all three never drift.
+
+Notes:
+
+- A manager with zero recommendations (e.g. a `renovate.json` with no matching update rules) emits no finding lines but still counts its `config_path` toward the summary's `unique_configs`.
+- `manager_version` is an empty string for Renovate and Dependabot: those are repo config files, not installed binaries, so depsguard has no version to detect.
+
+### Raw finding lines vs. collapsed summary counts
+
+Finding lines are **raw**: when two managers resolve to the same config file (for example npm and pnpm both reading `~/.npmrc`), each manager emits its own line for the same `(config_path, key)`. This is deliberate — per-manager lines preserve a per-package-manager breakdown for dashboards. The `summary` line's `counts`, by contrast, **collapse** each `(config_path, key)` to its single most-significant status across managers (the same rule the text and blob reports use), so the trailer's numbers match the badges.
+
+A consumer computing config-level aggregates (rather than per-manager ones) must therefore dedupe finding lines by `(config_path, key)`, keeping the most-significant status, rather than summing them directly.
+
+### Field mapping for cooldown-style ingestion
+
+NDJSON's per-finding shape mirrors a `cooldown.*` per-setting data model (one row per host per setting) used elsewhere in Elastic Security ingestion, so existing ES|QL built against that shape is mostly reusable after a field-mapping pass rather than a rewrite. Field *names* differ; this table records the intended rename so the ingest-side mapping decision is made once, before the NDJSON shape is considered stable:
+
+| NDJSON field                | `cooldown.*`-style field | Notes |
+|------------------------------|--------------------------|-------|
+| `key`                        | `cooldown.key`           | Setting identifier |
+| `status_value` / `expected`  | `cooldown.value` / `cooldown.expected` | Actual vs. wanted value |
+| `status`                     | `cooldown.status`        | State name |
+| `manager`                    | `cooldown.source`        | Which package manager reported it |
+| `config_path`                | `cooldown.config_path`   | Unchanged — already a flat field |
+| `scanned_at`                 | `@timestamp`             | Set at ingest via the envelope field, not ingest time |
+
+Host identity (`host.name`, etc.) is not part of this contract — it is attached by the ingest agent (e.g. Elastic Agent), not by depsguard, which has no concept of a host beyond the machine it runs on.
 
 ## What gets checked
 
