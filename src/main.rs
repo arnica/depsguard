@@ -359,21 +359,33 @@ fn run_interactive() -> io::Result<()> {
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            if has_informational_recommendations(&managers) {
-                writeln!(
-                    out,
-                    "  {}Some checks can't be auto-fixed here (see the notes above).{}",
-                    term::BOLD,
-                    term::RESET
-                )?;
-            } else {
-                writeln!(
-                    out,
-                    "  {}{}All package managers are properly configured!{}",
-                    term::BOLD,
-                    term::GREEN,
-                    term::RESET
-                )?;
+            match interactive_empty_state(&managers) {
+                InteractiveEmptyState::NoManagers => {}
+                InteractiveEmptyState::ManualFixes => {
+                    writeln!(
+                        out,
+                        "  {}Some checks need manual fixes (see the notes above).{}",
+                        term::BOLD,
+                        term::RESET
+                    )?;
+                }
+                InteractiveEmptyState::Informational => {
+                    writeln!(
+                        out,
+                        "  {}Some checks can't be auto-fixed here (see the notes above).{}",
+                        term::BOLD,
+                        term::RESET
+                    )?;
+                }
+                InteractiveEmptyState::AllClear => {
+                    writeln!(
+                        out,
+                        "  {}{}All package managers are properly configured!{}",
+                        term::BOLD,
+                        term::GREEN,
+                        term::RESET
+                    )?;
+                }
             }
             return Ok(());
         }
@@ -430,6 +442,31 @@ fn has_informational_recommendations(managers: &[ManagerInfo]) -> bool {
             .iter()
             .any(|rec| rec.status.is_unsupported() || rec.status.is_indeterminate())
     })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum InteractiveEmptyState {
+    NoManagers,
+    ManualFixes,
+    Informational,
+    AllClear,
+}
+
+fn interactive_empty_state(managers: &[ManagerInfo]) -> InteractiveEmptyState {
+    if managers.is_empty() {
+        InteractiveEmptyState::NoManagers
+    } else if managers.iter().any(|manager| {
+        manager
+            .recommendations
+            .iter()
+            .any(|rec| rec.needs_fix() && !rec.auto_fixable())
+    }) {
+        InteractiveEmptyState::ManualFixes
+    } else if has_informational_recommendations(managers) {
+        InteractiveEmptyState::Informational
+    } else {
+        InteractiveEmptyState::AllClear
+    }
 }
 
 /// Drive the interactive fix-selection loop.
@@ -917,6 +954,50 @@ mod tests {
         assert!(!has_needs_fix(&[manager(CheckStatus::Indeterminate(
             "dynamic expression".into(),
         ))]));
+    }
+
+    #[test]
+    fn interactive_empty_state_distinguishes_empty_manual_informational_and_clear_scans() {
+        let manager = |status| ManagerInfo {
+            kind: ManagerKind::Npm,
+            version: "10.0".into(),
+            config_path: PathBuf::from("/tmp/test"),
+            recommendations: vec![Recommendation {
+                key: "min-release-age".into(),
+                description: "test".into(),
+                expected: "7".into(),
+                status,
+            }],
+            discovered: false,
+        };
+
+        assert_eq!(
+            interactive_empty_state(&[]),
+            InteractiveEmptyState::NoManagers
+        );
+        assert_eq!(
+            interactive_empty_state(&[manager(CheckStatus::Manual(
+                "old".into(),
+                "edit the source setting".into(),
+            ))]),
+            InteractiveEmptyState::ManualFixes
+        );
+        assert_eq!(
+            interactive_empty_state(&[manager(CheckStatus::Unsupported(
+                "npm >= 11.10 required".into(),
+            ))]),
+            InteractiveEmptyState::Informational
+        );
+        assert_eq!(
+            interactive_empty_state(&[ManagerInfo {
+                kind: ManagerKind::Npm,
+                version: "10.0".into(),
+                config_path: PathBuf::from("/tmp/test"),
+                recommendations: vec![],
+                discovered: false,
+            }]),
+            InteractiveEmptyState::AllClear
+        );
     }
 
     fn args(parts: &[&str]) -> Vec<String> {
