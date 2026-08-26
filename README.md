@@ -208,7 +208,7 @@ depsguard scan --format json | jq '.summary'
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "tool": "depsguard",
   "tool_version": "0.1.38",
   "scanned_at": "2026-07-09T14:00:00Z",
@@ -217,7 +217,8 @@ depsguard scan --format json | jq '.summary'
     "unique_configs": 2,
     "counts": {
       "ok": 4, "missing": 2, "file_missing": 1,
-      "wrong_value": 0, "unsupported": 1, "total_errors": 3
+      "wrong_value": 0, "manual": 0, "unsupported": 1, "indeterminate": 0,
+      "total_errors": 3
     }
   },
   "managers": [
@@ -232,6 +233,7 @@ depsguard scan --format json | jq '.summary'
           "description": "Delay new versions by 7 days",
           "expected": "7",
           "needs_fix": true,
+          "auto_fixable": true,
           "status": { "state": "missing" }
         }
       ]
@@ -242,14 +244,16 @@ depsguard scan --format json | jq '.summary'
 
 - `scanned_at` is the run's start time, ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`), captured once and identical across the document.
 - `config_path` is the raw absolute path (not `~`-collapsed), so it is unambiguous for a consumer whose `$HOME` differs from the runner's.
-- `status.state` is one of `ok`, `missing`, `file_missing`, `wrong_value`, `unsupported`. A `value` field accompanies `ok` and `wrong_value` (the configured value); a `message` field accompanies `unsupported` (why the setting is unavailable); `missing` and `file_missing` carry neither.
+- `auto_fixable` tells an interactive client whether DepsGuard can safely apply the recommendation. A manual finding still has `needs_fix: true`, but has `auto_fixable: false` and a `remediation_message`.
+- `status.state` is one of `ok`, `missing`, `file_missing`, `wrong_value`, `manual`, `unsupported`, or `indeterminate`. A `value` field accompanies `ok`, `wrong_value`, and `manual`; a `message` field accompanies `unsupported`, `manual`, and `indeterminate`. `missing` and `file_missing` carry neither.
+- `indeterminate` findings are informational because the configured source expression cannot be evaluated safely. They are counted but do not set `needs_fix`.
 - `summary.counts` collapse each `(config_path, key)` to its most-significant status, so they match the badges in the text report.
 
 ### Schema stability
 
 The `schema_version` follows a simple policy so automation can depend on it:
 
-- **Minor bump** (`1.0` → `1.1`): backward-compatible additions (new fields or new optional keys). Consumers should ignore unknown fields.
+- **Minor bump** (`1.1` → `1.2`): backward-compatible additions (new fields or new optional keys). Consumers should ignore unknown fields.
 - **Major bump** (`1.0` → `2.0`): a field is removed or its meaning changes.
 
 Pin on the major version and tolerate unknown fields.
@@ -263,17 +267,17 @@ depsguard scan --format ndjson | jq -c .
 ```
 
 ```json
-{"record_type":"finding","schema_version":"1.1","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","manager":"pnpm","manager_version":"11.10.0","config_path":"/Users/x/Library/Preferences/pnpm/config.yaml","discovered":false,"key":"ignoreScripts","description":"Block malicious install scripts","expected":"true","needs_fix":true,"status":"missing"}
-{"record_type":"summary","schema_version":"1.1","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","needs_fix":true,"unique_configs":8,"counts":{"ok":15,"missing":2,"file_missing":0,"wrong_value":0,"unsupported":2,"total_errors":2}}
+{"record_type":"finding","schema_version":"1.2","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","manager":"pnpm","manager_version":"11.10.0","config_path":"/Users/x/Library/Preferences/pnpm/config.yaml","discovered":false,"key":"ignoreScripts","description":"Block malicious install scripts","expected":"true","needs_fix":true,"auto_fixable":true,"status":"missing"}
+{"record_type":"summary","schema_version":"1.2","tool":"depsguard","tool_version":"0.1.40","scanned_at":"2026-07-09T14:00:00Z","needs_fix":true,"unique_configs":8,"counts":{"ok":15,"missing":2,"file_missing":0,"wrong_value":0,"manual":0,"unsupported":2,"indeterminate":0,"total_errors":2}}
 ```
 
 ### Fields
 
 Every line carries the same envelope: `record_type` (`finding` or `summary`), `schema_version`, `tool`, `tool_version`, `scanned_at`. NDJSON shares the blob format's `schema_version` counter (see Schema stability above), not a separate one.
 
-Finding lines add: `manager`, `manager_version`, `config_path`, `discovered`, `key`, `description`, `expected`, `needs_fix`, `status` (the state name as a plain string: `ok`, `missing`, `file_missing`, `wrong_value`, `unsupported`), `status_value` (present for `ok`/`wrong_value`, the configured value), `status_message` (present for `unsupported`, why the setting is unavailable). Unlike the blob format's nested `status: { "state": ... }` object, these are flattened top-level keys so the ES field mapping stays flat.
+Finding lines add: `manager`, `manager_version`, `config_path`, `discovered`, `key`, `description`, `expected`, `needs_fix`, `auto_fixable`, `remediation_message` (manual findings only), `status` (the state name as a plain string: `ok`, `missing`, `file_missing`, `wrong_value`, `manual`, `unsupported`, `indeterminate`), `status_value` (present for `ok`/`wrong_value`/`manual`, the configured value), and `status_message` (present for `unsupported`/`manual`/`indeterminate`). Unlike the blob format's nested `status: { "state": ... }` object, these are flattened top-level keys so the ES field mapping stays flat.
 
-Summary lines add: `needs_fix`, `unique_configs`, `counts` (`ok`/`missing`/`file_missing`/`wrong_value`/`unsupported`/`total_errors`), the same `counts` shape and the same underlying computation as the blob and text reports, so all three never drift.
+Summary lines add: `needs_fix`, `unique_configs`, `counts` (`ok`/`missing`/`file_missing`/`wrong_value`/`manual`/`unsupported`/`indeterminate`/`total_errors`), the same `counts` shape and the same underlying computation as the blob and text reports, so all three never drift.
 
 Notes:
 

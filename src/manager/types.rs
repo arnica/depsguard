@@ -18,6 +18,12 @@ pub enum CheckStatus {
     WrongValue(String),
     /// The feature is not available (e.g. tool version too old). Not auto-fixable.
     Unsupported(String),
+    /// The configured value is known but must be remediated manually.
+    #[allow(dead_code)]
+    Manual(String, String),
+    /// The configured value is dynamic and cannot be evaluated safely.
+    #[allow(dead_code)]
+    Indeterminate(String),
 }
 
 impl CheckStatus {
@@ -31,11 +37,21 @@ impl CheckStatus {
         matches!(self, CheckStatus::Unsupported(_))
     }
 
+    /// Return whether this finding is informational because its value cannot be
+    /// determined without executing project source.
+    #[must_use]
+    pub fn is_indeterminate(&self) -> bool {
+        matches!(self, CheckStatus::Indeterminate(_))
+    }
+
     #[must_use]
     pub fn is_error(&self) -> bool {
         matches!(
             self,
-            CheckStatus::Missing | CheckStatus::FileMissing | CheckStatus::WrongValue(_)
+            CheckStatus::Missing
+                | CheckStatus::FileMissing
+                | CheckStatus::WrongValue(_)
+                | CheckStatus::Manual(_, _)
         )
     }
 }
@@ -48,6 +64,8 @@ impl std::fmt::Display for CheckStatus {
             CheckStatus::FileMissing => write!(f, "file missing"),
             CheckStatus::WrongValue(v) => write!(f, "Current: {v}"),
             CheckStatus::Unsupported(v) => write!(f, "{v}"),
+            CheckStatus::Manual(v, _) => write!(f, "Current: {v}"),
+            CheckStatus::Indeterminate(v) => write!(f, "{v}"),
         }
     }
 }
@@ -64,7 +82,40 @@ pub struct Recommendation {
 impl Recommendation {
     #[must_use]
     pub fn needs_fix(&self) -> bool {
-        !self.status.is_ok() && !self.status.is_unsupported()
+        !self.status.is_ok() && !self.status.is_unsupported() && !self.status.is_indeterminate()
+    }
+
+    /// Return whether this actionable recommendation is safe to offer in the
+    /// interactive fix selector.
+    #[must_use]
+    pub fn auto_fixable(&self) -> bool {
+        self.needs_fix() && !matches!(&self.status, CheckStatus::Manual(_, _))
+    }
+
+    /// Return an optional explanation for findings that need manual work.
+    #[must_use]
+    pub fn remediation_message(&self) -> Option<&str> {
+        match &self.status {
+            CheckStatus::Manual(_, message) => Some(message),
+            _ => None,
+        }
+    }
+}
+
+/// The command and arguments used to query a package manager version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VersionProbe {
+    pub executable: &'static str,
+    pub args: &'static [&'static str],
+}
+
+impl VersionProbe {
+    /// Construct a standard `<executable> --version` probe.
+    pub const fn standard(executable: &'static str) -> Self {
+        Self {
+            executable,
+            args: &["--version"],
+        }
     }
 }
 
@@ -86,6 +137,12 @@ pub enum ManagerKind {
 }
 
 impl ManagerKind {
+    /// Return the command used to inspect this manager's installed version.
+    #[must_use]
+    pub const fn version_probe(self) -> VersionProbe {
+        VersionProbe::standard(self.name())
+    }
+
     /// Managers scanned via user-level config (version detection + fixed path).
     pub const USER_LEVEL: &[ManagerKind] = &[
         ManagerKind::Npm,
@@ -114,7 +171,7 @@ impl ManagerKind {
         ManagerKind::Dependabot,
     ];
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             ManagerKind::Npm => "npm",
             ManagerKind::Pnpm | ManagerKind::PnpmGlobal => "pnpm",

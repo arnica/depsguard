@@ -4,7 +4,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use super::types::ManagerKind;
+use super::types::{ManagerKind, VersionProbe};
 
 static SKIP_SEARCH: AtomicBool = AtomicBool::new(false);
 static DELAY_DAYS_SETTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(7);
@@ -49,13 +49,13 @@ pub fn is_excluded(kind: ManagerKind) -> bool {
     })
 }
 
-/// Detect the installed version of a package manager by running `<name> --version`.
-pub fn detect_version(name: &str) -> Option<String> {
-    let result = Command::new(name).arg("--version").output();
+/// Detect a version with a manager-specific command and arguments.
+pub fn detect_version_with_probe(probe: VersionProbe) -> Option<String> {
+    let result = Command::new(probe.executable).args(probe.args).output();
     let output = match result {
         Ok(o) if o.status.success() => o,
-        _ if cfg!(target_os = "windows") => Command::new(format!("{name}.cmd"))
-            .arg("--version")
+        _ if cfg!(target_os = "windows") => Command::new(windows_command_name(probe.executable))
+            .args(probe.args)
             .output()
             .ok()
             .filter(|o| o.status.success())?,
@@ -64,4 +64,8 @@ pub fn detect_version(name: &str) -> Option<String> {
     String::from_utf8(output.stdout)
         .ok()
         .map(|s| s.trim().to_string())
+}
+
+pub(super) fn windows_command_name(executable: &str) -> String {
+    format!("{executable}.cmd")
 }

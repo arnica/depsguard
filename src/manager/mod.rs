@@ -28,7 +28,7 @@ pub mod yarn;
 
 pub use date::days_to_ymd;
 pub use detect::{
-    detect_version, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
+    detect_version_with_probe, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
     skip_search_enabled,
 };
 pub use paths::{config_path, display_path, home_dir};
@@ -50,7 +50,7 @@ use search::find_repo_configs;
 
 /// Scan a user-level package manager and return one or more config entries.
 pub fn scan_manager_infos(kind: ManagerKind) -> Vec<ManagerInfo> {
-    let Some(version) = detect_version(kind.name()) else {
+    let Some(version) = detect_version_with_probe(kind.version_probe()) else {
         return Vec::new();
     };
     let home = home_dir();
@@ -309,7 +309,7 @@ pub fn scan_all_with_progress(mut on_progress: impl FnMut(&str, f32)) -> Vec<Man
 mod tests {
     use super::config::{
         read_dependabot_entries, read_flat_config, read_ini_value, read_json_string_value,
-        read_toml_value, read_yaml_value,
+        read_jsonc_scalar_or_object, read_toml_value, read_yaml_value, JsonPolicyValue,
     };
     use super::detect::{
         get_delay_days, is_excluded, set_delay_days, set_excluded_managers, set_skip_search,
@@ -571,6 +571,52 @@ mod tests {
     }
 
     #[test]
+    fn read_toml_value_supports_fully_dotted_sections() {
+        let f = tmp_file("[tool.pdm]\nexclude-newer = \"7d\"\n");
+        assert_eq!(
+            read_toml_value(f.path(), "tool.pdm.exclude-newer"),
+            Some("7d".into())
+        );
+    }
+
+    #[test]
+    fn read_jsonc_policy_accepts_scalar_and_object_forms() {
+        let scalar = tmp_file("{\n  // one week\n  \"minimumDependencyAge\": \"P7D\",\n}\n");
+        assert_eq!(
+            read_jsonc_scalar_or_object(scalar.path(), "minimumDependencyAge", "age"),
+            Some(JsonPolicyValue::Scalar("P7D".into()))
+        );
+
+        let object = tmp_file(
+            "{\n  \"minimumDependencyAge\": {\n    \"age\": \"P7D\",\n    \"exclude\": [\"@scope/pkg\"],\n  },\n}\n",
+        );
+        assert_eq!(
+            read_jsonc_scalar_or_object(object.path(), "minimumDependencyAge", "age"),
+            Some(JsonPolicyValue::ObjectField(Some("P7D".into())))
+        );
+
+        let compact_scalar = tmp_file("{/* comment */\"minimumDependencyAge\":\"P7D\"}");
+        assert_eq!(
+            read_jsonc_scalar_or_object(compact_scalar.path(), "minimumDependencyAge", "age"),
+            Some(JsonPolicyValue::Scalar("P7D".into()))
+        );
+
+        let compact_object = tmp_file("{\"minimumDependencyAge\":{/* note */\"age\":\"P7D\",}}");
+        assert_eq!(
+            read_jsonc_scalar_or_object(compact_object.path(), "minimumDependencyAge", "age"),
+            Some(JsonPolicyValue::ObjectField(Some("P7D".into())))
+        );
+
+        let nested_keys = tmp_file(
+            "{\"tasks\": {\"minimumDependencyAge\": \"P1D\"}, \"minimumDependencyAge\": {\"rules\": {\"age\": \"P1D\"}, \"age\": \"P7D\"}}",
+        );
+        assert_eq!(
+            read_jsonc_scalar_or_object(nested_keys.path(), "minimumDependencyAge", "age"),
+            Some(JsonPolicyValue::ObjectField(Some("P7D".into())))
+        );
+    }
+
+    #[test]
     fn read_toml_value_missing() {
         let f = tmp_file("[section]\nkey = 1\n");
         assert_eq!(read_toml_value(f.path(), "nonexistent"), None);
@@ -711,6 +757,49 @@ mod tests {
             status: CheckStatus::FileMissing,
         };
         assert!(missing_file.needs_fix());
+
+        let manual = Recommendation {
+            key: "k".into(),
+            description: "d".into(),
+            expected: "v".into(),
+            status: CheckStatus::Manual("old".into(), "edit the source setting".into()),
+        };
+        assert!(manual.needs_fix());
+        assert!(!manual.auto_fixable());
+        assert_eq!(
+            manual.remediation_message(),
+            Some("edit the source setting")
+        );
+
+        let indeterminate = Recommendation {
+            key: "k".into(),
+            description: "d".into(),
+            expected: "v".into(),
+            status: CheckStatus::Indeterminate("dynamic expression".into()),
+        };
+        assert!(!indeterminate.needs_fix());
+        assert!(!indeterminate.auto_fixable());
+    }
+
+    #[test]
+    fn version_probe_supports_nonstandard_commands_and_windows_fallbacks() {
+        let probe = super::types::VersionProbe {
+            executable: "mix",
+            args: &["hex.info"],
+        };
+        assert_eq!(probe.executable, "mix");
+        assert_eq!(probe.args, &["hex.info"]);
+        assert_eq!(super::version::extract_version_str("Hex: 2.5.0"), "2.5.0");
+        assert_eq!(super::detect::windows_command_name("mix"), "mix.cmd");
+    }
+
+    #[test]
+    fn version_probe_executes_its_configured_arguments() {
+        let version = detect_version_with_probe(super::types::VersionProbe {
+            executable: "rustc",
+            args: &["--version"],
+        });
+        assert!(version.is_some_and(|value| value.starts_with("rustc ")));
     }
 
     #[test]

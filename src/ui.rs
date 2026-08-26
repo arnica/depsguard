@@ -134,8 +134,8 @@ fn status_icon(s: &CheckStatus) -> &'static str {
     match s {
         CheckStatus::Ok(_) => "✓",
         CheckStatus::Missing | CheckStatus::FileMissing => "✗",
-        CheckStatus::WrongValue(_) => "~",
-        CheckStatus::Unsupported(_) => "ℹ",
+        CheckStatus::WrongValue(_) | CheckStatus::Manual(_, _) => "~",
+        CheckStatus::Unsupported(_) | CheckStatus::Indeterminate(_) => "ℹ",
     }
 }
 
@@ -143,8 +143,8 @@ fn status_color(s: &CheckStatus) -> &'static str {
     match s {
         CheckStatus::Ok(_) => GREEN,
         CheckStatus::Missing | CheckStatus::FileMissing => RED,
-        CheckStatus::WrongValue(_) => YELLOW,
-        CheckStatus::Unsupported(_) => YELLOW,
+        CheckStatus::WrongValue(_) | CheckStatus::Manual(_, _) => YELLOW,
+        CheckStatus::Unsupported(_) | CheckStatus::Indeterminate(_) => YELLOW,
     }
 }
 
@@ -154,8 +154,11 @@ fn status_color(s: &CheckStatus) -> &'static str {
 /// `ignore-scripts` in `.npmrc` is `Ok` for npm but `Unsupported` for pnpm >= 11).
 fn status_rank(s: &CheckStatus) -> u8 {
     match s {
-        CheckStatus::Missing | CheckStatus::FileMissing | CheckStatus::WrongValue(_) => 3,
-        CheckStatus::Unsupported(_) => 2,
+        CheckStatus::Missing
+        | CheckStatus::FileMissing
+        | CheckStatus::WrongValue(_)
+        | CheckStatus::Manual(_, _) => 3,
+        CheckStatus::Unsupported(_) | CheckStatus::Indeterminate(_) => 2,
         CheckStatus::Ok(_) => 1,
     }
 }
@@ -168,13 +171,15 @@ pub(crate) struct SummaryCounts {
     pub(crate) missing: usize,
     pub(crate) file_missing: usize,
     pub(crate) wrong_value: usize,
+    pub(crate) manual: usize,
     pub(crate) unsupported: usize,
+    pub(crate) indeterminate: usize,
     pub(crate) unique_configs: usize,
 }
 
 impl SummaryCounts {
     pub(crate) fn total_errors(&self) -> usize {
-        self.missing + self.file_missing + self.wrong_value
+        self.missing + self.file_missing + self.wrong_value + self.manual
     }
 }
 
@@ -187,7 +192,9 @@ pub(crate) fn summary_counts(managers: &[ManagerInfo]) -> SummaryCounts {
         missing: 0,
         file_missing: 0,
         wrong_value: 0,
+        manual: 0,
         unsupported: 0,
+        indeterminate: 0,
         unique_configs: 0,
     };
     let mut best: std::collections::HashMap<(&Path, &str), &CheckStatus> =
@@ -209,7 +216,9 @@ pub(crate) fn summary_counts(managers: &[ManagerInfo]) -> SummaryCounts {
             CheckStatus::Missing => counts.missing += 1,
             CheckStatus::FileMissing => counts.file_missing += 1,
             CheckStatus::WrongValue(_) => counts.wrong_value += 1,
+            CheckStatus::Manual(_, _) => counts.manual += 1,
             CheckStatus::Unsupported(_) => counts.unsupported += 1,
+            CheckStatus::Indeterminate(_) => counts.indeterminate += 1,
         }
     }
     counts.unique_configs = {
@@ -242,6 +251,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
     let file_missing_count = counts.file_missing;
     let wrong_count = counts.wrong_value;
     let unsupported_count = counts.unsupported;
+    let indeterminate_count = counts.indeterminate;
     let total_errors = counts.total_errors();
     let unique_configs = counts.unique_configs;
 
@@ -280,7 +290,7 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             managers[idx]
                 .recommendations
                 .iter()
-                .any(|rec| rec.status.is_unsupported())
+                .any(|rec| rec.status.is_unsupported() || rec.status.is_indeterminate())
         });
         let badge = if has_errors {
             format!("{BG_RED}{BOLD} ACTION NEEDED {RESET}")
@@ -334,8 +344,16 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 CheckStatus::WrongValue(v) => {
                     format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
                 }
+                CheckStatus::Manual(v, _) => {
+                    format!("{YELLOW}{v}{RESET} {DIM}(want: {}){RESET}", rec.expected)
+                }
                 CheckStatus::Unsupported(v) => format!("{YELLOW}{v}{RESET}"),
+                CheckStatus::Indeterminate(v) => format!("{YELLOW}{v}{RESET}"),
             };
+            let remediation = rec
+                .remediation_message()
+                .map(|message| format!(" {DIM}· {message}{RESET}"))
+                .unwrap_or_default();
             let prefix = if show_prefix {
                 format!("{DIM}({}){RESET} ", mgr.kind.name())
             } else {
@@ -343,14 +361,14 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
             };
             writeln!(
                 w,
-                "     {color}{icon}{RESET} {prefix}{color}{}{RESET}{DIM},{RESET} {detail} {DIM}· {}{RESET}",
+                "     {color}{icon}{RESET} {prefix}{color}{}{RESET}{DIM},{RESET} {detail} {DIM}· {}{RESET}{remediation}",
                 rec.key, rec.description
             )?;
         }
         writeln!(w)?;
     }
 
-    if total_errors == 0 && unsupported_count == 0 {
+    if total_errors == 0 && unsupported_count == 0 && indeterminate_count == 0 {
         writeln!(
             w,
             "  {GREEN}{BOLD}All {ok_count} checks passed{RESET} {DIM}across {}{RESET}\n",
@@ -378,8 +396,20 @@ pub fn print_scan_results(w: &mut impl Write, managers: &[ManagerInfo]) -> io::R
                 plural(unsupported_count, "warning", "warnings")
             )?;
         }
+        if indeterminate_count > 0 {
+            write!(
+                w,
+                "{YELLOW}{BOLD}{}{RESET}  ",
+                plural(indeterminate_count, "manual review", "manual reviews")
+            )?;
+        }
         write!(w, "{GREEN}{ok_count} ok{RESET}")?;
-        let total = ok_count + file_missing_count + missing_count + wrong_count + unsupported_count;
+        let total = ok_count
+            + file_missing_count
+            + missing_count
+            + wrong_count
+            + unsupported_count
+            + indeterminate_count;
         writeln!(
             w,
             "  {DIM}({} total across {}){RESET}\n",
@@ -568,7 +598,7 @@ pub fn build_fix_items(managers: &[ManagerInfo]) -> Vec<SelectItem> {
 
     for (mi, mgr) in managers.iter().enumerate() {
         for (ri, rec) in mgr.recommendations.iter().enumerate() {
-            if rec.needs_fix() {
+            if rec.auto_fixable() {
                 let dedup_key = (mgr.config_path.clone(), rec.key.clone());
                 if !seen.insert(dedup_key) {
                     continue;
@@ -1242,6 +1272,34 @@ mod tests {
         assert!(s.contains("WARNING"));
         assert!(s.contains("1 warning"));
         assert!(!s.contains("All 0 checks passed"));
+    }
+
+    #[test]
+    fn manual_findings_are_visible_but_not_selectable() {
+        let mgr = make_manager(vec![make_rec(
+            "key",
+            CheckStatus::Manual("1d".into(), "edit the project source".into()),
+        )]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr.clone()]).unwrap();
+        let rendered = String::from_utf8(buf).unwrap();
+        assert!(rendered.contains("ACTION NEEDED"));
+        assert!(rendered.contains("edit the project source"));
+        assert!(build_fix_items(&[mgr]).is_empty());
+    }
+
+    #[test]
+    fn indeterminate_findings_are_informational_and_not_selectable() {
+        let mgr = make_manager(vec![make_rec(
+            "key",
+            CheckStatus::Indeterminate("dynamic expression".into()),
+        )]);
+        let mut buf = Vec::new();
+        print_scan_results(&mut buf, &[mgr.clone()]).unwrap();
+        let rendered = String::from_utf8(buf).unwrap();
+        assert!(rendered.contains("WARNING"));
+        assert!(rendered.contains("dynamic expression"));
+        assert!(build_fix_items(&[mgr]).is_empty());
     }
 
     #[test]

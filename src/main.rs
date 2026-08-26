@@ -318,8 +318,8 @@ fn run_scan_only() -> ScanOutcome {
 /// is the JSON document and the stream is always parseable. Exit-code semantics
 /// match `run_scan_only`.
 fn run_scan_json() -> ScanOutcome {
-    let managers = manager::scan_all_with_progress(|_, _| {});
     let scanned_at = manager::date::format_timestamp(now_epoch_secs());
+    let managers = manager::scan_all_with_progress(|_, _| {});
     println!("{}", json::render_scan_json(&managers, &scanned_at));
 
     if has_needs_fix(&managers) {
@@ -332,8 +332,8 @@ fn run_scan_json() -> ScanOutcome {
 /// Run scan-only mode emitting NDJSON (`--format ndjson`). Quiet by design, same
 /// as `run_scan_json`: no banner/progress, stdout carries only the NDJSON lines.
 fn run_scan_ndjson() -> ScanOutcome {
-    let managers = manager::scan_all_with_progress(|_, _| {});
     let scanned_at = manager::date::format_timestamp(now_epoch_secs());
+    let managers = manager::scan_all_with_progress(|_, _| {});
     println!("{}", json::render_scan_ndjson(&managers, &scanned_at));
 
     if has_needs_fix(&managers) {
@@ -359,7 +359,7 @@ fn run_interactive() -> io::Result<()> {
 
         let mut items = ui::build_fix_items(&managers);
         if items.is_empty() {
-            if has_unsupported_recommendations(&managers) {
+            if has_informational_recommendations(&managers) {
                 writeln!(
                     out,
                     "  {}Some checks can't be auto-fixed here (see the notes above).{}",
@@ -423,12 +423,12 @@ fn has_needs_fix(managers: &[ManagerInfo]) -> bool {
         .any(|manager| manager.recommendations.iter().any(|rec| rec.needs_fix()))
 }
 
-fn has_unsupported_recommendations(managers: &[ManagerInfo]) -> bool {
+fn has_informational_recommendations(managers: &[ManagerInfo]) -> bool {
     managers.iter().any(|manager| {
         manager
             .recommendations
             .iter()
-            .any(|rec| rec.status.is_unsupported())
+            .any(|rec| rec.status.is_unsupported() || rec.status.is_indeterminate())
     })
 }
 
@@ -894,6 +894,29 @@ mod tests {
             discovered: false,
         }];
         assert!(!has_needs_fix(&managers));
+    }
+
+    #[test]
+    fn has_needs_fix_treats_manual_as_actionable_but_indeterminate_as_informational() {
+        let manager = |status| ManagerInfo {
+            kind: ManagerKind::Npm,
+            version: "10.0".into(),
+            config_path: PathBuf::from("/tmp/test"),
+            recommendations: vec![Recommendation {
+                key: "min-release-age".into(),
+                description: "test".into(),
+                expected: "7".into(),
+                status,
+            }],
+            discovered: false,
+        };
+        assert!(has_needs_fix(&[manager(CheckStatus::Manual(
+            "old".into(),
+            "edit the source setting".into(),
+        ))]));
+        assert!(!has_needs_fix(&[manager(CheckStatus::Indeterminate(
+            "dynamic expression".into(),
+        ))]));
     }
 
     fn args(parts: &[&str]) -> Vec<String> {

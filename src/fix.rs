@@ -195,6 +195,12 @@ fn read_or_create(path: &Path) -> io::Result<String> {
 
 /// Apply a single recommendation fix to the config file at `path`.
 pub fn apply_fix(kind: ManagerKind, path: &Path, rec: &Recommendation) -> io::Result<String> {
+    if !rec.auto_fixable() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "recommendation is not safe to fix automatically",
+        ));
+    }
     match kind {
         ManagerKind::Npm => {
             let user_path = manager::config_path(ManagerKind::Npm);
@@ -270,12 +276,7 @@ fn apply_flat_fix(path: &Path, key: &str, value: &str) -> io::Result<String> {
 /// If `quote` is true, wraps value in double quotes.
 fn apply_toml_fix(path: &Path, dotted_key: &str, value: &str, quote: bool) -> io::Result<String> {
     let content = read_or_create(path)?;
-    let parts: Vec<&str> = dotted_key.splitn(2, '.').collect();
-    let (section, key) = if parts.len() == 2 {
-        (Some(parts[0]), parts[1])
-    } else {
-        (None, parts[0])
-    };
+    let (section, key) = manager::config::split_toml_key(dotted_key);
 
     let formatted_val = if quote {
         format!("\"{value}\"")
@@ -697,6 +698,15 @@ mod tests {
         let content = f.read();
         assert!(content.contains("minimumReleaseAge = 604800"));
         assert!(!content.contains("100"));
+    }
+
+    #[test]
+    fn toml_fix_updates_fully_dotted_section() {
+        let f = tmp_file("[tool.pdm]\nexclude-newer = \"1d\"\n[other]\nkeep = true\n");
+        apply_toml_fix(f.path(), "tool.pdm.exclude-newer", "7d", true).unwrap();
+        let content = f.read();
+        assert!(content.contains("[tool.pdm]\nexclude-newer = \"7d\""));
+        assert!(content.contains("[other]\nkeep = true"));
     }
 
     #[test]
@@ -1154,6 +1164,22 @@ mod tests {
         };
         apply_fix(ManagerKind::Dependabot, f.path(), &rec).unwrap();
         assert!(f.read().contains("default-days: 7"));
+    }
+
+    #[test]
+    fn apply_fix_rejects_manual_recommendations() {
+        let f = tmp_file("");
+        let rec = Recommendation {
+            key: "minimumDependencyAge".into(),
+            description: "test".into(),
+            expected: "P7D".into(),
+            status: crate::manager::CheckStatus::Manual(
+                "P1D".into(),
+                "edit the source setting".into(),
+            ),
+        };
+        let error = apply_fix(ManagerKind::Npm, f.path(), &rec).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 
     // ── encode/decode path tests ────────────────────────────────────
