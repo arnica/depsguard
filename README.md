@@ -129,6 +129,14 @@ cargo install depsguard
 
 Requires a [Rust toolchain](https://rustup.rs/) with `cargo`.
 
+### X-CMD
+
+Alternatively, install it with [x-cmd](https://www.x-cmd.com/mod/eget), which downloads the pre-built binary from GitHub Releases:
+
+```bash
+x eget use arnica/depsguard
+```
+
 ### Package managers (when published by your vendor)
 
 If your organization ships DepsGuard via Homebrew, Scoop, or WinGet, use their instructions. **Setting up or automating those channels** (Homebrew core PRs, buckets, WinGet PRs, CI secrets) is maintainer documentation; see [`AGENTS.md`](AGENTS.md) under *Release & distribution*.
